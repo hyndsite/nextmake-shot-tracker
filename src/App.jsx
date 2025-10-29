@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react"
-import BottomNav from "./components/BottomNav"
+
+// Screens
 import Login from "./screens/Login"
 import ModeGate from "./screens/ModeGate"
-import PraciteLog from "./screens/PracticeLog"
+import PracticeLog from "./screens/PracticeLog"   // make sure this file exists (no typo)
 import GameGate from "./screens/GameGate"
 import GameNew from "./screens/GameNew"
 import GameLogger from "./screens/GameLogger"
@@ -10,44 +11,97 @@ import Performance from "./screens/Performance"
 import Heatmap from "./screens/Heatmap"
 import GoalsManager from "./screens/GoalsManager"
 import Account from "./screens/Account"
+
+// Components
+import BottomNav from "./components/BottomNav"
+
+// Auto-sync (no manual buttons)
 import { initAutoSync } from "./lib/sync"
 
 export default function App(){
-  const [screen, setScreen] = useState("login") // login | mode | practice | game | game-new | game-logger | performance | heatmap | goals | account
+  // Screens: login | mode | practice | game | game-new | game-logger | performance | heatmap | goals | account
+  const [screen, setScreen] = useState("login")
   const [mode, setMode] = useState(localStorage.getItem("nm_mode") || "practice")
 
-  useEffect(()=>{ localStorage.setItem("nm_mode", mode) }, [mode])
-  const navTo = (s)=> setScreen(s)
+  const navTo = (s) => setScreen(s)
 
-  // basic auth gate (swap with Supabase later)
-  useEffect(()=>{
+  // 🟢 1) Initialize the auto-sync service ONCE on mount
+  useEffect(() => {
+    initAutoSync()
+  }, [])
+
+  // 💾 2) Persist selected mode locally so we remember user preference
+  useEffect(() => {
+    localStorage.setItem("nm_mode", mode)
+  }, [mode])
+
+  // 🔐 3) Simple auth gate (placeholder until Supabase auth is wired)
+  useEffect(() => {
     const authed = localStorage.getItem("nm_authed") === "1"
     setScreen(authed ? "mode" : "login")
-  },[])
+  }, [])
+
+  // Helpers
+  const handleLoginSuccess = () => {
+    localStorage.setItem("nm_authed", "1")
+    navTo("mode")
+  }
+
+  const handleSignOut = () => {
+    localStorage.removeItem("nm_authed")
+    navTo("login")
+  }
+
+  const toggleMode = () => {
+    const next = mode === "practice" ? "game" : "practice"
+    setMode(next)
+    navTo(next === "practice" ? "practice" : "game")
+  }
 
   return (
     <div className="min-h-dvh">
-      {screen === "login" && <Login onSuccess={()=>{localStorage.setItem("nm_authed","1"); navTo("mode")}} />}
-      {screen === "mode" && <ModeGate onSelect={(m)=>{ setMode(m); navTo(m==="practice" ? "practice" : "game")}} />}
+      {/* Top-level screen router */}
+      {screen === "login"        && <Login onSuccess={handleLoginSuccess} />}
+      {screen === "mode"         && (
+        <ModeGate
+          onSelect={(m) => {
+            setMode(m)
+            navTo(m === "practice" ? "practice" : "game")
+          }}
+        />
+      )}
 
-      {screen === "practice" && <PraciteLog />}
-      {screen === "game" && <GameGate onNew={()=>navTo("game-new")} onResume={()=>navTo("game-logger")} />}
+      {/* Practice flow */}
+      {screen === "practice"     && <PracticeLog />}
 
-      {screen === "game-new" && <GameNew onStart={()=>navTo("game-logger")} onCancel={()=>navTo("game")} />}
-      {screen === "game-logger" && <GameLogger onEnd={()=>navTo("game")} />}
+      {/* Game flow */}
+      {screen === "game"         && (
+        <GameGate
+          onNew={() => navTo("game-new")}
+          onResume={() => navTo("game-logger")}
+        />
+      )}
+      {screen === "game-new"     && (
+        <GameNew
+          onStart={() => navTo("game-logger")}
+          onCancel={() => navTo("game")}
+        />
+      )}
+      {screen === "game-logger"  && <GameLogger onEnd={() => navTo("game")} />}
 
-      {screen === "performance" && <Performance mode={mode} />}
-      {screen === "heatmap" && <Heatmap mode={mode} />}
-      {screen === "goals" && <GoalsManager mode={mode} />}
-      {screen === "account" && <Account onSignOut={()=>{localStorage.removeItem("nm_authed"); navTo("login")}} />}
+      {/* Analytics / Goals / Account */}
+      {screen === "performance"  && <Performance mode={mode} />}
+      {screen === "heatmap"      && <Heatmap mode={mode} />}
+      {screen === "goals"        && <GoalsManager mode={mode} />}
+      {screen === "account"      && <Account onSignOut={handleSignOut} />}
 
-      {/* BottomNav hidden on login/mode for a cleaner look */}
-      {!(screen==="login"||screen==="mode") && (
+      {/* Bottom nav hidden on login/mode screens */}
+      {!(screen === "login" || screen === "mode") && (
         <BottomNav
           active={screen}
-          onChange={(s)=>navTo(s)}
           mode={mode}
-          onToggleMode={()=>{ const next = mode==="practice"?"game":"practice"; setMode(next); navTo(next==="practice"?"practice":"game") }}
+          onToggleMode={toggleMode}
+          onChange={(s) => navTo(s)}
         />
       )}
     </div>
