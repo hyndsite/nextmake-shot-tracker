@@ -1,0 +1,12 @@
+# Node / Vite
+node_modules/
+dist/
+.vite/
+
+# Local env (never commit secrets)
+.env.local
+.env.*.local
+
+# Editor/OS
+.DS_Store
+.vscode/
