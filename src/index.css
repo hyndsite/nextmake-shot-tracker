@@ -1,11 +1,15 @@
+
+/* Tailwind v4: load everything with the new import */
+@import "tailwindcss";
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light dark;
+  color-scheme: light;
   color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  background-color: #ffffff;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -13,9 +17,29 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Mobile niceties */
+* { -webkit-tap-highlight-color: transparent; }
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Utility helpers (explicit colors so they won't be inverted) */
+.page { @apply p-4 pb-20 max-w-screen-sm mx-auto; }
+.h1 { @apply text-2xl font-semibold mb-3; }
+.card { @apply rounded-2xl border border-slate-200 p-5 mb-4 bg-white shadow-sm; }
+
+.btn { @apply inline-flex items-center justify-center rounded-xl px-4 py-2 border text-sm font-medium transition; }
+.btn-primary { @apply bg-sky-600 border-sky-600 text-white; }
+.btn-secondary { @apply bg-white border-slate-300 text-slate-900; }
+.btn-ghost { @apply border-transparent text-slate-600; }
+
+/* Inputs with explicit backgrounds/borders so dark mode can't invert them */
+.input {
+  @apply w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-slate-900 placeholder-slate-400;
+}
+.label { @apply text-xs font-medium text-slate-600; }
+.help  { @apply text-xs text-slate-500; }
 
 a {
   font-weight: 500;
