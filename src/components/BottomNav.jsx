@@ -11,7 +11,7 @@ import {
 const TABS = [
   { key: "practice",   label: "Practice",    Icon: ClipboardList },
   { key: "game",       label: "Game",        Icon: Gamepad2 },
-  { key: "progress",   label: "Performance", Icon: LineChart },
+  { key: "progress",   label: "Perf",        Icon: LineChart },
   { key: "goals",      label: "Goals",       Icon: Target },
   { key: "heatmap",    label: "Heatmap",     Icon: Map },
   { key: "account",    label: "Account",     Icon: UserRound },

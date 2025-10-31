@@ -105,6 +105,10 @@
     -webkit-appearance: none;
     appearance: none;
   }
+
+  .btn-blue {
+    @apply bg-sky-600 text-white border border-sky-600 shadow-sm hover:bg-sky-700 active:scale-[0.98];
+  }
 }
 
 /* Prevent system dark auto-styling */
