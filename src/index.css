@@ -78,6 +78,20 @@
   .pb-bottomnav {
     padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
   }
+
+  /* Tiny button for qty controls */
+  .btn-xs { @apply h-8 px-2 text-xs rounded-lg; }
+
+  /* Numeric input (tight) */
+  .input-qty { @apply h-8 w-16 text-center text-sm rounded-lg border border-slate-300 bg-white px-2; }
+
+  /* Keep the qty controls tight and inside the card on mobile */
+  .qty-row { @apply col-span-2 flex items-center gap-1 flex-nowrap overflow-hidden; }
+  .qty-group { @apply flex items-center gap-1 shrink-0; }
+
+  /* Bottom nav should never darken on device dark mode and nav buttons stay transparent */
+  .bottom-nav { @apply !bg-white; }
+  .bottom-nav button { @apply bg-transparent; }
 }
 
 

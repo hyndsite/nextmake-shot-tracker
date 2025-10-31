@@ -318,45 +318,45 @@ export default function PracticeLog(){
               </button>
             </div>
 
-            {/* Attempts row */}
+            {/* Attempts */}
             <div className="grid grid-cols-3 gap-3 items-center">
               <label className="label col-span-1">Attempts</label>
 
-              <div className="col-span-2 flex items-center gap-2">
-                <button type="button" onClick={() => dec(setAttempts)} className="btn btn-blue h-9 px-3 rounded-lg">−</button>
-
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  value={attempts}
-                  onChange={e => setAttempts(Math.max(0, Number(e.target.value || 0)))}
-                  className="h-9 w-20 rounded-lg border border-slate-300 bg-white px-2 text-center text-sm"
-                />
-
-                <button type="button" onClick={() => inc(setAttempts)} className="btn btn-blue h-9 px-3 rounded-lg">+</button>
-                <button type="button" onClick={() => add5(setAttempts)} className="btn btn-blue h-9 px-3 rounded-lg">+5</button>
+              <div className="qty-row">
+                <div className="qty-group">
+                  <button type="button" onClick={() => dec(setAttempts)} className="btn btn-blue btn-xs">−</button>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    value={attempts}
+                    onChange={e => setAttempts(Math.max(0, Number(e.target.value || 0)))}
+                    className="input-qty"
+                  />
+                  <button type="button" onClick={() => inc(setAttempts)} className="btn btn-blue btn-xs">+</button>
+                  <button type="button" onClick={() => add5(setAttempts)} className="btn btn-blue btn-xs">+5</button>
+                </div>
               </div>
             </div>
 
-            {/* Makes row */}
+            {/* Makes */}
             <div className="grid grid-cols-3 gap-3 items-center">
               <label className="label col-span-1">Makes</label>
 
-              <div className="col-span-2 flex items-center gap-2">
-                <button type="button" onClick={() => dec(setMakes)} className="btn btn-blue h-9 px-3 rounded-lg">−</button>
-
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  value={makes}
-                  onChange={e => setMakes(Math.max(0, Number(e.target.value || 0)))}
-                  className="h-9 w-20 rounded-lg border border-slate-300 bg-white px-2 text-center text-sm"
-                />
-
-                <button type="button" onClick={() => inc(setMakes)} className="btn btn-blue h-9 px-3 rounded-lg">+</button>
-                <button type="button" onClick={() => add5(setMakes)} className="btn btn-blue h-9 px-3 rounded-lg">+5</button>
+              <div className="qty-row">
+                <div className="qty-group">
+                  <button type="button" onClick={() => dec(setMakes)} className="btn btn-blue btn-xs">−</button>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    value={makes}
+                    onChange={e => setMakes(Math.max(0, Number(e.target.value || 0)))}
+                    className="input-qty"
+                  />
+                  <button type="button" onClick={() => inc(setMakes)} className="btn btn-blue btn-xs">+</button>
+                  <button type="button" onClick={() => add5(setMakes)} className="btn btn-blue btn-xs">+5</button>
+                </div>
               </div>
             </div>
 

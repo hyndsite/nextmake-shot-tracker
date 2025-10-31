@@ -27,12 +27,12 @@ const TABS = [
 export default function BottomNav({ activeTab, onChange }) {
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white
-                 shadow-[0_-4px_12px_rgba(15,23,42,0.06)]
-                 pt-1 pb-[calc(env(safe-area-inset-bottom,0px)+6px)]"
-      role="navigation"
-      aria-label="Primary"
-    >
+        className="bottom-nav fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white
+                  shadow-[0_-4px_12px_rgba(15,23,42,0.06)]
+                  pt-1 pb-[calc(env(safe-area-inset-bottom,0px)+6px)]"
+        role="navigation"
+        aria-label="Primary"
+      >
       <div className="mx-auto max-w-screen-sm px-3">
         <ul className="grid grid-cols-6">
           {TABS.map(({ key, label, Icon }) => {
@@ -40,12 +40,13 @@ export default function BottomNav({ activeTab, onChange }) {
             return (
               <li key={key} className="flex">
                 <button
-                  type="button"
-                  onClick={() => onChange?.(key)}
-                  aria-label={label}
-                  aria-current={active ? "page" : undefined}
-                  className="w-full py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 rounded-lg"
-                >
+                    type="button"
+                    onClick={() => onChange?.(key)}
+                    aria-label={label}
+                    aria-current={active ? "page" : undefined}
+                    className="w-full py-2 bg-transparent focus:outline-none focus-visible:ring-2
+                              focus-visible:ring-sky-400 rounded-lg"
+                  >
                   <div className="flex flex-col items-center justify-center gap-1">
                     <Icon
                       size={24}
