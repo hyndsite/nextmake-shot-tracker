@@ -89,10 +89,26 @@
   .qty-row { @apply col-span-2 flex items-center gap-1 flex-nowrap overflow-hidden; }
   .qty-group { @apply flex items-center gap-1 shrink-0; }
 
-  /* Bottom nav should never darken on device dark mode and nav buttons stay transparent */
+  /* Compact buttons & input for Attempts/Makes */
+  .btn-xs { @apply h-8 px-2 text-xs rounded-lg; }
+  .input-qty { @apply h-8 w-16 text-center text-sm rounded-lg border border-slate-300 bg-white !text-slate-900 placeholder-slate-400; }
+
+  /* Keep controls tight, **no clipping** */
+  .qty-row   { @apply col-span-2 w-full; }                  /* full width of column */
+  .qty-group { @apply flex items-center gap-1 flex-wrap; }  /* allow wrap instead of overflow/cutoff */
+
+  /* Bottom nav should stay light on mobile (no grey button fill) */
   .bottom-nav { @apply !bg-white; }
-  .bottom-nav button { @apply bg-transparent; }
+  .bottom-nav button,
+  .bottom-nav [role="button"] {
+    background-color: transparent !important;
+    -webkit-appearance: none;
+    appearance: none;
+  }
 }
+
+/* Prevent system dark auto-styling */
+html { color-scheme: light; }
 
 
 /* Utility helpers (explicit colors so they won't be inverted) */
