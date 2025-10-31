@@ -7,7 +7,7 @@ export default function ModeGate({ onSelect }) {
       {/* Page header */}
       <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-200">
         <div className="max-w-screen-sm mx-auto px-4 py-3">
-          <h1 className="text-center text-xl font-semibold text-slate-900">Select Mode</h1>
+          <h2 className="screen-title">Select Mode</h2>
         </div>
       </header>
 
@@ -28,7 +28,7 @@ export default function ModeGate({ onSelect }) {
             <button
               type="button"
               onClick={() => onSelect?.("game")}
-              className="mt-5 inline-flex h-12 w-full items-center justify-center rounded-full bg-sky-700 text-white text-sm font-medium shadow-sm active:scale-[0.99] transition"
+              className="btn-primary w-full mt-5"
               aria-label="Start Game Mode"
             >
               Start Mode
@@ -51,7 +51,7 @@ export default function ModeGate({ onSelect }) {
             <button
               type="button"
               onClick={() => onSelect?.("practice")}
-              className="mt-5 inline-flex h-12 w-full items-center justify-center rounded-full bg-sky-700 text-white text-sm font-medium shadow-sm active:scale-[0.99] transition"
+              className="btn-primary w-full mt-5"
               aria-label="Start Practice Mode"
             >
               Start Mode

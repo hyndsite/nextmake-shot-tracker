@@ -1,5 +1,5 @@
 import { createStore, get, set } from "idb-keyval"
-import { nanoid } from "./util-id"
+import { uuid } from "./util-id"
 import { notifyLocalMutate } from "./sync-notify"
 
 export const st = { game:{ sessions:createStore("game","sessions"), events:createStore("game","events") } }
@@ -9,7 +9,7 @@ async function addToIndex(s,id){ const i=await readIndex(s); if(!i.includes(id))
 const now = ()=> new Date().toISOString()
 
 export async function addGameSession({ dateISO, yourTeam, opponent, venue="", level="High School", homeAway="Home" }){
-  const id = nanoid()
+  const id = uuid()
   const row = { id, mode:"game", date_iso: dateISO ?? now().slice(0,10), your_team:yourTeam??"", opponent:opponent??"", venue, level, home_away:homeAway, started_at:now(), ended_at:null, status:"active", _dirty:true, _table:"game_sessions" }
   await set(id,row,st.game.sessions); await addToIndex(st.game.sessions,id)
   notifyLocalMutate()
@@ -25,7 +25,7 @@ export async function endGameSession(id){
 }
 
 export async function addGameEvent({ gameId, type, zoneId=null, shotType=null, isThree=null, made=null, ts=now() }){
-  const id = nanoid()
+  const id = uuid()
   const row = { id, game_id:gameId, user_id:null, mode:"game", type, zone_id:zoneId, shot_type:shotType, is_three:isThree, made, ts, _dirty:true, _table:"game_events" }
   await set(id,row,st.game.events); await addToIndex(st.game.events,id)
   notifyLocalMutate()
