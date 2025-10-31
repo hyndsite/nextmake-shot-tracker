@@ -73,6 +73,11 @@
   .btn-pressure-on {
     @apply bg-sky-600 text-white border-sky-600 shadow-sm;
   }
+
+  /* space for the fixed BottomNav; apply to main page wrappers */
+  .pb-bottomnav {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 

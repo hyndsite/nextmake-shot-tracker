@@ -226,3 +226,15 @@ export async function listActivePracticeSessions() {
     .filter(s => s?.status === "active" && !s?.ended_at)
     .sort((a,b) => (b.started_at || "").localeCompare(a.started_at || ""))
 }
+
+// List entries for a given practice session, oldest→newest
+export async function listEntriesBySession(sessionId) {
+  const ids = await readIndex(st.practice.entries)
+  const rows = []
+  for (const id of ids) {
+    const e = await get(id, st.practice.entries)
+    if (e?.session_id === sessionId) rows.push(e)
+  }
+  rows.sort((a,b) => (a.ts || "").localeCompare(b.ts || ""))
+  return rows
+}

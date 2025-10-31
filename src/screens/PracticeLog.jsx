@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react"
 import {
-  addPracticeSession, endPracticeSession, listPracticeSessions, listActivePracticeSessions,
-  addEntry, getTodaySummary
+  addPracticeSession, 
+  endPracticeSession, 
+  listPracticeSessions,
+  addEntry, 
+  listEntriesBySession, 
+  addMarker
 } from "../lib/practice-db"
 import { ZONES } from "../constants/zones"
 import { SHOT_TYPES } from "../constants/shotTypes"
@@ -19,7 +23,6 @@ function fmtDT(iso) {
 export default function PracticeLog(){
   const [sessions, setSessions] = useState([])
   const [activeId, setActiveId] = useState(null)
-  const [today, setToday] = useState({ attempts:0, makes:0, fg:0, efg:0, threesAttempts:0, threesMakes:0 })
   const [showConfirmStart, setShowConfirmStart] = useState(false)
   // ✅ use your real IDs
   const [zoneId, setZoneId] = useState(ZONE_OPTIONS[0]?.value || "")
@@ -27,12 +30,58 @@ export default function PracticeLog(){
   const [pressured, setPressured] = useState(false)
   const [attempts, setAttempts] = useState(10)
   const [makes, setMakes] = useState(4)
+  const [runningEFG, setRunningEFG] = useState(0)
+  const [recentDrills, setRecentDrills] = useState([]) // list below drill section
+   // ➕/➖ handlers for attempts & makes
+  const dec = (setter) => setter(v => Math.max(0, Number(v||0) - 1))
+  const inc = (setter) => setter(v => Number(v||0) + 1)
+  const add5 = (setter) => setter(v => Number(v||0) + 5)
+  const invalidCounts = makes > attempts || (attempts === 0 && makes === 0)
+  const [runningMakes, setRunningMakes] = useState(0)
+  const [runningAttempts, setRunningAttempts] = useState(0)
 
-  const canSave = useMemo(
-    ()=> !!activeId && attempts>=0 && makes>=0 && makes<=attempts,
-    [activeId, attempts, makes]
+  // helper for 3PT lookup
+  const ZONE_IS_THREE = useMemo(
+    () => Object.fromEntries(ZONES.map(z => [z.id, !!z.isThree])),
+    []
   )
 
+  // 🔄 recompute running eFG% for the active session
+  async function refreshEFG(sessionId) {
+    if (!sessionId) {
+      setRunningEFG(0)
+      setRunningMakes(0)
+      setRunningAttempts(0)
+      return
+    }
+  
+    const entries = await listEntriesBySession(sessionId)
+    let A = 0, M = 0, TM = 0
+    for (const e of entries) {
+      const a = Number(e.attempts || 0)
+      const m = Number(e.makes || 0)
+      A += a
+      M += m
+      if (ZONE_IS_THREE[e.zone_id]) TM += m
+    }
+    const efg = A ? (M + 0.5 * TM) / A : 0
+  
+    setRunningEFG(efg)
+    setRunningMakes(M)
+    setRunningAttempts(A)
+  
+    // Also repopulate the recent drills list when loading/reloading the page
+    setRecentDrills(
+      entries.map(e => ({
+        id: e.id,
+        when: new Date(e.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        zoneId: e.zone_id,
+        shotType: e.shot_type,
+        attempts: e.attempts,
+        makes: e.makes,
+      }))
+    )
+  }
   
   async function refresh() {
     const all = await listPracticeSessions()
@@ -41,8 +90,50 @@ export default function PracticeLog(){
     const actives = all.filter(s => s?.status === "active" && !s?.ended_at)
     setActiveId(actives[0]?.id ?? null)
   }
-  useEffect(() => { void refresh() }, [])
 
+  useEffect(() => { void refresh() }, [])
+  // call refreshEFG whenever activeId changes or after a save
+  useEffect(() => { if (activeId) void refreshEFG(activeId) }, [activeId])
+
+  // 📝 Save & Mark Set: persist entry then marker, update running list + eFG
+  async function onSaveAndMarkSet() {
+    if (!activeSession?.id) return
+    const a = Number(attempts||0)
+    const m = Number(makes||0)
+    if (a <= 0 && m <= 0) return // nothing to save
+
+    const entry = await addEntry({
+      sessionId: activeSession.id,
+      zoneId,
+      shotType: shotTypeId,
+      pressured,
+      attempts: a,
+      makes: m,
+      ts: new Date().toISOString()
+    })
+
+    await addMarker({ sessionId: activeSession.id, label: "Set" })
+
+    // Append to local “recent drills” list shown under the section
+    setRecentDrills(prev => [
+      ...prev,
+      {
+        id: entry.id,
+        when: new Date(entry.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        zoneId: entry.zone_id,
+        shotType: entry.shot_type,
+        attempts: entry.attempts,
+        makes: entry.makes,
+      }
+    ])
+
+    // reset inputs for next drill
+    setAttempts(0)
+    setMakes(0)
+
+    // refresh running eFG
+    await refreshEFG(activeSession.id)
+  }
   // Handlers
   async function onConfirmStartNew() {
     // End currently active first (if any), then start a new one
@@ -62,23 +153,6 @@ export default function PracticeLog(){
     } else {
       void onConfirmStartNew()
     }
-  }
-
-  async function saveEntry({ keep=false } = {}){
-    if(!canSave) return
-    console.log("[PracticeLog] saveEntry() clicked")
-    await addEntry({
-      sessionId: activeId,
-      zoneId,                 // ✅ store your zone id
-      shotType: shotTypeId,   // ✅ store your shot type id
-      pressured,
-      attempts: Number(attempts),
-      makes: Number(makes),
-      ts: new Date().toISOString()
-    })
-    await refresh()
-    console.log("[PracticeLog] saveEntry() logged")
-    if(!keep){ setAttempts(10); setMakes(0) }
   }
 
   const activeSession = useMemo(
@@ -199,12 +273,18 @@ export default function PracticeLog(){
         </section>
 
         {/* Today pill */}
-        <section className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-          <div className="text-sm">
-            <span className="font-medium">Today:</span>{" "}
-            eFG% <span className="font-semibold">{(today.efg*100).toFixed(1)}%</span>{" • "}
-            Attempts <span className="font-semibold">{today.attempts}</span>{" • "}
-            Makes <span className="font-semibold">{today.makes}</span>
+        <section className="my-2">
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 flex items-center justify-between">
+            <div>
+              <div className="text-sm text-slate-600">Current Session eFG%</div>
+              <div className="text-2xl font-bold text-slate-900">
+                {isFinite(runningEFG) ? (runningEFG * 100).toFixed(1) : "0.0"}%
+              </div>
+            </div>
+            <div className="text-right text-sm text-slate-600">
+              <div>Total Shots: <span className="font-semibold text-slate-900">{runningAttempts}</span></div>
+              <div>Total Makes: <span className="font-semibold text-slate-900">{runningMakes}</span></div>
+            </div>
           </div>
         </section>
 
@@ -238,64 +318,77 @@ export default function PracticeLog(){
               </button>
             </div>
 
+            {/* Attempts row */}
             <div className="grid grid-cols-3 gap-3 items-center">
               <label className="label col-span-1">Attempts</label>
-              <input type="number" min="0" className="input col-span-2"
-                value={attempts} onChange={e=>setAttempts(e.target.value)} />
+
+              <div className="col-span-2 flex items-center gap-2">
+                <button type="button" onClick={() => dec(setAttempts)} className="btn btn-blue h-9 px-3 rounded-lg">−</button>
+
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  value={attempts}
+                  onChange={e => setAttempts(Math.max(0, Number(e.target.value || 0)))}
+                  className="h-9 w-20 rounded-lg border border-slate-300 bg-white px-2 text-center text-sm"
+                />
+
+                <button type="button" onClick={() => inc(setAttempts)} className="btn btn-blue h-9 px-3 rounded-lg">+</button>
+                <button type="button" onClick={() => add5(setAttempts)} className="btn btn-blue h-9 px-3 rounded-lg">+5</button>
+              </div>
             </div>
 
+            {/* Makes row */}
             <div className="grid grid-cols-3 gap-3 items-center">
               <label className="label col-span-1">Makes</label>
-              <input type="number" min="0" className="input col-span-2"
-                value={makes} onChange={e=>setMakes(e.target.value)} />
+
+              <div className="col-span-2 flex items-center gap-2">
+                <button type="button" onClick={() => dec(setMakes)} className="btn btn-blue h-9 px-3 rounded-lg">−</button>
+
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  value={makes}
+                  onChange={e => setMakes(Math.max(0, Number(e.target.value || 0)))}
+                  className="h-9 w-20 rounded-lg border border-slate-300 bg-white px-2 text-center text-sm"
+                />
+
+                <button type="button" onClick={() => inc(setMakes)} className="btn btn-blue h-9 px-3 rounded-lg">+</button>
+                <button type="button" onClick={() => add5(setMakes)} className="btn btn-blue h-9 px-3 rounded-lg">+5</button>
+              </div>
             </div>
 
-            <div className="flex gap-2 pt-1">
-              <button type="button" onClick={()=>saveEntry({ keep:true })} disabled={!canSave}
-                className={`btn h-10 rounded-lg text-sm font-medium ${
-                  canSave
-                    ? "btn-outline-emerald"
-                    : "bg-slate-100 text-slate-400 border-slate-200"
-                }`}>
-                Save &amp; Add Another
-              </button>
-              <button type="button" onClick={()=>saveEntry({ keep:false })} disabled={!canSave}
-                className={`btn h-10 rounded-lg text-sm font-medium ${
-                  canSave
-                    ? "btn-emerald"
-                    : "bg-slate-100 text-slate-400 border-slate-200"
-                }`}>
-                Save
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={onSaveAndMarkSet}
+                disabled={!activeSession || invalidCounts}
+                className="btn btn-emerald h-10 rounded-lg text-sm font-medium"
+              >
+                Save &amp; Mark Set
               </button>
             </div>
           </div>
         </section>
 
-        {/* Quick actions */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-3">
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              onClick={()=>setAttempts(a=>Number(a||0)+10)}
-              className="btn btn-blue h-12 rounded-xl"
-            >
-              +10 Attempts
-            </button>
-
-            <button
-              onClick={()=>{
-                setMakes(m=>Number(m||0)+1);
-                setAttempts(a=>Number(a||0)+1);
-              }}
-              className="btn btn-blue h-12 rounded-xl"
-            >
-              +Make
-            </button>
-
-            <button type="button" className="btn btn-emerald h-12 rounded-xl">
-              Mark Set
-            </button>
-          </div>
+        {recentDrills.length > 0 && (
+        <section className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+          <div className="text-sm font-semibold text-slate-900 mb-2">This Session – Logged Drills</div>
+          <ul className="space-y-2">
+            {recentDrills.map(d => (
+              <li key={d.id} className="flex items-center justify-between text-sm">
+                <div className="flex flex-col">
+                  <span className="text-slate-900">{d.shotType} • {d.zoneId}</span>
+                  <span className="text-slate-500">{d.when}</span>
+                </div>
+                <div className="font-medium text-slate-900">{d.makes}/{d.attempts}</div>
+              </li>
+            ))}
+          </ul>
         </section>
+      )}
       </main>
     </div>
   )
