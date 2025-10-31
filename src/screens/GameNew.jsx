@@ -1,16 +1,141 @@
-export default function GameNew({ onStart, onCancel }){
-    return (
-        <div className="page">
-        <h1 className="h1">New Game Setup</h1>
-        <div className="card space-y-2">
-            <input className="border rounded-lg px-3 py-2 w-full" placeholder="Your Team" />
-            <input className="border rounded-lg px-3 py-2 w-full" placeholder="Opponent" />
-            <div className="flex gap-2">
-            <button className="btn" onClick={onCancel}>Cancel</button>
-            <button className="btn btn-primary ml-auto" onClick={onStart}>Start Game</button>
-            </div>
+import React, { useMemo, useState } from "react"
+import { addGameSession } from "../lib/game-db"
+import { LEVELS } from "../constants/programLevel"
+
+export default function GameNew({ navigate }) {
+  // Defaults
+  const todayISO = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const [dateISO, setDateISO]       = useState(todayISO)
+  const [teamName, setTeamName]     = useState("")
+  const [opponent, setOpponent]     = useState("")
+  const [venue, setVenue]           = useState("")
+  const [level, setLevel]           = useState("High School")
+  const [homeAway, setHomeAway]     = useState("Home")
+
+  const [saving, setSaving]         = useState(false)
+
+  function invalidReason() {
+    if (!teamName.trim())   return "Enter your team."
+    if (!opponent.trim())   return "Enter the opponent."
+    if (!dateISO)           return "Pick a date."
+    return null
+  }
+
+  async function startGame() {
+    const why = invalidReason()
+    if (why) { alert(why); return }
+
+    setSaving(true)
+    try {
+      const row = await addGameSession({
+        date_iso: dateISO,
+        team_name: teamName.trim(),
+        opponent_name: opponent.trim(),
+        venue: venue.trim() || null,
+        level,                         // e.g., "High School"
+        home_away: homeAway.toLowerCase(), // "home" | "away"
+      })
+      // Jump straight into the live logger
+      navigate?.("game-logger", { id: row.id })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="px-4 pt-3 pb-24 max-w-screen-sm mx-auto">
+      <header className="mb-3">
+        <h2 className="text-xl font-semibold text-slate-900">New Game</h2>
+      </header>
+
+      <section className="space-y-4">
+        {/* Date */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
+          <input
+            type="date"
+            value={dateISO}
+            onChange={e => setDateISO(e.target.value)}
+            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-900"
+          />
         </div>
+
+        {/* Your Team */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Your Team</label>
+          <input
+            type="text"
+            placeholder="e.g., Panthers"
+            value={teamName}
+            onChange={e => setTeamName(e.target.value)}
+            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 placeholder-slate-400 text-slate-900"
+          />
         </div>
-    )
+
+        {/* Opponent */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Opponent</label>
+          <input
+            type="text"
+            placeholder="e.g., Tigers"
+            value={opponent}
+            onChange={e => setOpponent(e.target.value)}
+            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 placeholder-slate-400 text-slate-900"
+          />
+        </div>
+
+        {/* Venue */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Venue</label>
+          <input
+            type="text"
+            placeholder="e.g., Main Gym"
+            value={venue}
+            onChange={e => setVenue(e.target.value)}
+            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 placeholder-slate-400 text-slate-900"
+          />
+        </div>
+
+        {/* Level + Home/Away */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Level</label>
+            <select
+                value={level}
+                onChange={e => setLevel(e.target.value)}
+                className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-900"
+            >
+                {LEVELS.map(l => (
+                <option key={l.key} value={l.label}>
+                    {l.label}
+                </option>
+                ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Home/Away</label>
+            <input
+              type="text"
+              value={homeAway}
+              onChange={e => setHomeAway(e.target.value)}
+              className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-900"
+            />
+          </div>
+        </div>
+
+        {/* Start button (emerald) */}
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={startGame}
+            disabled={saving}
+            className="btn btn-emerald w-full h-11 rounded-xl text-base font-semibold"
+          >
+            {saving ? "Starting…" : "Start Game"}
+          </button>
+        </div>
+      </section>
+    </div>
+  )
 }
-  
