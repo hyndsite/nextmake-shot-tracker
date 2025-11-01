@@ -57,8 +57,18 @@ export default function App() {
     return () => { mounted = false; sub.subscription.unsubscribe() }
   }, [])
 
+  // add this effect after your state declarations
+useEffect(() => {
+  if (activeTab === "game") {
+    // Always land on GameGate per your requirement
+    setGameRoute({ screen: "gate", params: {} });
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [activeTab]);
+
   // ---------- navigation helpers ----------
   const toModeGate = () => setScreen("mode")
+  
 
   // ModeGate → choose starting tab (practice|game)
   const handleModeSelect = (m) => {
@@ -104,6 +114,7 @@ export default function App() {
       {/* tab content */}
       {activeTab === "practice" && <PracticeLog />}
 
+      {/* // ... in the Game tab section, add a tiny fallback component: */}
       {activeTab === "game" && (
         <>
           {gameRoute.screen === "gate" && <GameGate navigate={navGame} />}
@@ -111,9 +122,16 @@ export default function App() {
           {gameRoute.screen === "game-logger" && (
             <GameLogger id={gameRoute.params?.id} navigate={navGame} />
           )}
-          {/* {gameRoute.screen === "game-detail" && (
-            <GameDetail id={gameRoute.params?.id} navigate={navGame} />
-          )} */}
+          {gameRoute.screen === "game-detail" && (
+            <div className="px-4 pt-3 pb-24 max-w-screen-sm mx-auto">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="text-slate-900 font-semibold mb-1">Game Detail (placeholder)</div>
+                <p className="text-sm text-slate-600">
+                  Detail view coming soon. Tap the Game icon in the bottom nav to return to Game Center.
+                </p>
+              </div>
+            </div>
+          )}
         </>
       )}
 

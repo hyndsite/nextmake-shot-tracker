@@ -1,4 +1,4 @@
-import { createStore, get, set, keys  } from "idb-keyval"
+import { createStore, get, set, del, keys  } from "idb-keyval"
 import { uuid } from "./util-id"
 import { notifyLocalMutate } from "./sync-notify"
 
@@ -78,6 +78,28 @@ export async function addGameSession(meta = {}) {
 
   await set(id, row, st.game.sessions)
   return row
+}
+
+export async function deleteGameSession(id) {
+  // Best-effort delete of events linked to this session.
+  try {
+    const evKeys = await keys(st.game.events);
+    for (const k of evKeys) {
+      const ev = await get(k, st.game.events);
+      if (ev?.session_id === id) {
+        await del(k, st.game.events);
+      }
+    }
+  } catch (err) {
+    // If the events store doesn't exist yet on this device, skip gracefully.
+    if (err?.name !== "NotFoundError") {
+      console.warn("[game-db] delete events warning:", err);
+    }
+  }
+
+  // Remove the session row (this store is known-good)
+  await del(id, st.game.sessions);
+  return true;
 }
 
 // Used by sync.js:

@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react"
-import { Plus, PlayCircle, Gamepad2, Trash2 } from "lucide-react"
+import { PlayCircle, Gamepad2, Trash2 } from "lucide-react"
 import {
   listGameSessions,        // all sessions (active + completed), newest first
   getActiveGameSession,    // returns active game or null
-  endGameSession,          // ends by id (sets ended_at + status:"completed")
+  endGameSession,
+  deleteGameSession         // ends by id (sets ended_at + status:"completed")
 } from "../lib/game-db"
 
 /**
@@ -73,6 +74,15 @@ export default function GameGate({ navigate }) {
 
   const openDetail = (id) => navigate?.("game-detail", { id })
 
+
+  async function onDelete(id, e) {
+    e?.stopPropagation(); // prevent card click
+    const ok = window.confirm("Delete this game and all its logged events?");
+    if (!ok) return;
+    await deleteGameSession(id);
+    await refresh();
+  }
+
   // ---- UI helpers ----------------------------------------------------------
   const fmtDate = (iso) => {
     try {
@@ -136,14 +146,24 @@ export default function GameGate({ navigate }) {
 
       {[...groupedPrev.entries()].map(([group, rows]) => (
         <section key={group} className="mt-2 space-y-2">
-          {/* Optional group label; hide if it's just 'Games' */}
           {group !== "Games" && (
             <div className="text-xs uppercase tracking-wide text-slate-500 pl-1">{group}</div>
           )}
           {rows.map((g) => (
             <div
               key={g.id}
-              className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 flex items-center gap-3"
+              role="button"
+              tabIndex={0}
+              onClick={() => openDetail(g.id)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault(); openDetail(g.id)
+                }
+              }}
+              className="w-full text-left rounded-2xl border border-slate-200 bg-white px-3 py-2.5
+                        flex items-center gap-3 hover:bg-slate-50 active:scale-[0.995]
+                        focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+              aria-label={`${g.team_name} vs ${g.opponent_name} on ${fmtDate(g.date_iso || g.started_at)}`}
             >
               <div className="shrink-0 mt-0.5">
                 <Gamepad2 size={18} className="text-slate-500" />
@@ -155,21 +175,23 @@ export default function GameGate({ navigate }) {
                 </div>
                 <div className="mt-1">{homeAwayPill(g)}</div>
               </div>
-              <div className="flex items-center gap-2">
+
+              {/* Trash button (stops card click) */}
+              <div className="shrink-0 pl-2">
                 <button
                   type="button"
-                  onClick={() => openDetail(g.id)}
-                  className="text-sky-700 text-sm font-medium"
+                  onClick={(e) => { e.stopPropagation(); onDelete(g.id, e) }}
+                  className="p-1.5 rounded-lg hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                  aria-label="Delete game"
                 >
-                  View
+                  <Trash2 size={18} className="text-red-600" />
                 </button>
-                {/* Optional delete icon – only wire if you implement deleteGameSession in game-db */}
-                {/* <button className="text-red-500"><Trash2 size={18} /></button> */}
               </div>
             </div>
           ))}
         </section>
       ))}
+
 
       {/* Confirm modal for “New Game” while one is active */}
       {showConfirmNew && (

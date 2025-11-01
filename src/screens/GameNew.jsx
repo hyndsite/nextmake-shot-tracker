@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react"
 import { addGameSession } from "../lib/game-db"
 import { LEVELS } from "../constants/programLevel"
+import { HOME_AWAY } from "../constants/homeAway"
 
 export default function GameNew({ navigate }) {
   // Defaults
@@ -115,13 +116,18 @@ export default function GameNew({ navigate }) {
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Home/Away</label>
-            <input
-              type="text"
-              value={homeAway}
-              onChange={e => setHomeAway(e.target.value)}
-              className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-900"
-            />
-          </div>
+            <select
+                value={homeAway}
+                onChange={e => setHomeAway(e.target.value)}
+                className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-900"
+            >
+                {HOME_AWAY.map(opt => (
+                <option key={opt.key} value={opt.label}>
+                    {opt.label}
+                </option>
+                ))}
+            </select>
+            </div>
         </div>
 
         {/* Start button (emerald) */}
