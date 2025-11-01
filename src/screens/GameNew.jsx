@@ -1,24 +1,23 @@
 import React, { useMemo, useState } from "react"
 import { addGameSession } from "../lib/game-db"
-import { LEVELS } from "../constants/programLevel"
-import { HOME_AWAY } from "../constants/homeAway"
+import { LEVELS } from "../constants/programLevel"      // <- ensure this file exists per our constants step
+import { HOME_AWAY } from "../constants/homeAway" // <- Home/Away dropdown options
 
 export default function GameNew({ navigate }) {
   // Defaults
   const todayISO = useMemo(() => new Date().toISOString().slice(0, 10), [])
-  const [dateISO, setDateISO]       = useState(todayISO)
-  const [teamName, setTeamName]     = useState("")
-  const [opponent, setOpponent]     = useState("")
-  const [venue, setVenue]           = useState("")
-  const [level, setLevel]           = useState("High School")
-  const [homeAway, setHomeAway]     = useState("Home")
-
-  const [saving, setSaving]         = useState(false)
+  const [dateISO, setDateISO]   = useState(todayISO)
+  const [teamName, setTeamName] = useState("")
+  const [opponent, setOpponent] = useState("")
+  const [venue, setVenue]       = useState("")
+  const [level, setLevel]       = useState("High School")
+  const [homeAway, setHomeAway] = useState("Home")
+  const [saving, setSaving]     = useState(false)
 
   function invalidReason() {
-    if (!teamName.trim())   return "Enter your team."
-    if (!opponent.trim())   return "Enter the opponent."
-    if (!dateISO)           return "Pick a date."
+    if (!teamName.trim()) return "Enter your team."
+    if (!opponent.trim()) return "Enter the opponent."
+    if (!dateISO)         return "Pick a date."
     return null
   }
 
@@ -33,10 +32,9 @@ export default function GameNew({ navigate }) {
         team_name: teamName.trim(),
         opponent_name: opponent.trim(),
         venue: venue.trim() || null,
-        level,                         // e.g., "High School"
-        home_away: homeAway.toLowerCase(), // "home" | "away"
+        level,                                  // e.g., "High School"
+        home_away: homeAway.toLowerCase(),      // "home" | "away"
       })
-      // Jump straight into the live logger
       navigate?.("game-logger", { id: row.id })
     } finally {
       setSaving(false)
@@ -44,12 +42,10 @@ export default function GameNew({ navigate }) {
   }
 
   return (
-    <div className="px-4 pt-3 pb-24 max-w-screen-sm mx-auto">
-      <header className="mb-3">
-        <h2 className="text-xl font-semibold text-slate-900">New Game</h2>
-      </header>
+    <div className="page">
+      <h2 className="screen-title">New Game</h2>
 
-      <section className="space-y-4">
+      <section className="section space-y-4">
         {/* Date */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
@@ -102,32 +98,32 @@ export default function GameNew({ navigate }) {
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Level</label>
             <select
-                value={level}
-                onChange={e => setLevel(e.target.value)}
-                className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-900"
+              value={level}
+              onChange={e => setLevel(e.target.value)}
+              className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-900"
             >
-                {LEVELS.map(l => (
+              {LEVELS.map(l => (
                 <option key={l.key} value={l.label}>
-                    {l.label}
+                  {l.label}
                 </option>
-                ))}
+              ))}
             </select>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Home/Away</label>
             <select
-                value={homeAway}
-                onChange={e => setHomeAway(e.target.value)}
-                className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-900"
+              value={homeAway}
+              onChange={e => setHomeAway(e.target.value)}
+              className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-900"
             >
-                {HOME_AWAY.map(opt => (
+              {HOME_AWAY.map(opt => (
                 <option key={opt.key} value={opt.label}>
-                    {opt.label}
+                  {opt.label}
                 </option>
-                ))}
+              ))}
             </select>
-            </div>
+          </div>
         </div>
 
         {/* Start button (emerald) */}
@@ -136,7 +132,7 @@ export default function GameNew({ navigate }) {
             type="button"
             onClick={startGame}
             disabled={saving}
-            className="btn btn-emerald w-full h-11 rounded-xl text-base font-semibold"
+            className="btn btn-emerald h-11 rounded-xl text-base font-semibold"
           >
             {saving ? "Starting…" : "Start Game"}
           </button>
