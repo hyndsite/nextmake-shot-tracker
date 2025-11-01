@@ -110,7 +110,7 @@ useEffect(() => {
 
   // screen === "app"
   return (
-    <div className="min-h-dvh pb-bottomnav">
+    <div className="w-full min-h-dvh pb-bottomnav">
       {/* tab content */}
       {activeTab === "practice" && <PracticeLog />}
 

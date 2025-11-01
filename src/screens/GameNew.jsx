@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react"
 import { addGameSession } from "../lib/game-db"
-import { LEVELS } from "../constants/programLevel"      // <- ensure this file exists per our constants step
+import {LEVELS } from "../constants/programLevel"     // <- ensure this file exists per our constants step
 import { HOME_AWAY } from "../constants/homeAway" // <- Home/Away dropdown options
 
 export default function GameNew({ navigate }) {
@@ -43,7 +43,7 @@ export default function GameNew({ navigate }) {
 
   return (
     <div className="page">
-      <h2 className="screen-title">New Game</h2>
+      <h1 className="screen-title">New Game</h1>
 
       <section className="section space-y-4">
         {/* Date */}

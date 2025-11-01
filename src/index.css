@@ -2,6 +2,14 @@
 /* Tailwind v4: load everything with the new import */
 @import "tailwindcss";
 
+/* --- Global full-width / full-height sanity --- */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+
+body { margin: 0; }
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -15,6 +23,10 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh; /* supports mobile dynamic viewport */
+  width: 100%;
 }
 
 /* Mobile niceties */
@@ -109,7 +121,50 @@
   .btn-blue {
     @apply bg-sky-600 text-white border border-sky-600 shadow-sm hover:bg-sky-700 active:scale-[0.98];
   }
+
+    /* Universal page wrapper: full device width, no max width */
+  .page {
+    @apply w-full max-w-none mx-0 px-4 pt-3;
+    /* Space for fixed BottomNav + safe area on iOS/Android */
+    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Generic card/section block */
+  .section {
+    @apply w-full rounded-2xl border border-slate-200 bg-white p-3;
+  }
+
+  /* Make primary buttons in sections naturally full width */
+  .section .btn {
+    @apply w-full;
+  }
+
+  /* Center screen titles by default */
+  .screen-title {
+    @apply text-center text-xl font-semibold text-slate-900 mb-3;
+  }
 }
+
+/* Center titles across all screens */
+.screen-title {
+  text-align: center;
+  font-size: 1.25rem; /* text-xl */
+  font-weight: 600;   /* font-semibold */
+  color: rgb(15 23 42); /* slate-900 */
+  margin-bottom: 0.75rem; /* mb-3 */
+}
+
+/* Cards/sections always fill width of the page */
+.section {
+  width: 100%;
+  border-radius: 1rem;      /* rounded-2xl */
+  border: 1px solid rgb(226 232 240); /* slate-200 */
+  background: #fff;
+  padding: 0.75rem;         /* p-3 */
+}
+
+/* Buttons inside sections expand to full width by default */
+.section .btn { @apply w-full;  }
 
 /* Prevent system dark auto-styling */
 html { color-scheme: light; }
