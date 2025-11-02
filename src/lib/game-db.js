@@ -102,6 +102,36 @@ export async function deleteGameSession(id) {
   return true;
 }
 
+export async function listGameEventsBySession(gameId) {
+  const out = []
+  const allKeys = await keys(st.game.events)
+
+  for (const k of allKeys) {
+    // idb-keyval keys can be strings or other types; normalize to string when possible
+    const keyStr = typeof k === "string" ? k : ""
+
+    // Fast path: composite key prefix match
+    if (keyStr && keyStr.startsWith(`${gameId}:`)) {
+      const ev = await get(k, st.game.events)
+      if (ev) out.push(ev)
+      continue
+    }
+
+    // Fallback: fetch and filter by value.game_id
+    const ev = await get(k, st.game.events)
+    if (ev?.game_id === gameId) out.push(ev)
+  }
+
+  // Stable sort by timestamp if present
+  out.sort((a, b) => {
+    const ta = typeof a.ts === "number" ? a.ts : 0
+    const tb = typeof b.ts === "number" ? b.ts : 0
+    return ta - tb
+  })
+
+  return out
+}
+
 // Used by sync.js:
 export async function _allDirtyGame(){ /* unchanged from earlier (returns dirty rows) */ }
 export async function _markClean(row){ /* unchanged from earlier (sets _dirty=false) */ }
