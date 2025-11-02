@@ -8,7 +8,7 @@ import {
 import ZONES from "../constants/zones"                 // [{id, name, isThree}, ...]
 import { ZONE_ANCHORS } from "../constants/zoneAnchors" // { zoneId: {x,y}, ... }
 import SHOT_TYPES from "../constants/shotTypes"         // [{id,label}, ...]
-import { X, Target, Hand, Basketball, Plus } from "lucide-react"
+import { X, Target, Hand, Plus } from "lucide-react"
 import { MdSportsBasketball } from "react-icons/md"
 /**
  * Assumptions:
