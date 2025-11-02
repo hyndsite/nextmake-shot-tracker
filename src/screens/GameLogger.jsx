@@ -9,7 +9,7 @@ import ZONES from "../constants/zones"                 // [{id, name, isThree}, 
 import { ZONE_ANCHORS } from "../constants/zoneAnchors" // { zoneId: {x,y}, ... }
 import SHOT_TYPES from "../constants/shotTypes"         // [{id,label}, ...]
 import { X, Target, Hand, Basketball, Plus } from "lucide-react"
-
+import { MdSportsBasketball } from "react-icons/md"
 /**
  * Assumptions:
  * - Court image path: /images/court-half.svg   (adjust if your asset lives elsewhere)
@@ -227,7 +227,7 @@ export default function GameLogger({ id: gameId, navigate }) {
           onClick={() => logQuick("rebound")}
           className="h-10 rounded-full border border-sky-300 text-sky-700 bg-sky-50 font-medium flex items-center justify-center gap-2"
         >
-          <Basketball size={16} /> Rebounds
+          <MdSportsBasketball size={16} /> Rebounds
         </button>
         <button
           type="button"
