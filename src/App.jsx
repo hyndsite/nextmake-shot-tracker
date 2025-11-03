@@ -22,6 +22,7 @@ import { initAutoSync } from "./lib/sync"
 import { supabase } from "./lib/supabase"
 import { whenIdbReady } from "./lib/idb-init";
 import { fixBadHomeAway } from "./lib/game-db"
+import PracticeGate from "./screens/PracticeGate"
 
 export default function App() {
   // high-level screen: "login" | "mode" | "app"
@@ -35,6 +36,7 @@ export default function App() {
   // lightweight router for the Game tab
   // screen: "gate" | "game-new" | "game-logger" | "game-detail"
   const [gameRoute, setGameRoute] = useState({ screen: "gate", params: {} })
+  const [practiceRoute, setPracticeRoute] = useState({ screen: "gate", params: {} })
 
   // ---------- effects ----------
   // 1) Auto-sync engine
@@ -44,6 +46,13 @@ export default function App() {
       initAutoSync();         // start sync after stores exist
     })();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "practice") {
+      setPracticeRoute({ screen: "gate", params: {} })
+    }
+  }, [activeTab])
+    
 
   useEffect(() => { fixBadHomeAway().catch(()=>{}) }, [])
 
@@ -68,13 +77,18 @@ export default function App() {
   }, [])
 
   // add this effect after your state declarations
-useEffect(() => {
-  if (activeTab === "game") {
-    // Always land on GameGate per your requirement
-    setGameRoute({ screen: "gate", params: {} });
+  useEffect(() => {
+    if (activeTab === "game") {
+      // Always land on GameGate per your requirement
+      setGameRoute({ screen: "gate", params: {} });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  const navPractice = (nextScreen, params = {}) => {
+    setPracticeRoute({ screen: nextScreen, params })
+    setActiveTab("practice")
   }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [activeTab]);
 
   // ---------- navigation helpers ----------
   const toModeGate = () => setScreen("mode")
@@ -122,7 +136,18 @@ useEffect(() => {
   return (
     <div className="w-full min-h-dvh pb-bottomnav">
       {/* tab content */}
-      {activeTab === "practice" && <PracticeLog />}
+      {activeTab === "practice" && (
+        <>
+          {practiceRoute.screen === "gate" && <PracticeGate navigate={navPractice} />}
+          {practiceRoute.screen === "practice-log" && (
+            <PracticeLog
+              id={practiceRoute.params?.id}
+              started_at={practiceRoute.params?.started_at}
+              navigate={navPractice}
+            />
+          )}
+        </>
+      )}
 
       {/* // ... in the Game tab section, add a tiny fallback component: */}
       {activeTab === "game" && (

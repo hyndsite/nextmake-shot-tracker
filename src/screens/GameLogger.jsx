@@ -16,7 +16,7 @@ import {
 import { X, Target, Hand, Plus } from "lucide-react"
 import { MdSportsBasketball } from "react-icons/md"
 import "../styles/GameLogger.css"
-import { ArrowLeft } from "lucide-react" // at the top if you aren’t already
+import { ArrowLeft } from "lucide-react"
 /* ---------------------------------------------------------
    Anchor helpers (handles object map or array inputs)
 --------------------------------------------------------- */

@@ -7,19 +7,74 @@ import {
   listPracticeSessions,
   listActivePracticeSessions,
 } from "../lib/practice-db"
-import { PlayCircle, Trash2 } from "lucide-react"
+import { PlayCircle, Trash2, ChevronDown } from "lucide-react"
 
 function fmtDate(iso) {
   try { return new Date(iso).toLocaleDateString() } catch { return iso || "—" }
 }
+
 function dayName(iso) {
   try { return new Date(iso).toLocaleDateString(undefined, { weekday: "long" }) } catch { return "—" }
+}
+
+function monthKey(iso) {
+  try {
+    const d = new Date(iso || Date.now())
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, "0")
+    return `${y}-${m}`
+  } catch {
+    return "0000-00"
+  }
+}
+
+function monthLabel(iso) {
+  try {
+    const d = new Date(iso || Date.now())
+    return d.toLocaleDateString(undefined, { month: "long", year: "numeric" })
+  } catch {
+    return "Unknown"
+  }
 }
 
 export default function PracticeGate({ navigate }) {
   const [sessions, setSessions] = useState([])
   const [active, setActive] = useState(null)
   const [confirmingNew, setConfirmingNew] = useState(false)
+  const [openMonth, setOpenMonth] = useState(null)
+
+  const groupedMonths = useMemo(() => {
+    const rows = sessions
+      // don't show the current active session in "Previous"
+      .filter(s => !active || s.id !== active.id)
+      .filter(s => s.started_at || s.date_iso)
+
+    if (!rows.length) return []
+
+    const map = new Map()
+    for (const s of rows) {
+      const base = s.started_at || s.date_iso
+      const key = monthKey(base)
+      const label = monthLabel(base)
+      if (!map.has(key)) {
+        map.set(key, { key, label, sessions: [] })
+      }
+      map.get(key).sessions.push(s)
+    }
+
+    const months = Array.from(map.values())
+    // Months in descending order
+    months.sort((a, b) => b.key.localeCompare(a.key))
+    // Sessions within each month in descending order
+    for (const m of months) {
+      m.sessions.sort((a, b) => {
+        const da = a.started_at || a.date_iso || ""
+        const db = b.started_at || b.date_iso || ""
+        return db.localeCompare(da)
+      })
+    }
+    return months
+  }, [sessions, active])
 
   async function refresh() {
     const all = await listPracticeSessions()
@@ -29,19 +84,12 @@ export default function PracticeGate({ navigate }) {
   }
   useEffect(() => { refresh() }, [])
 
-  const previous = useMemo(() =>
-    sessions
-      .filter(s => s.id !== active?.id)
-      .sort((a,b) => (b.started_at || "").localeCompare(a.started_at || "")),
-    [sessions, active]
-  )
-
   // Actions
   const startNew = async () => {
     if (active) { setConfirmingNew(true); return }
     const row = await addPracticeSession({})
     await refresh()
-    navigate?.("practice-log", { id: row.id })
+    navigate?.("practice-log", { id: row.id, started_at: row.started_at })
   }
 
   const confirmEndAndStart = async () => {
@@ -49,16 +97,18 @@ export default function PracticeGate({ navigate }) {
     const row = await addPracticeSession({})
     setConfirmingNew(false)
     await refresh()
-    navigate?.("practice-log", { id: row.id })
+    navigate?.("practice-log", { id: row.id, started_at: row.started_at })
   }
 
   const resumeActive = () => {
     if (!active) return
-    navigate?.("practice-log", { id: active.id })
+    navigate?.("practice-log", { id: active.id, started_at: active.started_at })
   }
 
   const openSession = (id) => {
-    navigate?.("practice-log", { id })
+    const s = sessions.find(x => x.id === id)
+    if (!s) return
+    navigate?.("practice-log", { id: s.id, started_at: s.started_at })
   }
 
   const onDelete = async (id) => {
@@ -92,28 +142,57 @@ export default function PracticeGate({ navigate }) {
 
       <h2 className="text-lg font-semibold mb-2">Previous Sessions</h2>
 
-      <div className="space-y-2">
-        {previous.map(s => (
-          <div key={s.id} className="flex items-center gap-2 rounded-xl border bg-white px-3 py-3">
+      <div className="space-y-3">
+        {groupedMonths.map((month) => (
+          <div key={month.key} className="rounded-xl border bg-white">
             <button
-              className="flex-1 text-left"
-              onClick={() => openSession(s.id)}
-              aria-label="Open session"
+              type="button"
+              onClick={() => setOpenMonth(openMonth === month.key ? null : month.key)}
+              className="w-full flex items-center justify-between px-3 py-2"
             >
-              <div className="font-medium">{dayName(s.date_iso)}</div>
-              <div className="text-sm text-slate-500">{fmtDate(s.date_iso)}</div>
+              <span className="text-sm font-semibold text-slate-900">
+                {month.label}
+              </span>
+              <ChevronDown
+                size={18}
+                className={`transition-transform ${openMonth === month.key ? "rotate-180" : ""}`}
+              />
             </button>
-            <button
-              className="p-2 rounded-md text-red-600 hover:bg-red-50"
-              onClick={() => onDelete(s.id)}
-              aria-label="Delete session"
-              title="Delete session"
-            >
-              <Trash2 size={18} />
-            </button>
+
+            {openMonth === month.key && (
+              <div className="border-t border-slate-100">
+                {month.sessions.map((s) => (
+                  <div
+                    key={s.id}
+                    className="flex items-center gap-2 px-3 py-3 border-b last:border-b-0"
+                  >
+                    <button
+                      className="flex-1 text-left"
+                      onClick={() => openSession(s.id)}
+                      aria-label="Open session"
+                    >
+                      <div className="font-medium">
+                        {dayName(s.started_at || s.date_iso)}
+                      </div>
+                      <div className="text-sm text-slate-500">
+                        {fmtDate(s.started_at || s.date_iso)}
+                      </div>
+                    </button>
+                    <button
+                      className="p-2 rounded-md text-red-600 hover:bg-red-50"
+                      onClick={() => onDelete(s.id)}
+                      aria-label="Delete session"
+                      title="Delete session"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
-        {previous.length === 0 && (
+        {groupedMonths.length === 0 && (
           <div className="text-sm text-slate-500">No previous sessions yet.</div>
         )}
       </div>
