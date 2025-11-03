@@ -155,9 +155,9 @@ export default function GameGate({ navigate }) {
               key={g.id}
               role="button"
               tabIndex={0}
-              onClick={() => openDetail(g.id)}
+              onClick={() => navigate("gameDetail", { id: g.id })}
               onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetail(g.id) }
+                if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate("gameDetail", { id: g.id })}
               }}
               className="w-full text-left rounded-2xl border border-slate-200 bg-white px-3 py-2.5
                          flex items-center gap-3 hover:bg-slate-50 active:scale-[0.995]

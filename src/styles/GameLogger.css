@@ -1,0 +1,124 @@
+/* ==========================================================================
+   GameLogger screen-specific styling
+   ========================================================================== */
+
+/* Ensure Samsung/Android devices don’t auto-darken */
+.gamelogger,
+.gamelogger * {
+  color-scheme: light !important;
+}
+
+/* --- Quick Stat Buttons (Steal, Assist, Rebound) --- */
+.gamelogger .quick-btn {
+  background-color: #ffffff !important;        /* White */
+  border: 2px solid #3c64b9 !important;        /* Tailwind sky-500 */
+  color: #0ea5e9 !important;                   /* Blue text */
+  font-weight: 500;
+  border-radius: 9999px;                       /* Full pill shape */
+  height: 2.5rem;                              /* h-10 equivalent */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  box-shadow: none;
+}
+
+.gamelogger .quick-btn:active {
+  transform: scale(0.98);
+}
+
+/* --- Shot Type Buttons in ShotModal --- */
+.shotmodal .shot-type-btn {
+  background-color: #ffffff !important;
+  border: 2px solid #3c64b9 !important;
+  color: #0ea5e9 !important;
+  font-weight: 500;
+  border-radius: 0.75rem; /* rounded-xl */
+  height: 2.5rem;
+  transition: all 0.2s ease;
+}
+
+.shotmodal .shot-type-btn.selected {
+  background-color: #3c64b9 !important;
+  border-color: #3c64b9 !important;
+  color: #ffffff !important;
+}
+
+.shotmodal .contested-btn.disabled {
+  border-color: #cbd5e1 !important; /* slate-300 */
+  color: #cbd5e1 !important;
+  cursor: not-allowed !important;
+  opacity: 0.6;
+}
+
+.shotmodal .contested-btn {
+  background-color: #ffffff !important;
+  border-color: #3cb95d !important;
+  color: #3cb95d !important;
+  font-weight: 500;
+  border-radius: 0.75rem; /* rounded-xl */
+  height: 2.5rem;
+  transition: all 0.2s ease;
+}
+
+.shotmodal .contested-btn.selected {
+  background-color: #3cb95d!important;
+  border-color: #3cb95d !important;
+  color: #ffffff !important;
+}
+
+/* ==========================================================================
+   Zone shot markers
+   ========================================================================== */
+
+   .zone-marker {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 2px;
+    pointer-events: none; /* don't block taps on zone buttons */
+  }
+  
+  .zone-marker svg {
+    width: 12px;
+    height: 12px;
+  }
+  
+  /* Optional subtle scaling for dense clusters */
+  .zone-marker.dense svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* ==========================================================================
+   Zone buttons (touch areas over the court)
+   ========================================================================== */
+
+/* Make them transparent regardless of OS theme */
+.zone-btn {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Keep their hit area large for mobile */
+.zone-btn {
+  width: 56px;   /* 14 * 4px = 56px */
+  height: 56px;
+  border-radius: 50%;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+}
+
+/* Add subtle visual feedback on hover/active */
+.zone-btn:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+.zone-btn:active {
+  transform: translate(-50%, -50%) scale(0.96);
+}
+

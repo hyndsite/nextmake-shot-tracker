@@ -1,57 +1,87 @@
-import React, { useEffect, useMemo, useRef, useState } from "react"
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
+import { SHOT_TYPES } from "../constants/shotTypes"
+import { ZONES } from "../constants/zones"
+import { ZONE_ANCHORS } from "../constants/zoneAnchors"
 import {
   endGameSession,
   getGameSession,
   listGameEventsBySession,
   addGameEvent,
 } from "../lib/game-db"
-import ZONES from "../constants/zones"                 // [{id, name, isThree}, ...]
-import { ZONE_ANCHORS } from "../constants/zoneAnchors" // { zoneId: {x,y}, ... }
-import SHOT_TYPES from "../constants/shotTypes"         // [{id,label}, ...]
 import { X, Target, Hand, Plus } from "lucide-react"
 import { MdSportsBasketball } from "react-icons/md"
-/**
- * Assumptions:
- * - Court image path: /images/court-half.svg   (adjust if your asset lives elsewhere)
- * - addGameEvent persists `{ mode: "game", ... }`
- * - listGameEventsBySession(gameId) returns all events for this game
- */
+import "../styles/GameLogger.css"
+import { ArrowLeft } from "lucide-react" // at the top if you aren’t already
+/* ---------------------------------------------------------
+   Anchor helpers (handles object map or array inputs)
+--------------------------------------------------------- */
+function anchorsToArray(anchors) {
+  if (Array.isArray(anchors)) {
+    return anchors.map((a, i) => ({
+      id: a.id ?? a.key ?? a.zoneId ?? String(i),
+      x: a.x,
+      y: a.y,
+      label: a.label ?? (a.id ?? a.zoneId ?? String(i)),
+    }))
+  }
+  return Object.entries(anchors || {}).map(([id, pt]) => ({
+    id,
+    x: pt.x,
+    y: pt.y,
+    label: pt.label ?? id,
+  }))
+}
+function detectCoordMode(arr) {
+  let maxX = -Infinity, maxY = -Infinity
+  for (const a of arr) { maxX = Math.max(maxX, a.x || 0); maxY = Math.max(maxY, a.y || 0) }
+  if (maxX <= 1 && maxY <= 1) return "fraction"
+  if (maxX > 100 || maxY > 100) return "pixel"
+  return "percent"
+}
+function toPercentAnchors(arr, mode, imgW, imgH) {
+  return arr.map((a) => {
+    let leftPct, topPct
+    if (mode === "fraction") { leftPct = a.x * 100; topPct = a.y * 100 }
+    else if (mode === "pixel") { leftPct = (a.x / imgW) * 100; topPct = (a.y / imgH) * 100 }
+    else { leftPct = a.x; topPct = a.y }
+    return { id: a.id, label: a.label, leftPct, topPct }
+  })
+}
 
+/* ---------------------------------------------------------
+   Main component
+--------------------------------------------------------- */
 export default function GameLogger({ id: gameId, navigate }) {
   const [game, setGame] = useState(null)
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
 
   // UI state
-  const [shotModal, setShotModal] = useState(null) // { zoneId, isThree, shotType, pressured }
+  const [shotModal, setShotModal] = useState(null) // { zoneId, zoneLabel, isThree, shotType, pressured }
   const [ftModalOpen, setFtModalOpen] = useState(false)
 
-  // Court sizing
-  const imgRef = useRef(null)
-  const [imgSize, setImgSize] = useState({ w: 1, h: 1 })
+  // Court sizing / anchors
+  const [imgNatural, setImgNatural] = useState({ w: 0, h: 0 })
+  const ANCHORS_ARR = useMemo(() => anchorsToArray(ZONE_ANCHORS), [])
+  const coordMode = useMemo(() => detectCoordMode(ANCHORS_ARR), [ANCHORS_ARR])
+  const pctAnchors = useMemo(() => {
+    if (!imgNatural.w || !imgNatural.h) return []
+    return toPercentAnchors(ANCHORS_ARR, coordMode, imgNatural.w, imgNatural.h)
+  }, [ANCHORS_ARR, coordMode, imgNatural])
 
-  // Build a quick zone lookup map
+  // Zones map
   const zoneMap = useMemo(() => {
     const m = new Map()
-    ZONES.forEach(z => m.set(z.id, z))
+    ZONES.forEach((z) => m.set(z.id, z))
     return m
   }, [])
 
-  // Derive the base coordinate system from the anchors themselves
-  const BASE = useMemo(() => {
-    let maxX = 1, maxY = 1
-    for (const a of Object.values(ZONE_ANCHORS)) {
-      if (a.x > maxX) maxX = a.x
-      if (a.y > maxY) maxY = a.y
-    }
-    return { w: maxX, h: maxY }
-  }, [])
-
-  // Scale factors from base anchor space to rendered image
-  const scale = useMemo(() => ({
-    kx: imgSize.w / BASE.w,
-    ky: imgSize.h / BASE.h,
-  }), [imgSize, BASE])
+  const pct = (m, a) => { return a ? ((m / a) * 100).toFixed(1) : 0}
 
   // Load game + events
   async function refresh() {
@@ -60,38 +90,31 @@ export default function GameLogger({ id: gameId, navigate }) {
       getGameSession(gameId),
       listGameEventsBySession(gameId),
     ])
-    setGame(g)
+    setGame(g || null)
     setEvents(ev || [])
     setLoading(false)
   }
   useEffect(() => { void refresh() }, [gameId])
 
-  // Track rendered size for scaling anchors
-  useEffect(() => {
-    const el = imgRef.current
-    if (!el) return
-    const sync = () => {
-      const r = el.getBoundingClientRect()
-      setImgSize({ w: r.width, h: r.height })
-    }
-    sync()
-    window.addEventListener("resize", sync)
-    return () => window.removeEventListener("resize", sync)
-  }, [])
-
-  // Title line
-  function titleLine(g) {
-    if (!g) return ""
-    const homeAway = (g.home_away || "").toLowerCase() === "home" ? "Home" : "Away"
-    return `${g.team_name} vs ${g.opponent_name} · ${homeAway} · ${g.level || ""}`.trim()
+  // read image intrinsic size (once on load)
+  function onImgLoad(e) {
+    const img = e.currentTarget
+    const w = img.naturalWidth || 0
+    const h = img.naturalHeight || 0
+    if (w && h) setImgNatural({ w, h })
   }
 
-  // Aggregated live stats
+  function titleLine(g) {
+    if (!g) return ""
+    const ha = (g.home_away || "").toLowerCase() === "home" ? "Home" : "Away"
+    return `${g.team_name} vs ${g.opponent_name} · ${ha} · ${g.level || ""}`.trim()
+  }
+
+  // Live stats
   const stats = useMemo(() => {
     let assists = 0, rebounds = 0, steals = 0
     let ftMakes = 0, ftAtt = 0
     let fgm = 0, fga = 0, threesMade = 0
-
     for (const e of events) {
       switch (e.type) {
         case "assist": assists++; break
@@ -100,10 +123,7 @@ export default function GameLogger({ id: gameId, navigate }) {
         case "freethrow": ftAtt++; if (e.made) ftMakes++; break
         case "shot":
           fga++
-          if (e.made) {
-            fgm++
-            if (e.is_three) threesMade++
-          }
+          if (e.made) { fgm++; if (e.is_three) threesMade++ }
           break
         default: break
       }
@@ -118,23 +138,21 @@ export default function GameLogger({ id: gameId, navigate }) {
     await addGameEvent({ game_id: gameId, mode: "game", type, ts: Date.now() })
     await refresh()
   }
-
   async function logFreeThrow(made) {
     await addGameEvent({ game_id: gameId, mode: "game", type: "freethrow", made, ts: Date.now() })
-    setFtModalOpen(false)
-    await refresh()
+    setFtModalOpen(false); await refresh()
   }
-
   function openShot(zoneId) {
     const z = zoneMap.get(zoneId)
+    const defaultType = null // force user to choose shot type first
     setShotModal({
       zoneId,
+      zoneLabel: z?.label || zoneId,
       isThree: !!z?.isThree,
-      shotType: (Array.isArray(SHOT_TYPES) && SHOT_TYPES[0]?.label) || "Jump Shot",
-      pressured: false,
+      shotType: defaultType,      // null initially → must select
+      pressured: null,            // null initially → must select after shot type
     })
   }
-
   async function commitShot({ zoneId, isThree, shotType, pressured, made }) {
     await addGameEvent({
       game_id: gameId,
@@ -147,10 +165,8 @@ export default function GameLogger({ id: gameId, navigate }) {
       made: !!made,
       ts: Date.now(),
     })
-    setShotModal(null)
-    await refresh()
+    setShotModal(null); await refresh()
   }
-
   async function onEndGame() {
     if (!game) return
     const ok = window.confirm("End this game?")
@@ -170,6 +186,16 @@ export default function GameLogger({ id: gameId, navigate }) {
 
   return (
     <div className="page">
+      <div className="flex items-center mb-3">
+        <button
+          type="button"
+          onClick={() => navigate?.("gate")} // or setActiveTab('game') if using your App tab state
+          className="flex items-center gap-1 border border-sky-600 text-sky-700 px-3 py-1.5 rounded-lg bg-white hover:bg-sky-50 active:scale-[0.98] shadow-sm"
+        >
+          <ArrowLeft size={16} />
+          <span className="text-sm font-medium">Back</span>
+        </button>
+      </div>
       {/* Header */}
       <div className="flex items-start justify-between mb-2">
         <div className="text-slate-800 font-medium leading-5 pr-3">
@@ -184,66 +210,70 @@ export default function GameLogger({ id: gameId, navigate }) {
         </button>
       </div>
 
-      {/* Court */}
-      <div className="relative w-full overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      {/* Court and overlay */}
+      <div className="relative w-full rounded-2xl overflow-hidden border border-slate-200 bg-white">
         <img
-          ref={imgRef}
-          src="/images/court-half.svg"  /* <-- adjust if your asset is elsewhere */
+          src="/court-half.svg" /* must exist in /public/court-half.svg */
           alt="Half court"
-          className="w-full block select-none pointer-events-none"
-          onLoad={(e) => {
-            const r = e.currentTarget.getBoundingClientRect()
-            setImgSize({ w: r.width, h: r.height })
-          }}
+          className="w-full h-auto block select-none pointer-events-none"
+          onLoad={onImgLoad}
         />
-        {/* Hotspots */}
-        {Object.entries(ZONE_ANCHORS).map(([zoneId, pt]) => {
-          const x = pt.x * scale.kx
-          const y = pt.y * scale.ky
-          return (
+        <div className="absolute inset-0">
+          {pctAnchors.map((a) => (
             <button
-              key={zoneId}
+              key={a.id}
               type="button"
-              className="absolute -translate-x-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-transparent hover:bg-sky-400/20 active:bg-sky-500/25 focus:outline-none"
-              style={{ left: x, top: y }}
-              aria-label={`Log shot for ${zoneMap.get(zoneId)?.name || zoneId}`}
-              onClick={() => openShot(zoneId)}
+              className="zone-btn absolute -translate-x-1/2 -translate-y-1/2 w-14 h-14 rounded-lg bg-white/90 hover:bg-white active:scale-[0.98] shadow"
+              style={{ left: `${a.leftPct}%`, top: `${a.topPct}%` }}
+              aria-label={`Log shot for ${a.label || a.id}`}
+              onClick={() => openShot(a.id)}
             />
-          )
-        })}
+          ))}
+
+          {/* Shot markers (basketballs) */}
+          {Array.isArray(events) && events
+            .filter((e) => e.type === "shot")
+            .map((e, idx) => {
+              const anchor = pctAnchors.find((a) => a.id === e.zone_id)
+              if (!anchor) return null
+              return (
+                <div
+                  key={`m-${idx}`}
+                  className="zone-marker"
+                  style={{
+                    left: `${anchor.leftPct}%`,
+                    top: `${anchor.topPct}%`,
+                  }}
+                >
+                  <MdSportsBasketball
+                    color={e.made ? "#12e346" : "#9ca3af"} // emerald-600 or gray-400
+                    style={{ filter: "drop-shadow(0 0 1px rgba(0,0,0,0.2))" }}
+                  />
+                </div>
+              )
+            })}
+        </div>
       </div>
 
-      {/* Quick stat buttons */}
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        <button
-          type="button"
-          onClick={() => logQuick("steal")}
-          className="h-10 rounded-full border border-sky-300 text-sky-700 bg-sky-50 font-medium flex items-center justify-center gap-2"
-        >
+      {/* Quick stat buttons — white bg + blue border */}
+      <div className="gamelogger mt-3 grid grid-cols-3 gap-2">
+        <button type="button" onClick={() => logQuick("steal")} className="quick-btn">
           <Hand size={16} /> Steals
         </button>
-        <button
-          type="button"
-          onClick={() => logQuick("rebound")}
-          className="h-10 rounded-full border border-sky-300 text-sky-700 bg-sky-50 font-medium flex items-center justify-center gap-2"
-        >
+        <button type="button" onClick={() => logQuick("rebound")} className="quick-btn">
           <MdSportsBasketball size={16} /> Rebounds
         </button>
-        <button
-          type="button"
-          onClick={() => logQuick("assist")}
-          className="h-10 rounded-full border border-sky-300 text-sky-700 bg-sky-50 font-medium flex items-center justify-center gap-2"
-        >
+        <button type="button" onClick={() => logQuick("assist")} className="quick-btn">
           <Target size={16} /> Assists
         </button>
       </div>
 
-      {/* Free throw */}
+      {/* Free throws — solid emerald */}
       <div className="mt-3">
         <button
           type="button"
           onClick={() => setFtModalOpen(true)}
-          className="h-10 w-full rounded-full border border-slate-300 bg-white font-medium flex items-center justify-center gap-1"
+          className="btn btn-emerald h-10 w-full rounded-full font-medium flex items-center justify-center gap-1"
         >
           <Plus size={18} /> Log Free Throw
         </button>
@@ -255,15 +285,15 @@ export default function GameLogger({ id: gameId, navigate }) {
           <StatCard label="Assists" value={stats.assists} />
           <StatCard label="Rebounds" value={stats.rebounds} />
           <StatCard label="Steals" value={stats.steals} />
-          <StatCard label="FG%" value={`${stats.fgPct}%`} />
+          <StatCard label="Freethrows" value={`${stats.ftMakes} / ${stats.ftAtt} / ${pct(stats.ftMakes, stats.ftAtt)}%`} tint="peach" />
           <StatCard label="Makes" value={stats.fgm} />
           <StatCard label="Misses" value={stats.fga - stats.fgm} />
-          <StatCard label="Freethrows" value={`${stats.ftMakes}/${stats.ftAtt}`} tint="peach" />
+          <StatCard label="FG%" value={`${stats.fgPct}%`} />
           <StatCard label="eFG%" value={`${stats.efgPct}%`} tint="sky" />
         </div>
       </section>
 
-      {/* Shot Modal */}
+      {/* Shot modal */}
       {shotModal && (
         <ShotModal
           data={shotModal}
@@ -273,7 +303,7 @@ export default function GameLogger({ id: gameId, navigate }) {
         />
       )}
 
-      {/* Free-throw Modal */}
+      {/* FT sheet */}
       {ftModalOpen && (
         <BottomSheet title="Log Free Throw" onClose={() => setFtModalOpen(false)}>
           <div className="grid grid-cols-2 gap-2">
@@ -290,12 +320,14 @@ export default function GameLogger({ id: gameId, navigate }) {
   )
 }
 
-/* ---------- small UI parts ---------- */
+/* ---------------------------------------------------------
+   Small UI pieces
+--------------------------------------------------------- */
 function StatCard({ label, value, tint }) {
   const tintClass =
     tint === "peach" ? "bg-orange-50"
-      : tint === "sky" ? "bg-sky-50"
-      : "bg-white"
+    : tint === "sky" ? "bg-sky-50"
+    : "bg-white"
   return (
     <div className={`rounded-2xl border border-slate-200 ${tintClass} px-4 py-3`}>
       <div className="text-slate-500 text-sm">{label}</div>
@@ -321,75 +353,87 @@ function BottomSheet({ title, onClose, children }) {
   )
 }
 
+/* ---------------------------------------------------------
+   Shot details modal (new gating rules)
+--------------------------------------------------------- */
 function ShotModal({ data, onClose, onMake, onMiss }) {
-  const [shotType, setShotType] = useState(data.shotType || "Jump Shot")
-  const [pressured, setPressured] = useState(!!data.pressured)
+  const [shotType, setShotType] = useState(data.shotType)   // starts as null
+  const [pressured, setPressured] = useState(data.pressured) // starts as null
 
-  const TYPES = Array.isArray(SHOT_TYPES) && SHOT_TYPES.length
+  const TYPES = (Array.isArray(SHOT_TYPES) && SHOT_TYPES.length)
     ? SHOT_TYPES
     : [{ id: "jump", label: "Jump Shot" }, { id: "layup", label: "Layup" }]
 
+  const hasShotType = !!shotType
+  const canToggleContested = hasShotType
+  const isContested = pressured === true
+  const canSubmit = isContested // per requirement: must select Contested to enable Make/Miss
+
   return (
-    <div className="fixed inset-0 z-50">
+    <div className="fixed inset-0 z-50 shotmodal">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="absolute left-0 right-0 bottom-0 rounded-t-2xl bg-white p-4 shadow-2xl">
-        <div className="text-center text-slate-900 font-semibold mb-2">Select Shot Details</div>
+        <div className="text-center text-slate-900 font-semibold mb-2">
+          {/* Use label from ZONES (passed as zoneLabel) */}
+          {data.zoneLabel}
+        </div>
         <div className="text-center text-sm text-slate-600 mb-3">
-          {data.zoneId} · {data.isThree ? "3-pointer" : "2-pointer"}
+          {data.isThree ? "3-pointer" : "2-pointer"}
         </div>
 
-        {/* Shot Type */}
+        {/* Shot Type (blue outline → solid when selected) */}
         <div className="mb-3">
           <div className="text-sm text-slate-700 mb-1">Shot Type</div>
           <div className="grid grid-cols-2 gap-2">
-            {TYPES.map(st => (
-              <button
-                key={st.id || st.label}
-                onClick={() => setShotType(st.label)}
-                className={`h-10 rounded-xl border font-medium ${
-                  shotType === st.label
-                    ? "border-sky-400 bg-sky-50 text-sky-800"
-                    : "border-slate-300 bg-white text-slate-700"
-                }`}
-              >
-                {st.label}
-              </button>
-            ))}
+            {TYPES.map((st) => {
+              const selected = shotType === st.label
+              return (
+                <button
+                  key={st.id || st.label}
+                  onClick={() => setShotType(st.label)}
+                  className={`shot-type-btn ${selected ? "selected" : ""}`}
+                >
+                  {st.label}
+                </button>
+              )
+            })}
           </div>
         </div>
 
-        {/* Contested toggle */}
+       {/* Contested toggle (disabled until shot type chosen) */}
         <div className="mb-4">
           <div className="text-sm text-slate-700 mb-1">Shot Context</div>
+
           <button
-            onClick={() => setPressured(p => !p)}
-            className={`h-10 w-full rounded-xl border font-medium ${
-              pressured
-                ? "border-sky-500 bg-sky-600 text-white"
-                : "border-sky-400 text-sky-700 bg-white"
-            }`}
+            disabled={!canToggleContested}
+            onClick={() => canToggleContested && setPressured(p => p === true ? null : true)}
+            className={`w-full contested-btn ${isContested ? "selected" : ""} ${!canToggleContested ? "disabled" : ""}`}
           >
-            {pressured ? "Contested" : "Uncontested"}
+            Contested
           </button>
+
+          {/* Note: per requirement, Make/Miss are only enabled if Contested is selected */}
         </div>
 
         <div className="grid grid-cols-2 gap-2">
           <button
-            className="btn btn-danger h-11 rounded-xl"
-            onClick={() => onMiss({ shotType, pressured })}
+            disabled={!canSubmit}
+            className={`w-full h-11 rounded-xl btn ${canSubmit ? "btn-danger" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}
+            onClick={() => onMiss({ shotType, pressured: true })}
           >
             Miss
           </button>
           <button
-            className="btn btn-emerald h-11 rounded-xl"
-            onClick={() => onMake({ shotType, pressured })}
+            disabled={!canSubmit}
+            className={`w-full h-11 rounded-xl btn ${canSubmit ? "btn-emerald" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}
+            onClick={() => onMake({ shotType, pressured: true })}
           >
             Make
           </button>
         </div>
 
         <div className="mt-2 flex justify-center">
-          <button className="text-sm text-slate-500 hover:text-slate-700" onClick={onClose}>
+          <button className="w-full text-sm text-slate-500 hover:text-slate-700" onClick={onClose}>
             Cancel
           </button>
         </div>

@@ -8,6 +8,7 @@ import PracticeLog from "./screens/PracticeLog"
 import GameGate from "./screens/GameGate"
 import GameNew from "./screens/GameNew"
 import GameLogger from "./screens/GameLogger"
+import GameDetail from "./screens/GameDetail"
 // import GameDetail from "./screens/GameDetail" // (add when ready)
 
 import Performance from "./screens/Performance"
@@ -19,6 +20,8 @@ import BottomNav from "./components/BottomNav"
 
 import { initAutoSync } from "./lib/sync"
 import { supabase } from "./lib/supabase"
+import { whenIdbReady } from "./lib/idb-init";
+import { fixBadHomeAway } from "./lib/game-db"
 
 export default function App() {
   // high-level screen: "login" | "mode" | "app"
@@ -35,7 +38,14 @@ export default function App() {
 
   // ---------- effects ----------
   // 1) Auto-sync engine
-  useEffect(() => { initAutoSync() }, [])
+  useEffect(() => {
+    (async () => {
+      await whenIdbReady();     // <-- create/upgrade stores once
+      initAutoSync();         // start sync after stores exist
+    })();
+  }, []);
+
+  useEffect(() => { fixBadHomeAway().catch(()=>{}) }, [])
 
   // 2) Persist the tab
   useEffect(() => {
@@ -122,16 +132,8 @@ useEffect(() => {
           {gameRoute.screen === "game-logger" && (
             <GameLogger id={gameRoute.params?.id} navigate={navGame} />
           )}
-          {gameRoute.screen === "game-detail" && (
-            <div className="px-4 pt-3 pb-24 max-w-screen-sm mx-auto">
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="text-slate-900 font-semibold mb-1">Game Detail (placeholder)</div>
-                <p className="text-sm text-slate-600">
-                  Detail view coming soon. Tap the Game icon in the bottom nav to return to Game Center.
-                </p>
-              </div>
-            </div>
-          )}
+          {gameRoute.screen === "gameDetail" && <GameDetail id={gameRoute.params?.id} navigate={navGame} />}
+
         </>
       )}
 

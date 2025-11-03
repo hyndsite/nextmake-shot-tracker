@@ -1,137 +1,225 @@
-import { createStore, get, set, del, keys  } from "idb-keyval"
+// src/lib/game-db.js
+import { createStore, get, set, del, keys } from "idb-keyval"
 import { uuid } from "./util-id"
 import { notifyLocalMutate } from "./sync-notify"
+import { whenIdbReady } from "./idb-init"
 
-const IDX_KEY="__index__"
-async function readIndex(s){ return (await get(IDX_KEY,s)) ?? [] }
-async function addToIndex(s,id){ const i=await readIndex(s); if(!i.includes(id)){ i.push(id); await set(IDX_KEY,i,s)}}
-const now = ()=> new Date().toISOString()
+const ready = whenIdbReady()
+const nowISO = () => new Date().toISOString()
 
 export const st = {
   game: {
-    sessions: createStore("game","sessions"),
-    events:   createStore("game","events"),
+    sessions: createStore("game", "sessions"),
+    events:   createStore("game", "events"),
   },
 }
 
-// Get all session ids (newest first by started_at)
-async function _allGameIds() {
-  const ids = await keys(st.game.sessions)
-  return ids
+// --- helpers ---
+function normalizeHomeAway(v) {
+  if (v == null) return "Home"
+  const s = String(v).trim().toLowerCase()
+  if (s === "home" || s === "h") return "Home"
+  if (s === "away" || s === "a") return "Away"
+  return "Home"
 }
 
+// (optional utility) sweep any existing rows that have bad home_away
+export async function fixBadHomeAway() {
+  await ready
+  const ks = await keys(st.game.sessions)
+  for (const k of ks) {
+    const row = await get(k, st.game.sessions)
+    if (!row) continue
+    const norm = normalizeHomeAway(row.home_away)
+    if (row.home_away !== norm) {
+      await set(k, { ...row, home_away: norm, _dirty: true, _table: "game_sessions" }, st.game.sessions)
+    }
+  }
+  notifyLocalMutate()
+}
+
+/* -----------------------------
+ * Sessions
+ * ---------------------------*/
+
 export async function listGameSessions() {
-  const ids = await _allGameIds()
+  await ready
+  const allKeys = await keys(st.game.sessions)
   const rows = []
-  for (const id of ids) {
-    const row = await get(id, st.game.sessions)
+  for (const k of allKeys) {
+    const row = await get(k, st.game.sessions)
     if (row) rows.push(row)
   }
-  rows.sort((a,b) => (b.started_at || "").localeCompare(a.started_at || ""))
+  rows.sort((a, b) => (b.started_at || "").localeCompare(a.started_at || ""))
   return rows
 }
 
+export async function getGameSession(id) {
+  await ready
+  if (!id) return null
+  return await get(id, st.game.sessions)
+}
+
 export async function getActiveGameSession() {
+  await ready
   const all = await listGameSessions()
   return all.find(s => s?.status === "active" && !s?.ended_at) || null
 }
 
-export async function endGameSession(id) {
-  const row = await get(id, st.game.sessions)
-  if (!row) return null
-  const ended_at = new Date().toISOString()
-  const updated = { ...row, status: "completed", ended_at, _dirty: true }
-  await set(id, updated, st.game.sessions)
-  return updated
-}
-
-export async function addGameEvent({ gameId, type, zoneId=null, shotType=null, isThree=null, made=null, ts=now() }){
-  const id = uuid()
-  const row = { id, game_id:gameId, user_id:null, mode:"game", type, zone_id:zoneId, shot_type:shotType, is_three:isThree, made, ts, _dirty:true, _table:"game_events" }
-  await set(id,row,st.game.events); await addToIndex(st.game.events,id)
-  notifyLocalMutate()
-  return row
-}
-
 export async function addGameSession(meta = {}) {
+  await ready
   const id = uuid()
-  const now = new Date().toISOString()
+  const startedAt = nowISO()
+
+  const homeAwayInput = meta.home_away ?? meta.homeAway ?? meta.homeOrAway
 
   const row = {
     id,
     status: "active",
-    started_at: now,
+    started_at: startedAt,
     ended_at: null,
 
-    // metadata (normalized keys)
-    date_iso: meta.date_iso ?? now.slice(0,10),
-    team_name: meta.team_name ?? "",
-    opponent_name: meta.opponent_name ?? "",
-    venue: meta.venue ?? null,
-    level: meta.level ?? "High School",
-    home_away: (meta.home_away ?? "home").toLowerCase(), // "home" | "away"
+    date_iso:      meta.date_iso      ?? startedAt.slice(0, 10),
+    team_name:     meta.team_name     ?? meta.teamName     ?? "",
+    opponent_name: meta.opponent_name ?? meta.opponentName ?? "",
+    venue:         meta.venue         ?? null,
+    level:         meta.level         ?? "High School",
+    home_away: normalizeHomeAway(homeAwayInput),
 
-    // sync markers
     _dirty: true,
     _table: "game_sessions",
   }
 
   await set(id, row, st.game.sessions)
+  notifyLocalMutate()
   return row
 }
 
+export async function endGameSession(id) {
+  await ready
+  const row = await getGameSession(id)
+  if (!row) return null
+  const updated = {
+    ...row,
+    status: "completed",
+    ended_at: nowISO(),
+    home_away: normalizeHomeAway(row.home_away),
+    _dirty: true,
+    _table: "game_sessions"
+  }
+  await set(id, updated, st.game.sessions)
+  notifyLocalMutate()
+  return updated
+}
+
 export async function deleteGameSession(id) {
-  // Best-effort delete of events linked to this session.
+  await ready
   try {
-    const evKeys = await keys(st.game.events);
+    const evKeys = await keys(st.game.events)
     for (const k of evKeys) {
-      const ev = await get(k, st.game.events);
-      if (ev?.session_id === id) {
-        await del(k, st.game.events);
-      }
+      const ev = await get(k, st.game.events)
+      if (ev?.game_id === id) await del(k, st.game.events)
     }
   } catch (err) {
-    // If the events store doesn't exist yet on this device, skip gracefully.
-    if (err?.name !== "NotFoundError") {
-      console.warn("[game-db] delete events warning:", err);
-    }
+    if (err?.name !== "NotFoundError") console.warn("[game-db] delete events warning:", err)
+  }
+  await del(id, st.game.sessions)
+  notifyLocalMutate()
+  return true
+}
+
+/* -----------------------------
+ * Events
+ * ---------------------------*/
+
+export async function addGameEvent(input) {
+  await ready
+
+  const game_id   = input.game_id   ?? input.gameId
+  const zone_id   = input.zone_id   ?? input.zoneId ?? null
+  const shot_type = input.shot_type ?? input.shotType ?? null
+  const is_three  = typeof input.is_three !== "undefined" ? input.is_three : (input.isThree ?? null)
+  const made      = typeof input.made !== "undefined" ? input.made : null
+  const type      = input.type
+  const mode      = input.mode ?? "game"
+  const user_id   = input.user_id ?? null
+
+  if (!game_id) throw new Error("[game-db] addGameEvent: game_id is required")
+  if (!type)    throw new Error("[game-db] addGameEvent: type is required")
+
+  let tsISO
+  if (typeof input.ts === "number") tsISO = new Date(input.ts).toISOString()
+  else if (input.ts) tsISO = new Date(input.ts).toISOString()
+  else tsISO = nowISO()
+
+  const id = input.id ?? uuid()
+
+  const row = {
+    id,
+    game_id,
+    user_id,
+    mode,
+    type,
+    zone_id,
+    shot_type,
+    is_three,
+    made,
+    ts: tsISO,
+    _dirty: true,
+    _table: "game_events",
   }
 
-  // Remove the session row (this store is known-good)
-  await del(id, st.game.sessions);
-  return true;
+  await set(id, row, st.game.events)
+  notifyLocalMutate()
+  return row
 }
 
 export async function listGameEventsBySession(gameId) {
+  await ready
   const out = []
   const allKeys = await keys(st.game.events)
-
   for (const k of allKeys) {
-    // idb-keyval keys can be strings or other types; normalize to string when possible
-    const keyStr = typeof k === "string" ? k : ""
-
-    // Fast path: composite key prefix match
-    if (keyStr && keyStr.startsWith(`${gameId}:`)) {
-      const ev = await get(k, st.game.events)
-      if (ev) out.push(ev)
-      continue
-    }
-
-    // Fallback: fetch and filter by value.game_id
     const ev = await get(k, st.game.events)
     if (ev?.game_id === gameId) out.push(ev)
   }
-
-  // Stable sort by timestamp if present
-  out.sort((a, b) => {
-    const ta = typeof a.ts === "number" ? a.ts : 0
-    const tb = typeof b.ts === "number" ? b.ts : 0
-    return ta - tb
-  })
-
+  out.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime())
   return out
 }
 
-// Used by sync.js:
-export async function _allDirtyGame(){ /* unchanged from earlier (returns dirty rows) */ }
-export async function _markClean(row){ /* unchanged from earlier (sets _dirty=false) */ }
+/* -----------------------------
+ * Dirty helpers used by sync layer
+ * ---------------------------*/
+
+export async function _allDirtyGame() {
+  await ready
+  const out = []
+  // sessions
+  {
+    const ks = await keys(st.game.sessions)
+    for (const k of ks) {
+      const row = await get(k, st.game.sessions)
+      if (row?._dirty) out.push(row)
+    }
+  }
+  // events
+  {
+    const ks = await keys(st.game.events)
+    for (const k of ks) {
+      const row = await get(k, st.game.events)
+      if (row?._dirty) out.push(row)
+    }
+  }
+  return out
+}
+
+export async function _markClean(row) {
+  await ready
+  if (!row?._table) return
+  if (row._table === "game_sessions") {
+    const cur = await get(row.id, st.game.sessions)
+    if (cur) { cur._dirty = false; await set(row.id, cur, st.game.sessions) }
+  } else if (row._table === "game_events") {
+    const cur = await get(row.id, st.game.events)
+    if (cur) { cur._dirty = false; await set(row.id, cur, st.game.events) }
+  }
+}

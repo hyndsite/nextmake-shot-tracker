@@ -1,30 +1,15 @@
 // src/lib/sync.js
-// Auto-sync engine: pushes local IndexedDB changes to Supabase automatically.
-// - No manual buttons
-// - Safe if game-db isn't implemented yet
-// - Filters local-only fields (_dirty, _table) before sending
-// - Debounced; triggers on local writes, auth changes, going online, visibility, and a heartbeat
-
 import { supabase } from "./supabase"
 import { onLocalMutate } from "./sync-notify"
 import { _allDirtyPractice, _markClean as _markCleanPractice } from "./practice-db"
+import { whenIdbReady } from "./idb-init"
 
 export const LAST_SYNC_KEY = "nm_last_sync"
-
 const SYNC_DEBOUNCE_MS = 400
-const SYNC_HEARTBEAT_MS = 60_000 // run at least once a minute
+const SYNC_HEARTBEAT_MS = 60_000
 
-let syncing = false
-let scheduled = false
-let inited = false
-
-let unsubAuth = null
-let unsubLocal = null
-let onlineHandler = null
-let visHandler = null
-let intervalId = null
-
-// ---- Optional game sync (loaded lazily) ------------------------------------
+let syncing = false, scheduled = false, inited = false
+let unsubAuth = null, unsubLocal = null, onlineHandler = null, visHandler = null, intervalId = null
 
 let gameFnsLoaded = false
 let _allDirtyGame = null
@@ -37,7 +22,6 @@ async function ensureGameFns() {
     _allDirtyGame = gameDb._allDirtyGame || null
     _markCleanGame = gameDb._markClean || null
   } catch {
-    // game-db not present yet; that's fine
     _allDirtyGame = null
     _markCleanGame = null
   } finally {
@@ -45,79 +29,90 @@ async function ensureGameFns() {
   }
 }
 
-// ---- Helpers ----------------------------------------------------------------
-
 function setLastSyncNow() {
-  const ts = new Date().toISOString()
-  localStorage.setItem(LAST_SYNC_KEY, ts)
+  localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString())
 }
 
 async function getUserId() {
-  const { data, error } = await supabase.auth.getUser()
-  if (error || !data?.user) return null
-  return data.user.id
+  const { data } = await supabase.auth.getUser()
+  return data?.user?.id || null
 }
 
-function ensureArray(maybeArr) {
-  return Array.isArray(maybeArr) ? maybeArr : []
+function toArray(bucket) {
+  if (!bucket) return []
+  if (Array.isArray(bucket)) return bucket
+  if (typeof bucket === "object") return Object.values(bucket).flat().filter(Boolean)
+  return []
 }
 
-function stampUser(rows, userId) {
-  for (const r of rows) r.user_id = userId
-  return rows
+function normalizeHomeAwayValue(v) {
+  if (v == null) return "Home"
+  const s = String(v).trim().toLowerCase()
+  if (s === "home" || s === "h") return "Home"
+  if (s === "away" || s === "a") return "Away"
+  return "Home"
+}
+
+function sanitizeForUpsert(rows) {
+  return rows.map(({ _dirty, _table, ...r }) => {
+    // normalize timestamps
+    if (typeof r.ts === "number") r.ts = new Date(r.ts).toISOString()
+    if (typeof r.started_at === "number") r.started_at = new Date(r.started_at).toISOString()
+    if (typeof r.ended_at === "number") r.ended_at = new Date(r.ended_at).toISOString()
+
+    // ensure date_iso is just YYYY-MM-DD (string) if present
+    if (r.date_iso instanceof Date) r.date_iso = r.date_iso.toISOString().slice(0,10)
+    if (typeof r.date_iso === "string" && r.date_iso.length > 10) r.date_iso = r.date_iso.slice(0,10)
+
+    // hard-normalize home_away for game_sessions rows that slipped through
+    if (_table === "game_sessions") {
+      r.home_away = normalizeHomeAwayValue(r.home_away)
+      if (!r.date_iso) r.date_iso = new Date().toISOString().slice(0,10)
+    }
+
+    return r
+  })
 }
 
 async function pushTable(table, rows) {
   if (!rows.length) return
-  const { error } = await supabase.from(table).upsert(rows, { onConflict: "id" })
-  if (error) throw error
+  const cleanRows = sanitizeForUpsert(rows)
+  const { error } = await supabase.from(table).upsert(cleanRows, { onConflict: "id" })
+  if (error) {
+    // helpful debug: show first row we tried to send
+    console.warn(`[sync] upsert error on ${table}`, error, { sample: cleanRows[0] })
+    throw error
+  }
 }
-
-// ---- Core sync steps ---------------------------------------------------------
 
 async function pushAll(userId) {
   await ensureGameFns()
 
-  // 1) Collect all dirty rows (defensively coerce to arrays)
-  const practiceBucket = ensureArray(await _allDirtyPractice())
-  const gameBucket = _allDirtyGame ? ensureArray(await _allDirtyGame()) : []
+  const practiceDirty = toArray(await _allDirtyPractice())
+  const gameDirty = toArray(_allDirtyGame ? await _allDirtyGame() : [])
 
-  // 2) Tag rows with user_id before sending
-  stampUser(practiceBucket, userId)
-  stampUser(gameBucket, userId)
+  for (const r of [...practiceDirty, ...gameDirty]) r.user_id = userId
 
-  // 3) Group by server table for efficient upserts
   const byTable = new Map()
-  for (const row of [...practiceBucket, ...gameBucket]) {
+  for (const row of [...practiceDirty, ...gameDirty]) {
     const table = row?._table
     if (!table) continue
     if (!byTable.has(table)) byTable.set(table, [])
     byTable.get(table).push(row)
   }
 
-  // 4) Sanitize local-only fields and push per table
   for (const [table, rows] of byTable) {
-    const cleanRows = rows.map((r) => {
-      const { _dirty, _table, ...safe } = r
-      return safe
-    })
-    await pushTable(table, cleanRows)
+    await pushTable(table, rows)
   }
 
-  // 5) Mark local rows clean after successful push
-  for (const row of practiceBucket) {
-    await _markCleanPractice(row)
-  }
-  if (_markCleanGame) {
-    for (const row of gameBucket) {
-      await _markCleanGame(row)
-    }
-  }
+  for (const row of practiceDirty) await _markCleanPractice(row)
+  if (_markCleanGame) for (const row of gameDirty) await _markCleanGame(row)
 }
 
 async function doSync() {
   if (syncing) return
   if (!navigator.onLine) return
+  await whenIdbReady()
 
   const userId = await getUserId()
   if (!userId) return
@@ -127,7 +122,6 @@ async function doSync() {
     await pushAll(userId)
     setLastSyncNow()
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error("[sync] push error:", err)
   } finally {
     syncing = false
@@ -137,47 +131,29 @@ async function doSync() {
 function scheduleSync() {
   if (scheduled) return
   scheduled = true
-  setTimeout(() => {
-    scheduled = false
-    void doSync()
-  }, SYNC_DEBOUNCE_MS)
+  setTimeout(() => { scheduled = false; void doSync() }, SYNC_DEBOUNCE_MS)
 }
 
-// ---- Public API --------------------------------------------------------------
-
-/**
- * Initialize the auto-sync engine once.
- * Safe to call multiple times; subsequent calls are ignored.
- */
 export function initAutoSync() {
   if (inited) return
   inited = true
 
-  // A) React to local IndexedDB mutations (practice-db/game-db call notifyLocalMutate)
+  whenIdbReady().then(() => scheduleSync())
   unsubLocal = onLocalMutate(() => scheduleSync())
 
-  // B) React to auth changes (login/logout)
-  const authSub = supabase.auth.onAuthStateChange((_event, session) => {
-    if (session) scheduleSync()
-  })
+  const authSub = supabase.auth.onAuthStateChange((_e, s) => { if (s) scheduleSync() })
   unsubAuth = () => authSub?.data?.subscription?.unsubscribe?.()
 
-  // C) Online / tab visibility events
   onlineHandler = () => scheduleSync()
   visHandler = () => { if (document.visibilityState === "visible") scheduleSync() }
   window.addEventListener("online", onlineHandler)
   document.addEventListener("visibilitychange", visHandler)
 
-  // D) Heartbeat to catch missed triggers
   intervalId = window.setInterval(() => scheduleSync(), SYNC_HEARTBEAT_MS)
 
-  // E) Attempt one sync on boot (debounced)
   scheduleSync()
 }
 
-/**
- * Teardown listeners (useful for tests/HMR). You usually won't need this in prod.
- */
 export function teardownAutoSync() {
   if (unsubLocal) { unsubLocal(); unsubLocal = null }
   if (unsubAuth)  { unsubAuth();  unsubAuth = null }

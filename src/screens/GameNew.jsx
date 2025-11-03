@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react"
 import { addGameSession } from "../lib/game-db"
 import {LEVELS } from "../constants/programLevel"     // <- ensure this file exists per our constants step
 import { HOME_AWAY } from "../constants/homeAway" // <- Home/Away dropdown options
+import { ArrowLeft } from "lucide-react"
 
 export default function GameNew({ navigate }) {
   // Defaults
@@ -13,6 +14,7 @@ export default function GameNew({ navigate }) {
   const [level, setLevel]       = useState("High School")
   const [homeAway, setHomeAway] = useState("Home")
   const [saving, setSaving]     = useState(false)
+  
 
   function invalidReason() {
     if (!teamName.trim()) return "Enter your team."
@@ -43,6 +45,16 @@ export default function GameNew({ navigate }) {
 
   return (
     <div className="page">
+      <div className="flex items-center mb-3">
+        <button
+          type="button"
+          onClick={() => navigate?.("gate")} // or setActiveTab('game') if using your App tab state
+          className="flex items-center gap-1 border border-sky-600 text-sky-700 px-3 py-1.5 rounded-lg bg-white hover:bg-sky-50 active:scale-[0.98] shadow-sm"
+        >
+          <ArrowLeft size={16} />
+          <span className="text-sm font-medium">Back</span>
+        </button>
+      </div>
       <h1 className="screen-title">New Game</h1>
 
       <section className="section space-y-4">
