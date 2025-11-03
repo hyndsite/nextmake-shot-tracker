@@ -1,0 +1,24 @@
+/* PracticeGate accordion header (month row) */
+  .accordion-header {
+    background-color: #374151;      /* gray-700 */
+    color: #ffffff;                 /* white text */
+  }
+  
+  /* ensure inner text inherits white */
+  .accordion-header * {
+    color: inherit;
+  }
+  
+  /* Each previous practice row */
+  .practice-session-row {
+    background-color: #ffffff;      /* hard white */
+    color: #111827;                 /* gray-900-ish */
+  }
+  
+  /* Keep text in row using norm al text color */
+  .practice-session-row button {
+    background-color: transparent;
+    color: inherit;
+    border: none;
+  }
+  

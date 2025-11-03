@@ -186,11 +186,11 @@ export default function GameLogger({ id: gameId, navigate }) {
 
   return (
     <div className="page">
-      <div className="flex items-center mb-3">
+       <div className="flex items-center mb-3">
         <button
           type="button"
-          onClick={() => navigate?.("gate")} // or setActiveTab('game') if using your App tab state
-          className="flex items-center gap-1 border border-sky-600 text-sky-700 px-3 py-1.5 rounded-lg bg-white hover:bg-sky-50 active:scale-[0.98] shadow-sm"
+          onClick={() => navigate?.("gate")}
+          className="btn-back"
         >
           <ArrowLeft size={16} />
           <span className="text-sm font-medium">Back</span>

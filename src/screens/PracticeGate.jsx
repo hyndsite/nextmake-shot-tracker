@@ -118,7 +118,7 @@ export default function PracticeGate({ navigate }) {
 
   return (
     <div className="page p-3 pb-20 max-w-screen-sm mx-auto">
-      <h1 className="text-2xl font-bold mb-3">Practice Sessions</h1>
+      <h2 className="text-2xl font-bold mb-3">Practice Sessions</h2>
 
       {/* Start New */}
       <button
@@ -148,7 +148,7 @@ export default function PracticeGate({ navigate }) {
             <button
               type="button"
               onClick={() => setOpenMonth(openMonth === month.key ? null : month.key)}
-              className="w-full flex items-center justify-between px-3 py-2"
+              className="w-full flex items-center justify-between px-3 py-2 accordion-header"
             >
               <span className="text-sm font-semibold text-slate-900">
                 {month.label}
@@ -164,7 +164,7 @@ export default function PracticeGate({ navigate }) {
                 {month.sessions.map((s) => (
                   <div
                     key={s.id}
-                    className="flex items-center gap-2 px-3 py-3 border-b last:border-b-0"
+                    className="flex items-center gap-2 px-3 py-3 border-b last:border-b-0 practice-session-row"
                   >
                     <button
                       className="flex-1 text-left"
@@ -179,7 +179,7 @@ export default function PracticeGate({ navigate }) {
                       </div>
                     </button>
                     <button
-                      className="p-2 rounded-md text-red-600 hover:bg-red-50"
+                      className="p-2 trash-btn"
                       onClick={() => onDelete(s.id)}
                       aria-label="Delete session"
                       title="Delete session"

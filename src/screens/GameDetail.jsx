@@ -108,7 +108,7 @@ export default function GameDetail({ id: gameId, navigate }) {
         <button
             type="button"
             onClick={() => navigate?.("gate")}
-            className="flex items-center gap-1 border border-sky-600 text-sky-700 px-3 py-1.5 rounded-lg bg-white hover:bg-sky-50 active:scale-[0.98] shadow-sm"
+            className="btn-back"
         >
             <ArrowLeft size={16} />
             <span className="text-sm font-medium">Back</span>
