@@ -181,7 +181,7 @@ export default function GameGate({ navigate }) {
                 <button
                   type="button"
                   onClick={(e) => onDelete(g.id, e)}
-                  className="p-1.5 rounded-lg hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                  className="trash-btn"
                   aria-label="Delete game"
                 >
                   <Trash2 size={18} className="text-red-600" />

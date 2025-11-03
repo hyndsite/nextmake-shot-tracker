@@ -118,7 +118,7 @@ export default function PracticeGate({ navigate }) {
 
   return (
     <div className="page p-3 pb-20 max-w-screen-sm mx-auto">
-      <h2 className="text-2xl font-bold mb-3">Practice Sessions</h2>
+      <h2 className="screen-title">Practice Sessions</h2>
 
       {/* Start New */}
       <button
