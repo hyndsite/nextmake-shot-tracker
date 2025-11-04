@@ -17,7 +17,7 @@ export const ZONE_ANCHORS =     {
           "y": 500.2
         },
         "right_wing_3": {
-          "x": 431,
+          "x": 430,
           "y": 199.4
         },
         "right_corner_3": {
@@ -29,7 +29,7 @@ export const ZONE_ANCHORS =     {
           "y": 344.2
         },
         "left_high_post": {
-          "x": 415.8,
+          "x": 403.8,
           "y": 627.8
         },
         "left_low_post": {
@@ -45,7 +45,7 @@ export const ZONE_ANCHORS =     {
           "y": 701.2
         },
         "left_wing_mid": {
-          "x": 349.1,
+          "x": 300,
           "y": 750.1
         },
         "center_mid": {
@@ -53,7 +53,7 @@ export const ZONE_ANCHORS =     {
           "y": 500.2
         },
         "right_wing_mid": {
-          "x": 349.1,
+          "x": 300,
           "y": 247
         },
         "right_short_corner": {
@@ -65,7 +65,7 @@ export const ZONE_ANCHORS =     {
           "y": 200.8
         },
         "nail": {
-          "x": 376.2,
+          "x": 356.2,
           "y": 499.6
         },
         "right_low_post": {
@@ -73,16 +73,16 @@ export const ZONE_ANCHORS =     {
           "y": 364.7
         },
         "right_high_post": {
-          "x": 413.2,
+          "x": 403.2,
           "y": 365.4
         },
         "runner_floater": {
           "x": 201.6,
           "y": 500.2
         },
-        "free_throw": {
-          "x": 400,
-          "y": 498.9
-        }
+        // "free_throw": {
+        //   "x": 400,
+        //   "y": 498.9
+        // }
     }
   

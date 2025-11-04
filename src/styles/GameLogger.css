@@ -80,6 +80,7 @@
     align-items: center;
     gap: 2px;
     pointer-events: none; /* don't block taps on zone buttons */
+    z-index: 10;
   }
   
   .zone-marker svg {
@@ -92,33 +93,37 @@
     width: 18px;
     height: 18px;
   }
-
+  
   /* ==========================================================================
-   Zone buttons (touch areas over the court)
-   ========================================================================== */
-
-/* Make them transparent regardless of OS theme */
-.zone-btn {
-  background-color: black !important;
-  border: none !important;
-  box-shadow: none !important;
-}
-
-/* Keep their hit area large for mobile */
-.zone-btn {
-  width: 56px;   /* 14 * 4px = 56px */
-  height: 56px;
-  border-radius: 50%;
-  position: absolute;
-  transform: translate(-50%, -50%);
-  cursor: pointer;
-}
-
-/* Add subtle visual feedback on hover/active */
-.zone-btn:hover {
-  background-color: rgba(255, 255, 255, 0.15);
-}
-.zone-btn:active {
-  transform: translate(-50%, -50%) scale(0.96);
-}
-
+     Zone buttons (touch areas over the court)
+     ========================================================================== */
+  
+  /* Screen-specific: only for GameLogger */
+  .gamelogger .zone-hit {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    width: 70px;               /* larger hit area than original, but not huge */
+    height: 70px;
+    padding: 0;
+    border: none;
+    background: transparent !important;
+    cursor: pointer;
+    z-index: 20;                /* above markers, below modals */
+  }
+  
+  /* Inner visual element for hover/focus feedback */
+  .gamelogger .zone-hit-inner {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 12px;        /* rounded square feel */
+    background: transparent;
+  }
+  
+  .gamelogger .zone-hit-inner:hover {
+    background-color: rgba(15, 23, 42, 0.08); /* subtle slate hover */
+  }
+  
+  .gamelogger .zone-hit-inner:active {
+    background-color: rgba(15, 23, 42, 0.12);
+  }

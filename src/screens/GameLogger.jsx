@@ -64,7 +64,7 @@ export default function GameLogger({ id: gameId, navigate }) {
   // UI state
   const [shotModal, setShotModal] = useState(null) // { zoneId, zoneLabel, isThree, shotType, pressured }
   const [ftModalOpen, setFtModalOpen] = useState(false)
-
+  const imgRef = useRef(null)
   // Court sizing / anchors
   const [imgNatural, setImgNatural] = useState({ w: 0, h: 0 })
   const ANCHORS_ARR = useMemo(() => anchorsToArray(ZONE_ANCHORS), [])
@@ -185,7 +185,7 @@ export default function GameLogger({ id: gameId, navigate }) {
   }
 
   return (
-    <div className="page">
+    <div className="page gamelogger">
        <div className="flex items-center mb-3">
         <button
           type="button"
@@ -213,45 +213,53 @@ export default function GameLogger({ id: gameId, navigate }) {
       {/* Court and overlay */}
       <div className="relative w-full rounded-2xl overflow-hidden border border-slate-200 bg-white">
         <img
+          ref={imgRef}
           src="/court-half.svg" /* must exist in /public/court-half.svg */
           alt="Half court"
           className="w-full h-auto block select-none pointer-events-none"
           onLoad={onImgLoad}
         />
+
+        {/* Plotted makes/misses (unchanged logic, just ensure they use .zone-marker) */}
+        <div className="absolute inset-0 pointer-events-none">
+          {Array.isArray(events) &&
+            events
+              .filter((e) => e.type === "shot")
+              .map((e, idx) => {
+                const anchor = pctAnchors.find((a) => a.id === e.zone_id)
+                if (!anchor) return null
+                return (
+                  <div
+                    key={`mk-${idx}`}
+                    className="zone-marker"
+                    style={{
+                      left: `${anchor.leftPct}%`,
+                      top: `${anchor.topPct}%`,
+                    }}
+                  >
+                    <MdSportsBasketball
+                      color={e.made ? "#059669" : "#9ca3af"}
+                      style={{ filter: "drop-shadow(0 0 1px rgba(0,0,0,0.25))" }}
+                    />
+                  </div>
+                )
+              })}
+        </div>
+
+        {/* Invisible / subtle click targets aligned to those anchors */}
         <div className="absolute inset-0">
           {pctAnchors.map((a) => (
             <button
               key={a.id}
               type="button"
-              className="zone-btn absolute -translate-x-1/2 -translate-y-1/2 w-14 h-14 rounded-lg bg-white/90 hover:bg-white active:scale-[0.98] shadow"
+              className="zone-hit"
               style={{ left: `${a.leftPct}%`, top: `${a.topPct}%` }}
               aria-label={`Log shot for ${a.label || a.id}`}
               onClick={() => openShot(a.id)}
-            />
+            >
+              <span className="zone-hit-inner" />
+            </button>
           ))}
-
-          {/* Shot markers (basketballs) */}
-          {Array.isArray(events) && events
-            .filter((e) => e.type === "shot")
-            .map((e, idx) => {
-              const anchor = pctAnchors.find((a) => a.id === e.zone_id)
-              if (!anchor) return null
-              return (
-                <div
-                  key={`m-${idx}`}
-                  className="zone-marker"
-                  style={{
-                    left: `${anchor.leftPct}%`,
-                    top: `${anchor.topPct}%`,
-                  }}
-                >
-                  <MdSportsBasketball
-                    color={e.made ? "#12e346" : "#9ca3af"} // emerald-600 or gray-400
-                    style={{ filter: "drop-shadow(0 0 1px rgba(0,0,0,0.2))" }}
-                  />
-                </div>
-              )
-            })}
         </div>
       </div>
 
