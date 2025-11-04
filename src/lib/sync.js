@@ -1,33 +1,116 @@
 // src/lib/sync.js
 import { supabase } from "./supabase"
 import { onLocalMutate } from "./sync-notify"
-import { _allDirtyPractice, _markClean as _markCleanPractice } from "./practice-db"
+import {
+  _allDirtyPractice,
+  _markClean as _markCleanPractice,
+  _purgePracticeRow,
+  upsertPracticeSessionsFromRemote,
+  upsertPracticeEntriesFromRemote,
+  upsertPracticeMarkersFromRemote,
+} from "./practice-db"
 import { whenIdbReady } from "./idb-init"
+import {
+  upsertGameSessionsFromRemote,
+  upsertGameEventsFromRemote,
+  _allDirtyGame,
+  _markClean as _markCleanGame,
+  _purgeGameRow,
+} from "./game-db"
 
 export const LAST_SYNC_KEY = "nm_last_sync"
 const SYNC_DEBOUNCE_MS = 400
 const SYNC_HEARTBEAT_MS = 60_000
 
-let syncing = false, scheduled = false, inited = false
-let unsubAuth = null, unsubLocal = null, onlineHandler = null, visHandler = null, intervalId = null
+let syncing = false,
+  scheduled = false,
+  inited = false
+let unsubAuth = null,
+  unsubLocal = null,
+  onlineHandler = null,
+  visHandler = null,
+  intervalId = null
 
-let gameFnsLoaded = false
-let _allDirtyGame = null
-let _markCleanGame = null
+// --------- bootstrap ALL data (game + practice) on app refresh ----------
+export async function bootstrapAllData() {
+  // 1) Check auth
+  const { data, error } = await supabase.auth.getUser()
+  if (error) throw error
+  const user = data?.user
+  if (!user) return { user: null }
 
-async function ensureGameFns() {
-  if (gameFnsLoaded) return
-  try {
-    const gameDb = await import("./game-db")
-    _allDirtyGame = gameDb._allDirtyGame || null
-    _markCleanGame = gameDb._markClean || null
-  } catch {
-    _allDirtyGame = null
-    _markCleanGame = null
-  } finally {
-    gameFnsLoaded = true
+  const userId = user.id
+
+  // 2) Pull all relevant rows for this user
+  const [
+    { data: gameSessions, error: gameSessErr },
+    { data: gameEvents, error: gameEvErr },
+    { data: practiceSess, error: pracSessErr },
+    { data: practiceEntries, error: pracEntryErr },
+    { data: practiceMarks, error: pracMarkErr },
+  ] = await Promise.all([
+    supabase
+      .from("game_sessions")
+      .select("*")
+      .eq("user_id", userId)
+      .order("date_iso", { ascending: false }),
+
+    supabase
+      .from("game_events")
+      .select("*")
+      .eq("user_id", userId)
+      .order("ts", { ascending: true }),
+
+    supabase
+      .from("practice_sessions")
+      .select("*")
+      .eq("user_id", userId)
+      .order("started_at", { ascending: false }),
+
+    supabase
+      .from("practice_entries")
+      .select("*")
+      .eq("user_id", userId)
+      .order("ts", { ascending: true }),
+
+    supabase
+      .from("practice_markers")
+      .select("*")
+      .eq("user_id", userId)
+      .order("ts", { ascending: true }),
+  ])
+
+  if (gameSessErr) throw gameSessErr
+  if (gameEvErr) throw gameEvErr
+  if (pracSessErr) throw pracSessErr
+  if (pracEntryErr) throw pracEntryErr
+  if (pracMarkErr) throw pracMarkErr
+
+  // 3) Store them locally as "clean"
+  await Promise.all([
+    upsertGameSessionsFromRemote(gameSessions || []),
+    upsertGameEventsFromRemote(gameEvents || []),
+    upsertPracticeSessionsFromRemote(practiceSess || []),
+    upsertPracticeEntriesFromRemote(practiceEntries || []),
+    upsertPracticeMarkersFromRemote(practiceMarks || []),
+  ])
+
+  return {
+    user,
+    gameSessionsCount: gameSessions?.length ?? 0,
+    gameEventsCount: gameEvents?.length ?? 0,
+    practiceSessionsCount: practiceSess?.length ?? 0,
+    practiceEntriesCount: practiceEntries?.length ?? 0,
+    practiceMarkersCount: practiceMarks?.length ?? 0,
   }
 }
+
+// Backwards compatibility: old name still works, just calls the new function
+export async function bootstrapGameData() {
+  return bootstrapAllData()
+}
+
+// --------- internal helpers for push sync ----------
 
 function setLastSyncNow() {
   localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString())
@@ -54,59 +137,97 @@ function normalizeHomeAwayValue(v) {
 }
 
 function sanitizeForUpsert(rows) {
-  return rows.map(({ _dirty, _table, ...r }) => {
+  return rows.map(({ _dirty, _table, _deleted, ...r }) => {
     // normalize timestamps
     if (typeof r.ts === "number") r.ts = new Date(r.ts).toISOString()
-    if (typeof r.started_at === "number") r.started_at = new Date(r.started_at).toISOString()
-    if (typeof r.ended_at === "number") r.ended_at = new Date(r.ended_at).toISOString()
+    if (typeof r.started_at === "number")
+      r.started_at = new Date(r.started_at).toISOString()
+    if (typeof r.ended_at === "number")
+      r.ended_at = new Date(r.ended_at).toISOString()
 
     // ensure date_iso is just YYYY-MM-DD (string) if present
-    if (r.date_iso instanceof Date) r.date_iso = r.date_iso.toISOString().slice(0,10)
-    if (typeof r.date_iso === "string" && r.date_iso.length > 10) r.date_iso = r.date_iso.slice(0,10)
+    if (r.date_iso instanceof Date) r.date_iso = r.date_iso.toISOString().slice(0, 10)
+    if (typeof r.date_iso === "string" && r.date_iso.length > 10)
+      r.date_iso = r.date_iso.slice(0, 10)
 
-    // hard-normalize home_away for game_sessions rows that slipped through
+    // normalize home_away for game_sessions rows
     if (_table === "game_sessions") {
       r.home_away = normalizeHomeAwayValue(r.home_away)
-      if (!r.date_iso) r.date_iso = new Date().toISOString().slice(0,10)
+      if (!r.date_iso) r.date_iso = new Date().toISOString().slice(0, 10)
     }
 
     return r
   })
 }
 
-async function pushTable(table, rows) {
+async function pushTableUpserts(table, rows) {
   if (!rows.length) return
   const cleanRows = sanitizeForUpsert(rows)
   const { error } = await supabase.from(table).upsert(cleanRows, { onConflict: "id" })
   if (error) {
-    // helpful debug: show first row we tried to send
     console.warn(`[sync] upsert error on ${table}`, error, { sample: cleanRows[0] })
     throw error
   }
 }
 
+async function pushTableDeletes(table, rows) {
+  if (!rows.length) return
+  const ids = rows.map((r) => r.id).filter(Boolean)
+  if (!ids.length) return
+  const { error } = await supabase.from(table).delete().in("id", ids)
+  if (error) {
+    console.warn(`[sync] delete error on ${table}`, error, { sample: ids[0] })
+    throw error
+  }
+}
+
 async function pushAll(userId) {
-  await ensureGameFns()
-
   const practiceDirty = toArray(await _allDirtyPractice())
-  const gameDirty = toArray(_allDirtyGame ? await _allDirtyGame() : [])
+  const gameDirty = toArray(await _allDirtyGame())
 
-  for (const r of [...practiceDirty, ...gameDirty]) r.user_id = userId
+  // attach user_id
+  for (const r of [...practiceDirty, ...gameDirty]) {
+    r.user_id = userId
+  }
 
-  const byTable = new Map()
+  const upsertsByTable = new Map()
+  const deletesByTable = new Map()
+
+  function addRow(map, table, row) {
+    if (!table) return
+    if (!map.has(table)) map.set(table, [])
+    map.get(table).push(row)
+  }
+
   for (const row of [...practiceDirty, ...gameDirty]) {
     const table = row?._table
     if (!table) continue
-    if (!byTable.has(table)) byTable.set(table, [])
-    byTable.get(table).push(row)
+    if (row._deleted) {
+      addRow(deletesByTable, table, row)
+    } else {
+      addRow(upsertsByTable, table, row)
+    }
   }
 
-  for (const [table, rows] of byTable) {
-    await pushTable(table, rows)
+  // First upserts (create/update)
+  for (const [table, rows] of upsertsByTable) {
+    await pushTableUpserts(table, rows)
   }
 
-  for (const row of practiceDirty) await _markCleanPractice(row)
-  if (_markCleanGame) for (const row of gameDirty) await _markCleanGame(row)
+  // Then deletes
+  for (const [table, rows] of deletesByTable) {
+    await pushTableDeletes(table, rows)
+  }
+
+  // Finally, update local flags / purge
+  for (const row of practiceDirty) {
+    if (row._deleted) await _purgePracticeRow(row)
+    else await _markCleanPractice(row)
+  }
+  for (const row of gameDirty) {
+    if (row._deleted) await _purgeGameRow(row)
+    else await _markCleanGame(row)
+  }
 }
 
 async function doSync() {
@@ -131,7 +252,10 @@ async function doSync() {
 function scheduleSync() {
   if (scheduled) return
   scheduled = true
-  setTimeout(() => { scheduled = false; void doSync() }, SYNC_DEBOUNCE_MS)
+  setTimeout(() => {
+    scheduled = false
+    void doSync()
+  }, SYNC_DEBOUNCE_MS)
 }
 
 export function initAutoSync() {
@@ -141,11 +265,15 @@ export function initAutoSync() {
   whenIdbReady().then(() => scheduleSync())
   unsubLocal = onLocalMutate(() => scheduleSync())
 
-  const authSub = supabase.auth.onAuthStateChange((_e, s) => { if (s) scheduleSync() })
+  const authSub = supabase.auth.onAuthStateChange((_e, s) => {
+    if (s) scheduleSync()
+  })
   unsubAuth = () => authSub?.data?.subscription?.unsubscribe?.()
 
   onlineHandler = () => scheduleSync()
-  visHandler = () => { if (document.visibilityState === "visible") scheduleSync() }
+  visHandler = () => {
+    if (document.visibilityState === "visible") scheduleSync()
+  }
   window.addEventListener("online", onlineHandler)
   document.addEventListener("visibilitychange", visHandler)
 
@@ -155,10 +283,25 @@ export function initAutoSync() {
 }
 
 export function teardownAutoSync() {
-  if (unsubLocal) { unsubLocal(); unsubLocal = null }
-  if (unsubAuth)  { unsubAuth();  unsubAuth = null }
-  if (onlineHandler) { window.removeEventListener("online", onlineHandler); onlineHandler = null }
-  if (visHandler)    { document.removeEventListener("visibilitychange", visHandler); visHandler = null }
-  if (intervalId)    { clearInterval(intervalId); intervalId = null }
+  if (unsubLocal) {
+    unsubLocal()
+    unsubLocal = null
+  }
+  if (unsubAuth) {
+    unsubAuth()
+    unsubAuth = null
+  }
+  if (onlineHandler) {
+    window.removeEventListener("online", onlineHandler)
+    onlineHandler = null
+  }
+  if (visHandler) {
+    document.removeEventListener("visibilitychange", visHandler)
+    visHandler = null
+  }
+  if (intervalId) {
+    clearInterval(intervalId)
+    intervalId = null
+  }
   inited = false
 }

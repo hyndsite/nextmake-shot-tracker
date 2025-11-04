@@ -53,16 +53,21 @@ export default function GameGate({ navigate }) {
     catch { return iso || "" }
   }
 
-  const homeAwayPill = (s) => (
-    <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium
-        ${s.home_away === "home"
-          ? "bg-emerald-50 text-emerald-700"
-          : "bg-slate-100 text-slate-700"}`}
-    >
-      {s.home_away === "home" ? "Home" : "Away"}
-    </span>
-  )
+  const homeAwayPill = (s) => {
+    const ha = (s.home_away || "").toLowerCase() === "home" ? "Home" : "Away"
+    const isHome = ha === "Home"
+  
+    return (
+      <span
+        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium
+          ${isHome
+            ? "bg-emerald-50 text-emerald-700"
+            : "bg-slate-100 text-slate-700"}`}
+      >
+        {ha}
+      </span>
+    )
+  }
 
   // ---------- actions ----------
   const startNew = async () => {
@@ -82,9 +87,7 @@ export default function GameGate({ navigate }) {
   }
 
   const openDetail = (id) => {
-    // If you don’t have GameDetail yet, you can switch this to:
-    // navigate?.("game-logger", { id })
-    navigate?.("game-detail", { id })
+    navigate?.("gameDetail", { id })
   }
 
   async function onDelete(id, e) {
@@ -155,9 +158,9 @@ export default function GameGate({ navigate }) {
               key={g.id}
               role="button"
               tabIndex={0}
-              onClick={() => navigate("gameDetail", { id: g.id })}
+              onClick={() => openDetail(g.id)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate("gameDetail", { id: g.id })}
+                if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetail(g.id) }
               }}
               className="w-full text-left rounded-2xl border border-slate-200 bg-white px-3 py-2.5
                          flex items-center gap-3 hover:bg-slate-50 active:scale-[0.995]

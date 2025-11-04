@@ -99,7 +99,7 @@
 
 /* Make them transparent regardless of OS theme */
 .zone-btn {
-  background-color: transparent !important;
+  background-color: black !important;
   border: none !important;
   box-shadow: none !important;
 }
