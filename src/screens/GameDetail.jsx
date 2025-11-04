@@ -4,7 +4,7 @@ import { MdSportsBasketball } from "react-icons/md"
 import { ZONES } from "../constants/zones"
 import { ZONE_ANCHORS } from "../constants/zoneAnchors"
 import { getGameSession, listGameEventsBySession } from "../lib/game-db"
-import "../styles/GameLogger.css" 
+import "../styles/GameLogger.css"
 import { ArrowLeft } from "lucide-react"
 
 /* ----------------------- anchor helpers (same as GameLogger) ----------------------- */
@@ -12,28 +12,58 @@ function anchorsToArray(anchors) {
   if (Array.isArray(anchors)) {
     return anchors.map((a, i) => ({
       id: a.id ?? a.key ?? a.zoneId ?? String(i),
-      x: a.x, y: a.y, label: a.label ?? (a.id ?? a.zoneId ?? String(i)),
+      x: a.x,
+      y: a.y,
+      label: a.label ?? (a.id ?? a.zoneId ?? String(i)),
     }))
   }
   return Object.entries(anchors || {}).map(([id, pt]) => ({
-    id, x: pt.x, y: pt.y, label: pt.label ?? id,
+    id,
+    x: pt.x,
+    y: pt.y,
+    label: pt.label ?? id,
   }))
 }
+
 function detectCoordMode(arr) {
-  let maxX = -Infinity, maxY = -Infinity
-  for (const a of arr) { maxX = Math.max(maxX, a.x || 0); maxY = Math.max(maxY, a.y || 0) }
+  let maxX = -Infinity,
+    maxY = -Infinity
+  for (const a of arr) {
+    maxX = Math.max(maxX, a.x || 0)
+    maxY = Math.max(maxY, a.y || 0)
+  }
   if (maxX <= 1 && maxY <= 1) return "fraction"
   if (maxX > 100 || maxY > 100) return "pixel"
   return "percent"
 }
+
 function toPercentAnchors(arr, mode, imgW, imgH) {
   return arr.map((a) => {
     let leftPct, topPct
-    if (mode === "fraction") { leftPct = a.x * 100; topPct = a.y * 100 }
-    else if (mode === "pixel") { leftPct = (a.x / imgW) * 100; topPct = (a.y / imgH) * 100 }
-    else { leftPct = a.x; topPct = a.y }
+    if (mode === "fraction") {
+      leftPct = a.x * 100
+      topPct = a.y * 100
+    } else if (mode === "pixel") {
+      leftPct = (a.x / imgW) * 100
+      topPct = (a.y / imgH) * 100
+    } else {
+      leftPct = a.x
+      topPct = a.y
+    }
     return { id: a.id, label: a.label, leftPct, topPct }
   })
+}
+
+/**
+ * Compute a small radial offset (in px) for a given shot index in a zone.
+ * This keeps shots near the anchor but slightly separated visually.
+ */
+function computeRadialOffset(index, total, radius = 10) {
+  if (total <= 1) return { dx: 0, dy: 0 }
+  const angle = (index / total) * 2 * Math.PI
+  const dx = radius * Math.cos(angle)
+  const dy = radius * Math.sin(angle)
+  return { dx, dy }
 }
 
 /* ----------------------------------- component ----------------------------------- */
@@ -44,19 +74,32 @@ export default function GameDetail({ id: gameId, navigate }) {
 
   // precompute anchors in % just like GameLogger
   const ANCHORS_ARR = useMemo(() => anchorsToArray(ZONE_ANCHORS), [])
-  const coordMode   = useMemo(() => detectCoordMode(ANCHORS_ARR), [ANCHORS_ARR])
-  const pctAnchors  = useMemo(() => {
+  const coordMode = useMemo(() => detectCoordMode(ANCHORS_ARR), [ANCHORS_ARR])
+  const pctAnchors = useMemo(() => {
     if (!imgNatural.w || !imgNatural.h) return []
     return toPercentAnchors(ANCHORS_ARR, coordMode, imgNatural.w, imgNatural.h)
   }, [ANCHORS_ARR, coordMode, imgNatural])
 
   // zones map (for label lookups if needed later)
   const zoneMap = useMemo(() => {
-    const m = new Map(); (ZONES || []).forEach((z) => m.set(z.id, z)); return m
+    const m = new Map()
+    ;(ZONES || []).forEach((z) => m.set(z.id, z))
+    return m
   }, [])
 
+  // Group shot events by zone so we can apply per-zone jitter
+  const shotsByZone = useMemo(() => {
+    const map = new Map()
+    ;(events || []).forEach((e) => {
+      if (e.type !== "shot" || !e.zone_id) return
+      if (!map.has(e.zone_id)) map.set(e.zone_id, [])
+      map.get(e.zone_id).push(e)
+    })
+    return map
+  }, [events])
+
   useEffect(() => {
-    (async () => {
+    ;(async () => {
       const [g, ev] = await Promise.all([
         getGameSession(gameId),
         listGameEventsBySession(gameId),
@@ -81,23 +124,44 @@ export default function GameDetail({ id: gameId, navigate }) {
 
   // basic stats (match GameLogger)
   const stats = useMemo(() => {
-    let assists = 0, rebounds = 0, steals = 0
-    let ftMakes = 0, ftAtt = 0
-    let fgm = 0, fga = 0, threesMade = 0
+    let assists = 0,
+      rebounds = 0,
+      steals = 0
+    let ftMakes = 0,
+      ftAtt = 0
+    let fgm = 0,
+      fga = 0,
+      threesMade = 0
     for (const e of events) {
       switch (e.type) {
-        case "assist":    assists++; break
-        case "rebound":   rebounds++; break
-        case "steal":     steals++; break
-        case "freethrow": ftAtt++; if (e.made) ftMakes++; break
-        case "shot":
-          fga++; if (e.made) { fgm++; if (e.is_three) threesMade++ }
+        case "assist":
+          assists++
           break
-        default: break
+        case "rebound":
+          rebounds++
+          break
+        case "steal":
+          steals++
+          break
+        case "freethrow":
+          ftAtt++
+          if (e.made) ftMakes++
+          break
+        case "shot":
+          fga++
+          if (e.made) {
+            fgm++
+            if (e.is_three) threesMade++
+          }
+          break
+        default:
+          break
       }
     }
-    const fgPct  = fga ? Math.round((fgm / fga) * 100) : 0
-    const efgPct = fga ? Math.round(((fgm + 0.5 * threesMade) / fga) * 100) : 0
+    const fgPct = fga ? Math.round((fgm / fga) * 100) : 0
+    const efgPct = fga
+      ? Math.round(((fgm + 0.5 * threesMade) / fga) * 100)
+      : 0
     return { assists, rebounds, steals, ftMakes, ftAtt, fgm, fga, fgPct, efgPct }
   }, [events])
 
@@ -106,17 +170,24 @@ export default function GameDetail({ id: gameId, navigate }) {
       {/* Header */}
       <div className="flex items-center mb-3">
         <button
-            type="button"
-            onClick={() => navigate?.("gate")}
-            className="btn-back"
+          type="button"
+          onClick={() => navigate?.("gate")}
+          className="btn-back"
         >
-            <ArrowLeft size={16} />
-            <span className="text-sm font-medium">Back</span>
+          <ArrowLeft size={16} />
+          <span className="text-sm font-medium">Back</span>
         </button>
-        </div>
+      </div>
+
       <div className="mb-2 text-center">
         <div className="text-slate-900 font-semibold">
-          {game ? `${game.opponent_name ? `${game.team_name} vs ${game.opponent_name}` : game.team_name}` : "Game"}
+          {game
+            ? `${
+                game.opponent_name
+                  ? `${game.team_name} vs ${game.opponent_name}`
+                  : game.team_name
+              }`
+            : "Game"}
         </div>
         <div className="text-slate-600 text-sm">{titleLine(game)}</div>
         {game?.date_iso && (
@@ -135,25 +206,43 @@ export default function GameDetail({ id: gameId, navigate }) {
           onLoad={onImgLoad}
         />
         <div className="absolute inset-0">
-          {Array.isArray(events) && events
-            .filter((e) => e.type === "shot")
-            .map((e, idx) => {
-              const anchor = pctAnchors.find((a) => a.id === e.zone_id)
-              if (!anchor) return null
+          {/* For each zone, plot all its shots with a small radial offset */}
+          {Array.from(shotsByZone.entries()).map(([zoneId, shots]) => {
+            const anchor = pctAnchors.find((a) => a.id === zoneId)
+            if (!anchor) return null
+            const total = shots.length
+
+            return shots.map((e, idx) => {
+              const { dx, dy } = computeRadialOffset(idx, total, 10)
               return (
                 <div
-                  key={`mk-${idx}`}
-                  className="zone-marker"
-                  style={{ left: `${anchor.leftPct}%`, top: `${anchor.topPct}%` }}
-                  aria-label={`${zoneMap.get(e.zone_id)?.label || e.zone_id} ${e.made ? "make" : "miss"}`}
+                  key={`mk-${zoneId}-${idx}`}
+                  className="zone-marker zone-marker-detail"
+                  style={{
+                    left: `calc(${anchor.leftPct}% + ${dx}px)`,
+                    top: `calc(${anchor.topPct}% + ${dy}px)`,
+                  }}
+                  aria-label={`${
+                    zoneMap.get(e.zone_id)?.label || e.zone_id
+                  } ${e.made ? "make" : "miss"}`}
                 >
                   <MdSportsBasketball
-                    color={e.made ? "#059669" /* emerald-600 */ : "#9ca3af" /* gray-400 */}
-                    style={{ filter: "drop-shadow(0 0 1px rgba(0,0,0,0.25))" }}
+                    // Bigger only on GameDetail via inline style
+                    color={
+                      e.made
+                        ? "#059669" /* emerald-600 */
+                        : "#9ca3af" /* gray-400 */
+                    }
+                    style={{
+                      width: 18,
+                      height: 18,
+                      filter: "drop-shadow(0 0 1px rgba(0,0,0,0.25))",
+                    }}
                   />
                 </div>
               )
-            })}
+            })
+          })}
         </div>
       </div>
 
@@ -163,7 +252,11 @@ export default function GameDetail({ id: gameId, navigate }) {
           <StatCard label="Assists" value={stats.assists} />
           <StatCard label="Rebounds" value={stats.rebounds} />
           <StatCard label="Steals" value={stats.steals} />
-          <StatCard label="Freethrows" value={`${stats.ftMakes} / ${stats.ftAtt}`} tint="peach" />
+          <StatCard
+            label="Freethrows"
+            value={`${stats.ftMakes} / ${stats.ftAtt}`}
+            tint="peach"
+          />
           <StatCard label="Makes" value={stats.fgm} />
           <StatCard label="Misses" value={stats.fga - stats.fgm} />
           <StatCard label="FG%" value={`${stats.fgPct}%`} />
@@ -177,9 +270,11 @@ export default function GameDetail({ id: gameId, navigate }) {
 /* same simple card used in GameLogger */
 function StatCard({ label, value, tint }) {
   const tintClass =
-    tint === "peach" ? "bg-orange-50"
-    : tint === "sky" ? "bg-sky-50"
-    : "bg-white"
+    tint === "peach"
+      ? "bg-orange-50"
+      : tint === "sky"
+      ? "bg-sky-50"
+      : "bg-white"
   return (
     <div className={`rounded-2xl border border-slate-200 ${tintClass} px-4 py-3`}>
       <div className="text-slate-500 text-sm">{label}</div>
