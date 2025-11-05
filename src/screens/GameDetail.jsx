@@ -3,7 +3,11 @@ import React, { useEffect, useMemo, useState } from "react"
 import { MdSportsBasketball } from "react-icons/md"
 import { ZONES } from "../constants/zones"
 import { ZONE_ANCHORS } from "../constants/zoneAnchors"
-import { getGameSession, listGameEventsBySession } from "../lib/game-db"
+import {
+  getGameSession,
+  listGameEventsBySession,
+  endGameSession,
+} from "../lib/game-db"
 import "../styles/GameLogger.css"
 import { ArrowLeft } from "lucide-react"
 
@@ -72,6 +76,11 @@ export default function GameDetail({ id: gameId, navigate }) {
   const [events, setEvents] = useState([])
   const [imgNatural, setImgNatural] = useState({ w: 0, h: 0 })
 
+  // score editing state
+  const [teamScore, setTeamScore] = useState("")
+  const [oppScore, setOppScore] = useState("")
+  const [savingScore, setSavingScore] = useState(false)
+
   // precompute anchors in % just like GameLogger
   const ANCHORS_ARR = useMemo(() => anchorsToArray(ZONE_ANCHORS), [])
   const coordMode = useMemo(() => detectCoordMode(ANCHORS_ARR), [ANCHORS_ARR])
@@ -106,6 +115,20 @@ export default function GameDetail({ id: gameId, navigate }) {
       ])
       setGame(g || null)
       setEvents(ev || [])
+
+      if (g) {
+        setTeamScore(
+          typeof g.team_score === "number" ? String(g.team_score) : "",
+        )
+        setOppScore(
+          typeof g.opponent_score === "number"
+            ? String(g.opponent_score)
+            : "",
+        )
+      } else {
+        setTeamScore("")
+        setOppScore("")
+      }
     })()
   }, [gameId])
 
@@ -165,6 +188,76 @@ export default function GameDetail({ id: gameId, navigate }) {
     return { assists, rebounds, steals, ftMakes, ftAtt, fgm, fga, fgPct, efgPct }
   }, [events])
 
+  function getShotColor(event) {
+    const type = (event.shot_type || event.shotType || "").toLowerCase()
+    const isLayup = type === "layup"
+
+    // Layups override normal make/miss colors
+    if (isLayup && event.made) return "#2563eb" // blue: made layup
+    if (isLayup && !event.made) return "#eab308" // yellow: missed layup
+
+    if (event.made) return "#059669" // green: made shot
+    return "#dc2626" // red: missed shot
+  }
+
+  function describeShot(e, zoneMap) {
+    const zone = zoneMap.get(e.zone_id)
+    const zoneLabel = zone?.label || e.zone_id || "Unknown Zone"
+    const shotType = e.is_three ? "3 pointer" : "2 pointer"
+    const result = e.made ? "Make" : "Miss"
+    return { shotType, zoneLabel, result }
+  }
+
+  function LegendRow({ color, label }) {
+    return (
+      <div className="flex items-center gap-1 text-[11px] leading-tight">
+        <MdSportsBasketball color={color} style={{ width: 12, height: 12 }} />
+        <span className="text-slate-700">{label}</span>
+      </div>
+    )
+  }
+
+  const hasScoreChanges =
+    game &&
+    (String(game.team_score ?? "") !== String(teamScore) ||
+      String(game.opponent_score ?? "") !== String(oppScore))
+
+  async function onSaveScore() {
+    if (!game) return
+    setSavingScore(true)
+    try {
+      const teamScoreInt =
+        teamScore === "" ? null : Number.parseInt(teamScore, 10)
+      const oppScoreInt =
+        oppScore === "" ? null : Number.parseInt(oppScore, 10)
+
+      const patch = {
+        team_score:
+          Number.isFinite(teamScoreInt) && teamScoreInt >= 0
+            ? teamScoreInt
+            : null,
+        opponent_score:
+          Number.isFinite(oppScoreInt) && oppScoreInt >= 0
+            ? oppScoreInt
+            : null,
+      }
+
+      const updated = await endGameSession(game.id, patch)
+      setGame(updated || game)
+      setTeamScore(
+        patch.team_score === null ? "" : String(patch.team_score),
+      )
+      setOppScore(
+        patch.opponent_score === null ? "" : String(patch.opponent_score),
+      )
+    } catch (err) {
+      console.warn("[GameDetail] save score failed:", err)
+      window.alert("Could not save score on this device.")
+    } finally {
+      setSavingScore(false)
+    }
+  }
+
   return (
     <div className="page">
       {/* Header */}
@@ -195,6 +288,44 @@ export default function GameDetail({ id: gameId, navigate }) {
             {new Date(game.date_iso).toLocaleDateString()}
           </div>
         )}
+      </div>
+
+      {/* Editable Final Score */}
+      <div className="mb-3 flex items-center justify-center gap-2">
+        <span className="text-xs font-medium text-slate-600">
+          Final Score
+        </span>
+        <input
+          type="number"
+          inputMode="numeric"
+          min="0"
+          className="w-14 h-8 rounded-lg border border-slate-300 text-center text-sm"
+          value={teamScore}
+          onChange={(e) => setTeamScore(e.target.value)}
+          placeholder="Us"
+        />
+        <span className="text-xs text-slate-500">-</span>
+        <input
+          type="number"
+          inputMode="numeric"
+          min="0"
+          className="w-14 h-8 rounded-lg border border-slate-300 text-center text-sm"
+          value={oppScore}
+          onChange={(e) => setOppScore(e.target.value)}
+          placeholder="Them"
+        />
+        <button
+          type="button"
+          onClick={onSaveScore}
+          disabled={!hasScoreChanges || savingScore}
+          className={`h-8 px-3 rounded-lg text-xs font-semibold ${
+            hasScoreChanges && !savingScore
+              ? "bg-sky-600 text-white"
+              : "bg-slate-100 text-slate-400 cursor-not-allowed"
+          }`}
+        >
+          {savingScore ? "Saving…" : "Save"}
+        </button>
       </div>
 
       {/* Court with markers (no tap zones) */}
@@ -228,14 +359,10 @@ export default function GameDetail({ id: gameId, navigate }) {
                 >
                   <MdSportsBasketball
                     // Bigger only on GameDetail via inline style
-                    color={
-                      e.made
-                        ? "#059669" /* emerald-600 */
-                        : "#9ca3af" /* gray-400 */
-                    }
+                    color={getShotColor(e)}
                     style={{
-                      width: 18,
-                      height: 18,
+                      width: 22,
+                      height: 22,
                       filter: "drop-shadow(0 0 1px rgba(0,0,0,0.25))",
                     }}
                   />
@@ -243,6 +370,13 @@ export default function GameDetail({ id: gameId, navigate }) {
               )
             })
           })}
+        </div>
+        {/* Legend */}
+        <div className="absolute bottom-2 right-2 bg-white/90 rounded-lg shadow px-2 py-1 space-y-1">
+          <LegendRow color="#059669" label="made shot" />
+          <LegendRow color="#dc2626" label="missed shot" />
+          <LegendRow color="#2563eb" label="made layup" />
+          <LegendRow color="#eab308" label="missed layup" />
         </div>
       </div>
 
@@ -261,6 +395,49 @@ export default function GameDetail({ id: gameId, navigate }) {
           <StatCard label="Misses" value={stats.fga - stats.fgm} />
           <StatCard label="FG%" value={`${stats.fgPct}%`} />
           <StatCard label="eFG%" value={`${stats.efgPct}%`} tint="sky" />
+        </div>
+      </section>
+
+      {/* Shot Attempts Log */}
+      <section className="section mt-3">
+        <h3 className="text-sm font-semibold text-slate-700 mb-2">
+          Shot Attempts
+        </h3>
+
+        <div className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
+          {events.filter((e) => e.type === "shot").length === 0 && (
+            <div className="p-2 text-sm text-slate-500 text-center">
+              No shots logged yet.
+            </div>
+          )}
+
+          {events
+            .filter((e) => e.type === "shot")
+            .slice() // create a shallow copy before reverse
+            .reverse() // newest at top
+            .map((e) => {
+              const { shotType, zoneLabel, result } = describeShot(e, zoneMap)
+              return (
+                <div
+                  key={e.id}
+                  className="flex items-center justify-between px-3 py-1.5 text-sm"
+                >
+                  <div className="text-slate-800 font-medium w-[90px]">
+                    {shotType}
+                  </div>
+                  <div className="flex-1 text-slate-600 truncate text-center">
+                    {zoneLabel}
+                  </div>
+                  <div
+                    className={`w-[60px] text-right font-semibold ${
+                      e.made ? "text-emerald-600" : "text-red-600"
+                    }`}
+                  >
+                    {result}
+                  </div>
+                </div>
+              )
+            })}
         </div>
       </section>
     </div>

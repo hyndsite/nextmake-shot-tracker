@@ -53,6 +53,14 @@ function toPercentAnchors(arr, mode, imgW, imgH) {
   })
 }
 
+function describeShot(e, zoneMap) {
+  const zone = zoneMap.get(e.zone_id)
+  const zoneLabel = zone?.label || e.zone_id || "Unknown Zone"
+  const shotType = e.is_three ? "3 pointer" : "2 pointer"
+  const result = e.made ? "Make" : "Miss"
+  return { shotType, zoneLabel, result }
+}
+
 /* ---------------------------------------------------------
    Main component
 --------------------------------------------------------- */
@@ -265,31 +273,45 @@ export default function GameLogger({ id: gameId, navigate }) {
     )
   }
 
+  function getShotColor(event) {
+    const type = (event.shot_type || event.shotType || "").toLowerCase()
+    const isLayup = type === "layup"
+  
+    // Layups override normal make/miss colors
+    if (isLayup && event.made) return "#2563eb"   // blue: made layup
+    if (isLayup && !event.made) return "#eab308"  // yellow: missed layup
+  
+    if (event.made) return "#059669"             // green: made shot
+    return "#dc2626"                             // red: missed shot
+  }
+  
+  function LegendRow({ color, label }) {
+    return (
+      <div className="flex items-center gap-1 text-[11px] leading-tight">
+        <MdSportsBasketball color={color} style={{ width: 12, height: 12 }} />
+        <span className="text-slate-700">{label}</span>
+      </div>
+    )
+  }
+  
+
   return (
     <div className="page gamelogger">
-       <div className="flex items-center mb-3">
+       <div className="relative mb-3 h-10 flex items-center justify-center">
         <button
           type="button"
           onClick={() => navigate?.("gate")}
-          className="btn-back"
+          className="btn-back absolute left-0"
         >
           <ArrowLeft size={16} />
           <span className="text-sm font-medium">Back</span>
         </button>
-      </div>
-      {/* Header */}
-      <div className="flex items-start justify-between mb-2">
-        <div className="text-slate-800 font-medium leading-5 pr-3">
+
+        <div className="text-center text-slate-800 font-medium leading-5 px-20">
           {titleLine(game)}
         </div>
-        <button
-          type="button"
-          onClick={onEndGame}
-          className="btn btn-danger rounded-xl h-10 px-4 text-sm font-semibold"
-        >
-          End Game
-        </button>
       </div>
+
       {/* Final score inputs */}
       <div className="mb-3 flex items-center justify-center gap-2">
         <span className="text-xs font-medium text-slate-600">Final Score</span>
@@ -341,9 +363,10 @@ export default function GameLogger({ id: gameId, navigate }) {
                       top: `${anchor.topPct}%`,
                     }}
                   >
-                    <MdSportsBasketball
-                      color={e.made ? "#059669" : "#9ca3af"}
+                    <MdSportsBasketball 
+                      color={getShotColor(e)}
                       style={{ filter: "drop-shadow(0 0 1px rgba(0,0,0,0.25))" }}
+                      
                     />
                   </div>
                 )
@@ -364,6 +387,12 @@ export default function GameLogger({ id: gameId, navigate }) {
               <span className="zone-hit-inner" />
             </button>
           ))}
+        </div>
+        <div className="absolute bottom-2 right-2 bg-white/90 rounded-lg shadow px-2 py-1 space-y-1">
+          <LegendRow color="#059669" label="made shot" />
+          <LegendRow color="#dc2626" label="missed shot" />
+          <LegendRow color="#2563eb" label="made layup" />
+          <LegendRow color="#eab308" label="missed layup" />
         </div>
       </div>
 
@@ -417,6 +446,59 @@ export default function GameLogger({ id: gameId, navigate }) {
           <StatCard label="eFG%" value={`${stats.efgPct}%`} tint="sky" />
         </div>
       </section>
+      {/* Shot Attempts Log */}
+      <section className="section mt-3">
+        <h3 className="text-sm font-semibold text-slate-700 mb-2">
+          Shot Attempts
+        </h3>
+
+        <div className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
+          {events.filter((e) => e.type === "shot").length === 0 && (
+            <div className="p-2 text-sm text-slate-500 text-center">
+              No shots logged yet.
+            </div>
+          )}
+
+          {events
+            .filter((e) => e.type === "shot")
+            .slice() // create a shallow copy before reverse
+            .reverse() // newest at top
+            .map((e) => {
+              const { shotType, zoneLabel, result } = describeShot(e, zoneMap)
+              return (
+                <div
+                  key={e.id}
+                  className="flex items-center justify-between px-3 py-1.5 text-sm"
+                >
+                  <div className="text-slate-800 font-medium w-[90px]">
+                    {shotType}
+                  </div>
+                  <div className="flex-1 text-slate-600 truncate text-center">
+                    {zoneLabel}
+                  </div>
+                  <div
+                    className={`w-[60px] text-right font-semibold ${
+                      e.made ? "text-emerald-600" : "text-red-600"
+                    }`}
+                  >
+                    {result}
+                  </div>
+                </div>
+              )
+            })}
+        </div>
+      </section>
+        {/* Full-width bottom End Game button */}
+      <div className=" rounded-xl bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-200 p-3">
+        <button
+          type="button"
+          onClick={onEndGame}
+          className="btn btn-danger w-full h-12 rounded-xl bg-red-600 text-white font-semibold text-base shadow hover:bg-red-700 active:scale-[0.98] transition-all"
+        >
+          End Game
+        </button>
+      </div>
+ 
 
 
       {/* Shot modal */}
@@ -480,34 +562,44 @@ function BottomSheet({ title, onClose, children }) {
 }
 
 /* ---------------------------------------------------------
-   Shot details modal (new gating rules)
+   Shot details modal (updated behavior)
+   - Must select Shot Type first.
+   - After Shot Type is selected:
+       * Contested toggle is enabled (optional).
+       * Make and Miss are enabled regardless of Contested.
 --------------------------------------------------------- */
 function ShotModal({ data, onClose, onMake, onMiss }) {
-  const [shotType, setShotType] = useState(data.shotType)   // starts as null
-  const [pressured, setPressured] = useState(data.pressured) // starts as null
+  // Start from data, but allow null → user must pick shot type
+  const [shotType, setShotType] = useState(data.shotType || null)
+  const [pressured, setPressured] = useState(
+    typeof data.pressured === "boolean" ? data.pressured : false,
+  )
 
-  const TYPES = (Array.isArray(SHOT_TYPES) && SHOT_TYPES.length)
-    ? SHOT_TYPES
-    : [{ id: "jump", label: "Jump Shot" }, { id: "layup", label: "Layup" }]
+  const TYPES =
+    Array.isArray(SHOT_TYPES) && SHOT_TYPES.length
+      ? SHOT_TYPES
+      : [
+          { id: "jump", label: "Jump Shot" },
+          { id: "layup", label: "Layup" },
+        ]
 
   const hasShotType = !!shotType
   const canToggleContested = hasShotType
-  const isContested = pressured === true
-  const canSubmit = isContested // per requirement: must select Contested to enable Make/Miss
+  const isContested = !!pressured
+  const canSubmit = hasShotType // Make/Miss require Shot Type ONLY
 
   return (
     <div className="fixed inset-0 z-50 shotmodal">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="absolute left-0 right-0 bottom-0 rounded-t-2xl bg-white p-4 shadow-2xl">
         <div className="text-center text-slate-900 font-semibold mb-2">
-          {/* Use label from ZONES (passed as zoneLabel) */}
           {data.zoneLabel}
         </div>
         <div className="text-center text-sm text-slate-600 mb-3">
           {data.isThree ? "3-pointer" : "2-pointer"}
         </div>
 
-        {/* Shot Type (blue outline → solid when selected) */}
+        {/* Shot Type (must be selected before anything else is enabled) */}
         <div className="mb-3">
           <div className="text-sm text-slate-700 mb-1">Shot Type</div>
           <div className="grid grid-cols-2 gap-2">
@@ -526,40 +618,54 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
           </div>
         </div>
 
-       {/* Contested toggle (disabled until shot type chosen) */}
+        {/* Contested toggle (optional, but only after shot type chosen) */}
         <div className="mb-4">
           <div className="text-sm text-slate-700 mb-1">Shot Context</div>
 
           <button
             disabled={!canToggleContested}
-            onClick={() => canToggleContested && setPressured(p => p === true ? null : true)}
-            className={`w-full contested-btn ${isContested ? "selected" : ""} ${!canToggleContested ? "disabled" : ""}`}
+            onClick={() =>
+              canToggleContested && setPressured((prev) => !prev)
+            }
+            className={`w-full contested-btn ${
+              isContested ? "selected" : ""
+            } ${!canToggleContested ? "disabled" : ""}`}
           >
-            Contested
+            {isContested ? "Contested" : "Uncontested"}
           </button>
-
-          {/* Note: per requirement, Make/Miss are only enabled if Contested is selected */}
         </div>
 
+        {/* Make / Miss buttons (enabled as soon as shot type is selected) */}
         <div className="grid grid-cols-2 gap-2">
           <button
             disabled={!canSubmit}
-            className={`w-full h-11 rounded-xl btn ${canSubmit ? "btn-danger" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}
-            onClick={() => onMiss({ shotType, pressured: true })}
+            className={
+              canSubmit
+                ? "btn btn-danger h-11 rounded-xl"
+                : "h-11 rounded-xl bg-slate-100 text-slate-400 cursor-not-allowed"
+            }
+            onClick={() => onMiss({ shotType, pressured: isContested })}
           >
             Miss
           </button>
           <button
             disabled={!canSubmit}
-            className={`w-full h-11 rounded-xl btn ${canSubmit ? "btn-emerald" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}
-            onClick={() => onMake({ shotType, pressured: true })}
+            className={
+              canSubmit
+                ? "btn btn-emerald h-11 rounded-xl"
+                : "h-11 rounded-xl bg-slate-100 text-slate-400 cursor-not-allowed"
+            }
+            onClick={() => onMake({ shotType, pressured: isContested })}
           >
             Make
           </button>
         </div>
 
         <div className="mt-2 flex justify-center">
-          <button className="w-full text-sm text-slate-500 hover:text-slate-700" onClick={onClose}>
+          <button
+            className="w-full text-sm text-slate-500 hover:text-slate-700"
+            onClick={onClose}
+          >
             Cancel
           </button>
         </div>

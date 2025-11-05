@@ -224,15 +224,15 @@ export default function GameGate({ navigate }) {
                     {g.team_name} vs. {g.opponent_name}
                   </div>
 
-                  {/* Home / Away pill */}
-                  <div className="mt-1">{homeAwayPill(g)}</div>
-
-                  {/* W/L | score line, if scores available */}
-                  {result && (
-                    <div className="mt-0.5 text-xs font-medium text-slate-700">
-                      {result.letter} | {result.team} - {result.opp}
-                    </div>
-                  )}
+                  {/* Home/Away + W/L|Score in two columns */}
+                  <div className="mt-1 flex items-center gap-3">
+                    <div>{homeAwayPill(g)}</div>
+                    {result && (
+                      <div className="text-xs font-medium text-slate-700 text-right">
+                        {result.letter} | {result.team} - {result.opp}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Trash (does not trigger card click) */}
