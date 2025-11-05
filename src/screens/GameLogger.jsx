@@ -65,6 +65,8 @@ export default function GameLogger({ id: gameId, navigate }) {
   const [shotModal, setShotModal] = useState(null) // { zoneId, zoneLabel, isThree, shotType, pressured }
   const [ftModalOpen, setFtModalOpen] = useState(false)
   const imgRef = useRef(null)
+  const [teamScore, setTeamScore] = useState("")
+  const [oppScore, setOppScore] = useState("")
   // Court sizing / anchors
   const [imgNatural, setImgNatural] = useState({ w: 0, h: 0 })
   const ANCHORS_ARR = useMemo(() => anchorsToArray(ZONE_ANCHORS), [])
@@ -92,8 +94,18 @@ export default function GameLogger({ id: gameId, navigate }) {
     ])
     setGame(g || null)
     setEvents(ev || [])
+  
+    if (g) {
+      setTeamScore(g.team_score ?? "")
+      setOppScore(g.opponent_score ?? "")
+    } else {
+      setTeamScore("")
+      setOppScore("")
+    }
+  
     setLoading(false)
   }
+  
   useEffect(() => { void refresh() }, [gameId])
 
   // read image intrinsic size (once on load)
@@ -112,26 +124,67 @@ export default function GameLogger({ id: gameId, navigate }) {
 
   // Live stats
   const stats = useMemo(() => {
-    let assists = 0, rebounds = 0, steals = 0
-    let ftMakes = 0, ftAtt = 0
-    let fgm = 0, fga = 0, threesMade = 0
+    let assists = 0,
+      rebounds = 0,
+      steals = 0
+    let ftMakes = 0,
+      ftAtt = 0
+    let fgm = 0,
+      fga = 0,
+      threesMade = 0
+  
     for (const e of events) {
       switch (e.type) {
-        case "assist": assists++; break
-        case "rebound": rebounds++; break
-        case "steal": steals++; break
-        case "freethrow": ftAtt++; if (e.made) ftMakes++; break
+        case "assist":
+          assists++
+          break
+        case "rebound":
+          rebounds++
+          break
+        case "steal":
+          steals++
+          break
+        case "freethrow":
+          ftAtt++
+          if (e.made) ftMakes++
+          break
         case "shot":
           fga++
-          if (e.made) { fgm++; if (e.is_three) threesMade++ }
+          if (e.made) {
+            fgm++
+            if (e.is_three) threesMade++
+          }
           break
-        default: break
+        default:
+          break
       }
     }
-    const fgPct  = fga ? Math.round((fgm / fga) * 100) : 0
-    const efgPct = fga ? Math.round(((fgm + 0.5 * threesMade) / fga) * 100) : 0
-    return { assists, rebounds, steals, ftMakes, ftAtt, fgm, fga, fgPct, efgPct }
+  
+    const fgPct = fga ? Math.round((fgm / fga) * 100) : 0
+    const efgPct = fga
+      ? Math.round(((fgm + 0.5 * threesMade) / fga) * 100)
+      : 0
+  
+    const twoPtMakes = fgm - threesMade
+    const threePtMakes = threesMade
+    const totalPoints = twoPtMakes * 2 + threePtMakes * 3 + ftMakes
+  
+    return {
+      assists,
+      rebounds,
+      steals,
+      ftMakes,
+      ftAtt,
+      fgm,
+      fga,
+      fgPct,
+      efgPct,
+      twoPtMakes,
+      threePtMakes,
+      totalPoints,
+    }
   }, [events])
+  
 
   // Actions
   async function logQuick(type) {
@@ -167,11 +220,28 @@ export default function GameLogger({ id: gameId, navigate }) {
     })
     setShotModal(null); await refresh()
   }
+  
   async function onEndGame() {
     if (!game) return
     const ok = window.confirm("End this game?")
     if (!ok) return
-    await endGameSession(game.id)
+  
+    const teamScoreInt =
+      teamScore === "" ? null : Number.parseInt(teamScore, 10)
+    const oppScoreInt =
+      oppScore === "" ? null : Number.parseInt(oppScore, 10)
+  
+    await endGameSession(game.id, {
+      team_score:
+        Number.isFinite(teamScoreInt) && teamScoreInt >= 0
+          ? teamScoreInt
+          : null,
+      opponent_score:
+        Number.isFinite(oppScoreInt) && oppScoreInt >= 0
+          ? oppScoreInt
+          : null,
+    })
+  
     navigate?.("gate")
   }
 
@@ -180,6 +250,17 @@ export default function GameLogger({ id: gameId, navigate }) {
       <div className="page">
         <h1 className="screen-title">Game</h1>
         <div className="section">Loading…</div>
+      </div>
+    )
+  }
+
+  function MiniStat({ label, value }) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-center">
+        <div className="text-[10px] uppercase tracking-wide text-slate-500">
+          {label}
+        </div>
+        <div className="text-sm font-semibold text-slate-900">{value}</div>
       </div>
     )
   }
@@ -208,6 +289,29 @@ export default function GameLogger({ id: gameId, navigate }) {
         >
           End Game
         </button>
+      </div>
+      {/* Final score inputs */}
+      <div className="mb-3 flex items-center justify-center gap-2">
+        <span className="text-xs font-medium text-slate-600">Final Score</span>
+        <input
+          type="number"
+          inputMode="numeric"
+          min="0"
+          className="w-14 h-8 rounded-lg border border-slate-300 text-center text-sm"
+          value={teamScore}
+          onChange={(e) => setTeamScore(e.target.value)}
+          placeholder="Us"
+        />
+        <span className="text-xs text-slate-500">-</span>
+        <input
+          type="number"
+          inputMode="numeric"
+          min="0"
+          className="w-14 h-8 rounded-lg border border-slate-300 text-center text-sm"
+          value={oppScore}
+          onChange={(e) => setOppScore(e.target.value)}
+          placeholder="Them"
+        />
       </div>
 
       {/* Court and overlay */}
@@ -289,17 +393,31 @@ export default function GameLogger({ id: gameId, navigate }) {
 
       {/* Stats */}
       <section className="section mt-3">
+        {/* Scoring summary row */}
+        <div className="grid grid-cols-4 gap-2 mb-3">
+          <MiniStat label="2PT" value={stats.twoPtMakes} />
+          <MiniStat label="3PT" value={stats.threePtMakes} />
+          <MiniStat label="FT" value={stats.ftMakes} />
+          <MiniStat label="TP" value={stats.totalPoints} />
+        </div>
+
+        {/* Existing 2-column stat grid */}
         <div className="grid grid-cols-2 gap-3">
           <StatCard label="Assists" value={stats.assists} />
           <StatCard label="Rebounds" value={stats.rebounds} />
           <StatCard label="Steals" value={stats.steals} />
-          <StatCard label="Freethrows" value={`${stats.ftMakes} / ${stats.ftAtt} / ${pct(stats.ftMakes, stats.ftAtt)}%`} tint="peach" />
+          <StatCard label="FG%" value={`${stats.fgPct}%`} />
           <StatCard label="Makes" value={stats.fgm} />
           <StatCard label="Misses" value={stats.fga - stats.fgm} />
-          <StatCard label="FG%" value={`${stats.fgPct}%`} />
+          <StatCard
+            label="Freethrows"
+            value={`${stats.ftMakes}/${stats.ftAtt}`}
+            tint="peach"
+          />
           <StatCard label="eFG%" value={`${stats.efgPct}%`} tint="sky" />
         </div>
       </section>
+
 
       {/* Shot modal */}
       {shotModal && (

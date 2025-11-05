@@ -5,6 +5,7 @@ import { notifyLocalMutate } from "./sync-notify"
 import { whenIdbReady } from "./idb-init"
 import { supabase } from "./supabase"
 
+
 const ready = whenIdbReady()
 const nowISO = () => new Date().toISOString()
 
@@ -16,6 +17,27 @@ export const st = {
 }
 
 // --- helpers ---
+async function computeExistingScoringTotals(gameId) {
+  await ready
+  const evKeys = await keys(st.game.events)
+  let two = 0
+  let three = 0
+  let ft = 0
+
+  for (const k of evKeys) {
+    const ev = await get(k, st.game.events)
+    if (!ev || ev.game_id !== gameId) continue
+    if (ev.type === "shot" && ev.made) {
+      if (ev.is_three) three++
+      else two++
+    } else if (ev.type === "freethrow" && ev.made) {
+      ft++
+    }
+  }
+
+  const totalPoints = two * 2 + three * 3 + ft
+  return { two, three, ft, totalPoints }
+}
 
 function normalizeHomeAway(v) {
   if (v == null) return "Home"
@@ -102,12 +124,14 @@ export async function addGameSession(meta = {}) {
   return row
 }
 
-export async function endGameSession(id) {
+export async function endGameSession(id, patch = {}) {
   await ready
   const row = await getGameSession(id)
   if (!row) return null
+
   const updated = {
     ...row,
+    ...patch, // <-- allows team_score / opponent_score, etc.
     status: "completed",
     ended_at: nowISO(),
     home_away: normalizeHomeAway(row.home_away),
@@ -115,6 +139,7 @@ export async function endGameSession(id) {
     _deleted: false,
     _table: "game_sessions",
   }
+
   await set(id, updated, st.game.sessions)
   notifyLocalMutate()
   return updated
@@ -187,6 +212,7 @@ export async function addGameEvent(input) {
 
   const id = input.id ?? uuid()
 
+  // Base row
   const row = {
     id,
     game_id,
@@ -203,10 +229,41 @@ export async function addGameEvent(input) {
     _table: "game_events",
   }
 
+  // Attach running scoring totals for shot / freethrow events
+  if (type === "shot" || type === "freethrow") {
+    const { two, three, ft, totalPoints } = await computeExistingScoringTotals(
+      game_id,
+    )
+
+    let t2 = two
+    let t3 = three
+    let tft = ft
+    let tp = totalPoints
+
+    if (type === "shot" && made) {
+      if (is_three) {
+        t3 += 1
+        tp += 3
+      } else {
+        t2 += 1
+        tp += 2
+      }
+    } else if (type === "freethrow" && made) {
+      tft += 1
+      tp += 1
+    }
+
+    row.total_2pt_made = t2
+    row.total_3pt_made = t3
+    row.total_ft_made = tft
+    row.total_points = tp
+  }
+
   await set(id, row, st.game.events)
   notifyLocalMutate()
   return row
 }
+
 
 export async function listGameEventsBySession(gameId) {
   await ready

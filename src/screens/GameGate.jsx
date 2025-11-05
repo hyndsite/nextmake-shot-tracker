@@ -22,12 +22,14 @@ export default function GameGate({ navigate }) {
     setSessions(all || [])
     setActive(current || null)
   }
-  useEffect(() => { void refresh() }, [])
+  useEffect(() => {
+    void refresh()
+  }, [])
 
   // ---------- derived ----------
   const previous = useMemo(
-    () => (sessions || []).filter(s => s.status === "completed"),
-    [sessions]
+    () => (sessions || []).filter((s) => s.status === "completed"),
+    [sessions],
   )
 
   // Group by level (fallback to "Games")
@@ -41,28 +43,52 @@ export default function GameGate({ navigate }) {
     // sort each group by date desc (date_iso or started_at)
     for (const arr of g.values()) {
       arr.sort((a, b) =>
-        (b.date_iso || b.started_at || "").localeCompare(a.date_iso || a.started_at || "")
+        (b.date_iso || b.started_at || "").localeCompare(
+          a.date_iso || a.started_at || "",
+        ),
       )
     }
     return g
   }, [previous])
 
   // ---------- helpers ----------
+  function computeResultSummary(session) {
+    const ts = session.team_score
+    const os = session.opponent_score
+    if (ts == null || os == null) return null
+
+    const team = Number(ts)
+    const opp = Number(os)
+    if (!Number.isFinite(team) || !Number.isFinite(opp)) return null
+
+    let letter = ""
+    if (team > opp) letter = "W"
+    else if (team < opp) letter = "L"
+    else letter = "T"
+
+    return { letter, team, opp }
+  }
+
   const fmtDate = (iso) => {
-    try { return new Date(iso || Date.now()).toLocaleDateString() }
-    catch { return iso || "" }
+    try {
+      return new Date(iso || Date.now()).toLocaleDateString()
+    } catch {
+      return iso || ""
+    }
   }
 
   const homeAwayPill = (s) => {
     const ha = (s.home_away || "").toLowerCase() === "home" ? "Home" : "Away"
     const isHome = ha === "Home"
-  
+
     return (
       <span
         className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium
-          ${isHome
-            ? "bg-emerald-50 text-emerald-700"
-            : "bg-slate-100 text-slate-700"}`}
+          ${
+            isHome
+              ? "bg-emerald-50 text-emerald-700"
+              : "bg-slate-100 text-slate-700"
+          }`}
       >
         {ha}
       </span>
@@ -71,7 +97,10 @@ export default function GameGate({ navigate }) {
 
   // ---------- actions ----------
   const startNew = async () => {
-    if (active) { setShowConfirmNew(true); return }
+    if (active) {
+      setShowConfirmNew(true)
+      return
+    }
     navigate?.("game-new")
   }
 
@@ -92,7 +121,9 @@ export default function GameGate({ navigate }) {
 
   async function onDelete(id, e) {
     e?.stopPropagation()
-    const ok = window.confirm("Delete this game and all its logged events?")
+    const ok = window.confirm(
+      "Delete this game and all its logged events?",
+    )
     if (!ok) return
     try {
       await deleteGameSession(id)
@@ -126,7 +157,9 @@ export default function GameGate({ navigate }) {
               <PlayCircle className="text-sky-600" size={24} />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-slate-900 font-semibold">Resume Active Game</div>
+              <div className="text-slate-900 font-semibold">
+                Resume Active Game
+              </div>
               <div className="text-sm text-slate-600 truncate">
                 {active.team_name} vs {active.opponent_name}
               </div>
@@ -146,52 +179,76 @@ export default function GameGate({ navigate }) {
       )}
 
       {/* Previous Games */}
-      <h2 className="mt-5 text-slate-900 font-semibold text-center">Previous Games</h2>
+      <h2 className="mt-5 text-slate-900 font-semibold text-center">
+        Previous Games
+      </h2>
 
       {[...groupedPrev.entries()].map(([group, rows]) => (
         <section key={group} className="w-full mt-2 space-y-2">
           {group !== "Games" && (
-            <div className="text-xs uppercase tracking-wide text-slate-500 pl-1">{group}</div>
-          )}
-          {rows.map((g) => (
-            <div
-              key={g.id}
-              role="button"
-              tabIndex={0}
-              onClick={() => openDetail(g.id)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetail(g.id) }
-              }}
-              className="w-full text-left rounded-2xl border border-slate-200 bg-white px-3 py-2.5
-                         flex items-center gap-3 hover:bg-slate-50 active:scale-[0.995]
-                         focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
-              aria-label={`${g.team_name} vs ${g.opponent_name} on ${fmtDate(g.date_iso || g.started_at)}`}
-            >
-              <div className="shrink-0 mt-0.5">
-                <Gamepad2 size={18} className="text-slate-500" />
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="text-xs text-slate-500">{fmtDate(g.date_iso || g.started_at)}</div>
-                <div className="truncate text-slate-900 font-medium">
-                  {g.team_name} vs. {g.opponent_name}
-                </div>
-                <div className="mt-1">{homeAwayPill(g)}</div>
-              </div>
-
-              {/* Trash (does not trigger card click) */}
-              <div className="shrink-0 pl-2">
-                <button
-                  type="button"
-                  onClick={(e) => onDelete(g.id, e)}
-                  className="trash-btn"
-                  aria-label="Delete game"
-                >
-                  <Trash2 size={18} className="text-red-600" />
-                </button>
-              </div>
+            <div className="text-xs uppercase tracking-wide text-slate-500 pl-1">
+              {group}
             </div>
-          ))}
+          )}
+
+          {rows.map((g) => {
+            const result = computeResultSummary(g)
+            return (
+              <div
+                key={g.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => openDetail(g.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    openDetail(g.id)
+                  }
+                }}
+                className="w-full text-left rounded-2xl border border-slate-200 bg-white px-3 py-2.5
+                           flex items-center gap-3 hover:bg-slate-50 active:scale-[0.995]
+                           focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                aria-label={`${g.team_name} vs ${
+                  g.opponent_name
+                } on ${fmtDate(g.date_iso || g.started_at)}`}
+              >
+                <div className="shrink-0 mt-0.5">
+                  <Gamepad2 size={18} className="text-slate-500" />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-slate-500">
+                    {fmtDate(g.date_iso || g.started_at)}
+                  </div>
+                  <div className="truncate text-slate-900 font-medium">
+                    {g.team_name} vs. {g.opponent_name}
+                  </div>
+
+                  {/* Home / Away pill */}
+                  <div className="mt-1">{homeAwayPill(g)}</div>
+
+                  {/* W/L | score line, if scores available */}
+                  {result && (
+                    <div className="mt-0.5 text-xs font-medium text-slate-700">
+                      {result.letter} | {result.team} - {result.opp}
+                    </div>
+                  )}
+                </div>
+
+                {/* Trash (does not trigger card click) */}
+                <div className="shrink-0 pl-2">
+                  <button
+                    type="button"
+                    onClick={(e) => onDelete(g.id, e)}
+                    className="trash-btn"
+                    aria-label="Delete game"
+                  >
+                    <Trash2 size={18} className="text-red-600" />
+                  </button>
+                </div>
+              </div>
+            )
+          })}
         </section>
       ))}
 
@@ -199,19 +256,27 @@ export default function GameGate({ navigate }) {
       {showConfirmNew && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-[92%] max-w-sm rounded-2xl bg-white p-4 shadow-xl">
-            <div className="text-base font-semibold mb-1">Active Game Detected</div>
+            <div className="text-base font-semibold mb-1">
+              Active Game Detected
+            </div>
             <p className="text-sm text-slate-600 mb-4">
               An active game session already exists:{" "}
               <span className="font-medium">{active?.team_name}</span> vs{" "}
-              <span className="font-medium">{active?.opponent_name}</span>{" "}
-              on {fmtDate(active?.started_at)}. Starting a new game will end the current one.
-              Do you want to continue?
+              <span className="font-medium">{active?.opponent_name}</span> on{" "}
+              {fmtDate(active?.started_at)}. Starting a new game will end
+              the current one. Do you want to continue?
             </p>
             <div className="flex justify-end gap-2">
-              <button className="btn btn-blue" onClick={() => setShowConfirmNew(false)}>
+              <button
+                className="btn btn-blue"
+                onClick={() => setShowConfirmNew(false)}
+              >
                 Cancel
               </button>
-              <button className="btn btn-emerald" onClick={confirmEndAndStart}>
+              <button
+                className="btn btn-emerald"
+                onClick={confirmEndAndStart}
+              >
                 End &amp; Start New
               </button>
             </div>
