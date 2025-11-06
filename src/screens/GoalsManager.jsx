@@ -262,14 +262,14 @@ export default function GoalsManager({ navigate }) {
           <form className="space-y-3" onSubmit={handleCreateOrUpdateSet}>
             <input
               type="text"
-              className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm"
+              className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900 placeholder:text-slate-400"
               placeholder="Set name (e.g., Preseason Block)"
               value={setName}
               onChange={(e) => setSetName(e.target.value)}
             />
 
             <select
-              className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm"
+              className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900"
               value={setType}
               onChange={(e) => setSetType(e.target.value)}
             >
@@ -280,7 +280,7 @@ export default function GoalsManager({ navigate }) {
             <div className="relative">
               <input
                 type="date"
-                className="w-full h-10 rounded-lg border border-slate-300 px-3 pr-9 text-sm"
+                className="w-full h-10 rounded-lg border border-slate-300 px-3 pr-9 text-sm text-slate-900 placeholder:text-slate-400"
                 value={setDueDate}
                 onChange={(e) => setSetDueDate(e.target.value)}
               />
@@ -307,7 +307,7 @@ export default function GoalsManager({ navigate }) {
 
           <form className="space-y-3" onSubmit={handleAddGoal}>
             <select
-              className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm"
+              className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900"
               value={selectedSetIdForGoal}
               onChange={(e) => setSelectedSetIdForGoal(e.target.value)}
             >
@@ -321,7 +321,7 @@ export default function GoalsManager({ navigate }) {
 
             <input
               type="text"
-              className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm"
+              className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900 placeholder:text-slate-400"
               placeholder="Goal Name (e.g., FG% by Zone)"
               value={goalName}
               onChange={(e) => setGoalName(e.target.value)}
@@ -329,14 +329,14 @@ export default function GoalsManager({ navigate }) {
 
             <input
               type="text"
-              className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm"
+              className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900 placeholder:text-slate-400"
               placeholder="Details (e.g., 30 days · Wing Right)"
               value={goalDetails}
               onChange={(e) => setGoalDetails(e.target.value)}
             />
 
             <select
-              className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm"
+              className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900"
               value={goalMetric}
               onChange={(e) => setGoalMetric(e.target.value)}
             >
@@ -349,7 +349,7 @@ export default function GoalsManager({ navigate }) {
 
             <input
               type="number"
-              className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm"
+              className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900 placeholder:text-slate-400"
               placeholder="Target Value (e.g., 45)"
               value={goalTarget}
               onChange={(e) => setGoalTarget(e.target.value)}
@@ -432,7 +432,9 @@ export default function GoalsManager({ navigate }) {
                               ? `${dLeft} day${dLeft === 1 ? "" : "s"} left`
                               : `${Math.abs(
                                   dLeft,
-                                )} day${Math.abs(dLeft) === 1 ? "" : "s"} ago`}
+                                )} day${
+                                  Math.abs(dLeft) === 1 ? "" : "s"
+                                } ago`}
                           </span>
                         )}
                         <span
