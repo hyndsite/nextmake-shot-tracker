@@ -149,14 +149,16 @@ export async function deleteGoalSet(id) {
 
 /**
  * Create a goal inside a set for the current user.
- * Schema columns used: user_id, set_id, name, details, metric, target_value
+ * Schema columns used: user_id, set_id, name, details, metric,
+ * target_value, target_end_date
  *
  * @param {{
  *   setId: string,
  *   name?: string,
  *   details?: string,
  *   metric: string,
- *   targetValue: number
+ *   targetValue: number,
+ *   targetEndDate: string, // ISO date (YYYY-MM-DD)
  * }} input
  */
 export async function createGoal({
@@ -165,6 +167,7 @@ export async function createGoal({
   details,
   metric,
   targetValue,
+  targetEndDate,
 }) {
   const userId = await requireUserId()
 
@@ -178,6 +181,7 @@ export async function createGoal({
         details: details ?? null,
         metric,
         target_value: targetValue,
+        target_end_date: targetEndDate,
       },
     ])
     .select("*")
@@ -194,7 +198,8 @@ export async function createGoal({
 /**
  * Update a goal by id.
  * Patch shape should only include columns that actually exist in your table
- * (e.g., name, details, metric, target_value, current_value, etc.).
+ * (e.g., name, details, metric, target_value, target_end_date,
+ * current_value, etc.).
  */
 export async function updateGoal(id, patch) {
   const { data, error } = await supabase

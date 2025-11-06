@@ -13,20 +13,38 @@ import {
 import { ArrowLeft, Calendar, Edit2, Trash2 } from "lucide-react"
 import { MdEmojiObjects } from "react-icons/md"
 
-/* Metric options shown in the "Goal Metric" dropdown */
-const METRIC_OPTIONS = [
+/**
+ * Metric options for goals
+ *
+ * BASE_METRIC_OPTIONS = metrics valid for both Practice + Game
+ * GAME_ONLY_METRIC_OPTIONS = metrics that only make sense for Game goal sets
+ */
+
+// Available for both Practice and Game goal sets
+const BASE_METRIC_OPTIONS = [
   { value: "efg_overall", label: "eFG% (overall)" },
   { value: "three_pct_overall", label: "3P% (overall)" },
   { value: "ft_pct", label: "FT%" },
-  { value: "fg_pct_zone", label: "FG% by Zone" },
+  { value: "fg_pct_zone", label: "FG% (by zone)" },
   { value: "off_dribble_fg", label: "Off-Dribble FG%" },
   { value: "pressured_fg", label: "Pressured FG%" },
-  { value: "makes_7d", label: "Makes (7 days)" },
-  { value: "attempts_30d", label: "Attempts (30 days)" },
+  { value: "makes", label: "Makes (count)" },
+  { value: "attempts", label: "Attempts (count)" },
 ]
 
+// Only for Game goal sets (we track these only in games)
+const GAME_ONLY_METRIC_OPTIONS = [
+  { value: "points_total", label: "Total Points (Game)" },
+  { value: "steals_total", label: "Steals (Game)" },
+  { value: "assists_total", label: "Assists (Game)" },
+  { value: "rebounds_total", label: "Rebounds (Game)" },
+]
+
+// Used for label lookup everywhere (Goal cards, etc.)
+const ALL_METRIC_OPTIONS = [...BASE_METRIC_OPTIONS, ...GAME_ONLY_METRIC_OPTIONS]
+
 function metricLabel(value) {
-  return METRIC_OPTIONS.find((m) => m.value === value)?.label || value
+  return ALL_METRIC_OPTIONS.find((m) => m.value === value)?.label || value
 }
 
 function formatDueDate(iso) {
@@ -66,8 +84,11 @@ export default function GoalsManager({ navigate }) {
   const [selectedSetIdForGoal, setSelectedSetIdForGoal] = useState("")
   const [goalName, setGoalName] = useState("")
   const [goalDetails, setGoalDetails] = useState("")
-  const [goalMetric, setGoalMetric] = useState(METRIC_OPTIONS[0]?.value || "")
+  const [goalMetric, setGoalMetric] = useState(
+    BASE_METRIC_OPTIONS[0]?.value || "",
+  )
   const [goalTarget, setGoalTarget] = useState("")
+  const [goalEndDate, setGoalEndDate] = useState("")
 
   // Which sets are expanded in the list
   const [expandedSetIds, setExpandedSetIds] = useState(new Set())
@@ -109,6 +130,40 @@ export default function GoalsManager({ navigate }) {
       ),
     [goalSets],
   )
+
+  const selectedSetForGoal = useMemo(
+    () => goalSets.find((s) => s.id === selectedSetIdForGoal) || null,
+    [goalSets, selectedSetIdForGoal],
+  )
+
+  // Metric options depend on selected set type:
+  // - Practice set → base metrics
+  // - Game set → base metrics + game-only metrics
+  const availableMetricOptions = useMemo(() => {
+    if (!selectedSetForGoal) return BASE_METRIC_OPTIONS
+    if (selectedSetForGoal.type === "game") {
+      return [...BASE_METRIC_OPTIONS, ...GAME_ONLY_METRIC_OPTIONS]
+    }
+    return BASE_METRIC_OPTIONS
+  }, [selectedSetForGoal])
+
+  // Keep goalEndDate aligned with selected set (default to set due date)
+  useEffect(() => {
+    if (selectedSetForGoal?.due_date) {
+      setGoalEndDate((prev) => prev || selectedSetForGoal.due_date)
+    } else {
+      setGoalEndDate("")
+    }
+  }, [selectedSetForGoal])
+
+  // Ensure goalMetric is always valid for the currently selected set type
+  useEffect(() => {
+    if (!availableMetricOptions.length) return
+    const isValid = availableMetricOptions.some((opt) => opt.value === goalMetric)
+    if (!isValid) {
+      setGoalMetric(availableMetricOptions[0].value)
+    }
+  }, [availableMetricOptions, goalMetric])
 
   function resetSetForm() {
     setSetName("")
@@ -176,7 +231,22 @@ export default function GoalsManager({ navigate }) {
 
   async function handleAddGoal(e) {
     e.preventDefault()
-    if (!selectedSetIdForGoal || !goalMetric || !goalTarget) return
+    if (
+      !selectedSetIdForGoal ||
+      !goalMetric ||
+      !goalTarget ||
+      !goalEndDate
+    )
+      return
+
+    // Safety: ensure end date does not exceed set due date (in case max attr is bypassed)
+    if (
+      selectedSetForGoal?.due_date &&
+      goalEndDate > selectedSetForGoal.due_date
+    ) {
+      alert("Target end date cannot be after the goal set due date.")
+      return
+    }
 
     try {
       const created = await createGoal({
@@ -185,6 +255,7 @@ export default function GoalsManager({ navigate }) {
         details: goalDetails || "",
         metric: goalMetric,
         targetValue: Number(goalTarget),
+        targetEndDate: goalEndDate,
       })
 
       setGoalSets((prev) =>
@@ -196,8 +267,9 @@ export default function GoalsManager({ navigate }) {
       )
       setGoalName("")
       setGoalDetails("")
-      setGoalMetric(METRIC_OPTIONS[0]?.value || "")
+      setGoalMetric(availableMetricOptions[0]?.value || "")
       setGoalTarget("")
+      setGoalEndDate(selectedSetForGoal?.due_date || "")
       setExpandedSetIds((old) => new Set(old).add(selectedSetIdForGoal))
     } catch (err) {
       console.warn("[GoalsManager] handleAddGoal error:", err)
@@ -335,17 +407,33 @@ export default function GoalsManager({ navigate }) {
               onChange={(e) => setGoalDetails(e.target.value)}
             />
 
+            {/* Metric options now depend on set type */}
             <select
               className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900"
               value={goalMetric}
               onChange={(e) => setGoalMetric(e.target.value)}
             >
-              {METRIC_OPTIONS.map((m) => (
+              {availableMetricOptions.map((m) => (
                 <option key={m.value} value={m.value}>
                   {m.label}
                 </option>
               ))}
             </select>
+
+            {/* Target End Date (per goal, cannot exceed set due date) */}
+            <div className="relative">
+              <input
+                type="date"
+                className="w-full h-10 rounded-lg border border-slate-300 px-3 pr-9 text-sm text-slate-900 placeholder:text-slate-400"
+                value={goalEndDate}
+                onChange={(e) => setGoalEndDate(e.target.value)}
+                max={selectedSetForGoal?.due_date || undefined}
+              />
+              <Calendar
+                size={16}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+            </div>
 
             <input
               type="number"
@@ -357,7 +445,12 @@ export default function GoalsManager({ navigate }) {
 
             <button
               type="submit"
-              disabled={!selectedSetIdForGoal || !goalMetric || !goalTarget}
+              disabled={
+                !selectedSetIdForGoal ||
+                !goalMetric ||
+                !goalTarget ||
+                !goalEndDate
+              }
               className="btn btn-primary w-full h-10 rounded-lg bg-sky-600 text-white text-sm font-semibold disabled:bg-slate-200 disabled:text-slate-400"
             >
               Add Goal
@@ -520,6 +613,11 @@ function GoalCard({ goal, onDelete }) {
           </div>
           {goal.details && (
             <div className="text-xs text-slate-500">{goal.details}</div>
+          )}
+          {goal.target_end_date && (
+            <div className="text-[11px] text-slate-400">
+              Target by: {formatDueDate(goal.target_end_date)}
+            </div>
           )}
         </div>
         <button
