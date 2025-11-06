@@ -550,10 +550,10 @@ export default function GoalsManager({ navigate }) {
                         e.stopPropagation()
                         startEditSet(set)
                       }}
-                      className="p-1 rounded-full hover:bg-slate-100"
+                      className="edit-btn p-1 rounded-full hover:bg-slate-100"
                       aria-label="Edit goal set"
                     >
-                      <Edit2 size={14} className="edit-btn text-slate-500" />
+                      <Edit2 size={14} className="text-slate-500" />
                     </button>
                     <button
                       type="button"
@@ -561,7 +561,7 @@ export default function GoalsManager({ navigate }) {
                         e.stopPropagation()
                         handleDeleteSet(set)
                       }}
-                      className="p-1 rounded-full hover:bg-slate-100"
+                      className="trash-btn p-1 rounded-full hover:bg-slate-100"
                       aria-label="Delete goal set"
                     >
                       <Trash2 size={14} className="trash-can text-red-500" />
@@ -623,7 +623,7 @@ function GoalCard({ goal, onDelete }) {
         <button
           type="button"
           onClick={onDelete}
-          className="h-7 px-3 rounded-full bg-red-50 text-[11px] font-semibold text-red-600"
+          className="trash-btn h-7 px-3 rounded-full bg-red-50 text-[11px] font-semibold text-red-600"
         >
           Delete
         </button>
