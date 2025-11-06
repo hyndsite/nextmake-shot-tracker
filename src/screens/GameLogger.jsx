@@ -56,9 +56,10 @@ function toPercentAnchors(arr, mode, imgW, imgH) {
 function describeShot(e, zoneMap) {
   const zone = zoneMap.get(e.zone_id)
   const zoneLabel = zone?.label || e.zone_id || "Unknown Zone"
-  const shotType = e.is_three ? "3 pointer" : "2 pointer"
+  const shotType = e.shot_type || ""
+  const shotValue = e.is_three ? "3 pointer" : "2 pointer"
   const result = e.made ? "Make" : "Miss"
-  return { shotType, zoneLabel, result }
+  return { shotValue, zoneLabel, shotType, result }
 }
 
 /* ---------------------------------------------------------
@@ -459,22 +460,25 @@ export default function GameLogger({ id: gameId, navigate }) {
             </div>
           )}
 
-          {events
+{events
             .filter((e) => e.type === "shot")
             .slice() // create a shallow copy before reverse
             .reverse() // newest at top
             .map((e) => {
-              const { shotType, zoneLabel, result } = describeShot(e, zoneMap)
+              const { shotValue, zoneLabel, shotType, result } = describeShot(e, zoneMap)
               return (
                 <div
                   key={e.id}
                   className="flex items-center justify-between px-3 py-1.5 text-sm"
                 >
                   <div className="text-slate-800 font-medium w-[90px]">
-                    {shotType}
+                    {shotValue}
                   </div>
                   <div className="flex-1 text-slate-600 truncate text-center">
                     {zoneLabel}
+                  </div>
+                  <div className="flex-1 text-slate-600 truncate text-center">
+                    {shotType}
                   </div>
                   <div
                     className={`w-[60px] text-right font-semibold ${

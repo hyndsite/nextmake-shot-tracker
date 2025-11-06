@@ -155,6 +155,7 @@ export default function GameDetail({ id: gameId, navigate }) {
     let fgm = 0,
       fga = 0,
       threesMade = 0
+  
     for (const e of events) {
       switch (e.type) {
         case "assist":
@@ -181,11 +182,30 @@ export default function GameDetail({ id: gameId, navigate }) {
           break
       }
     }
+  
     const fgPct = fga ? Math.round((fgm / fga) * 100) : 0
     const efgPct = fga
       ? Math.round(((fgm + 0.5 * threesMade) / fga) * 100)
       : 0
-    return { assists, rebounds, steals, ftMakes, ftAtt, fgm, fga, fgPct, efgPct }
+  
+    const twoPtMakes = fgm - threesMade
+    const threePtMakes = threesMade
+    const totalPoints = twoPtMakes * 2 + threePtMakes * 3 + ftMakes
+  
+    return {
+      assists,
+      rebounds,
+      steals,
+      ftMakes,
+      ftAtt,
+      fgm,
+      fga,
+      fgPct,
+      efgPct,
+      twoPtMakes,
+      threePtMakes,
+      totalPoints,
+    }
   }, [events])
 
   function getShotColor(event) {
@@ -203,9 +223,10 @@ export default function GameDetail({ id: gameId, navigate }) {
   function describeShot(e, zoneMap) {
     const zone = zoneMap.get(e.zone_id)
     const zoneLabel = zone?.label || e.zone_id || "Unknown Zone"
-    const shotType = e.is_three ? "3 pointer" : "2 pointer"
+    const shotType = e.shot_type || ""
+    const shotValue = e.is_three ? "3 pointer" : "2 pointer"
     const result = e.made ? "Make" : "Miss"
-    return { shotType, zoneLabel, result }
+    return { shotValue, zoneLabel, shotType, result }
   }
 
   function LegendRow({ color, label }) {
@@ -257,6 +278,18 @@ export default function GameDetail({ id: gameId, navigate }) {
       setSavingScore(false)
     }
   }
+
+  function MiniStat({ label, value }) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-center">
+        <div className="text-[10px] uppercase tracking-wide text-slate-500">
+          {label}
+        </div>
+        <div className="text-sm font-semibold text-slate-900">{value}</div>
+      </div>
+    )
+  }
+
 
   return (
     <div className="page">
@@ -382,6 +415,14 @@ export default function GameDetail({ id: gameId, navigate }) {
 
       {/* Stats grid (read-only) */}
       <section className="section mt-3">
+        {/* Scoring summary row */}
+        <div className="grid grid-cols-4 gap-2 mb-3">
+          <MiniStat label="2PT" value={stats.twoPtMakes} />
+          <MiniStat label="3PT" value={stats.threePtMakes} />
+          <MiniStat label="FT" value={stats.ftMakes} />
+          <MiniStat label="TP" value={stats.totalPoints} />
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <StatCard label="Assists" value={stats.assists} />
           <StatCard label="Rebounds" value={stats.rebounds} />
@@ -416,17 +457,20 @@ export default function GameDetail({ id: gameId, navigate }) {
             .slice() // create a shallow copy before reverse
             .reverse() // newest at top
             .map((e) => {
-              const { shotType, zoneLabel, result } = describeShot(e, zoneMap)
+              const { shotValue, zoneLabel, shotType, result } = describeShot(e, zoneMap)
               return (
                 <div
                   key={e.id}
                   className="flex items-center justify-between px-3 py-1.5 text-sm"
                 >
                   <div className="text-slate-800 font-medium w-[90px]">
-                    {shotType}
+                    {shotValue}
                   </div>
                   <div className="flex-1 text-slate-600 truncate text-center">
                     {zoneLabel}
+                  </div>
+                  <div className="flex-1 text-slate-600 truncate text-center">
+                    {shotType}
                   </div>
                   <div
                     className={`w-[60px] text-right font-semibold ${
