@@ -250,6 +250,18 @@ html, body, #root {
     background-color: #fee2e2;      /* red-100 */
   }
 
+  .edit-btn {
+    background-color: #ffffff;      /* force white */
+    color: #898690;                 /* red-600 */
+    border-radius: 9999px;
+    border: 1px solid transparent;
+  }
+  
+  .edit-btn:hover {
+    background-color: #fee2e2;      /* red-100 */
+  }
+
+
   .accordion-header {
     background-color: #374151;      /* gray-700 */
     color: #ffffff;                 /* white text */

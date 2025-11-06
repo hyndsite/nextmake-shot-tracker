@@ -23,3 +23,10 @@
   .btn-back:active {
     transform: scale(0.98);
   }
+
+  .btn-white {
+    background-color: #ffffff;      /* force white */
+    color: #000000;                 /* red-600 */
+    border-radius: 9999px;
+    border: 1px solid transparent;
+  }

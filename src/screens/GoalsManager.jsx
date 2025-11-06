@@ -460,7 +460,7 @@ export default function GoalsManager({ navigate }) {
                       className="p-1 rounded-full hover:bg-slate-100"
                       aria-label="Edit goal set"
                     >
-                      <Edit2 size={14} className="text-slate-500" />
+                      <Edit2 size={14} className="edit-btn text-slate-500" />
                     </button>
                     <button
                       type="button"
@@ -471,7 +471,7 @@ export default function GoalsManager({ navigate }) {
                       className="p-1 rounded-full hover:bg-slate-100"
                       aria-label="Delete goal set"
                     >
-                      <Trash2 size={14} className="text-red-500" />
+                      <Trash2 size={14} className="trash-can text-red-500" />
                     </button>
                   </div>
                 </div>
