@@ -10,9 +10,9 @@
 
 /* --- Quick Stat Buttons (Steal, Assist, Rebound) --- */
 .gamelogger .quick-btn {
-  background-color: #ffffff !important;        /* White */
-  border: 2px solid #3c64b9 !important;        /* Tailwind sky-500 */
-  color: #0ea5e9 !important;                   /* Blue text */
+  background-color: #ffffff !important;        /* White idle */
+  border: 2px solid #3c64b9 !important;        /* Border = Tailwind sky-500 */
+  color: #0ea5e9 !important;                   /* Text = Blue */
   font-weight: 500;
   border-radius: 9999px;                       /* Full pill shape */
   height: 2.5rem;                              /* h-10 equivalent */
@@ -21,9 +21,14 @@
   justify-content: center;
   gap: 0.5rem;
   box-shadow: none;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.05s ease;
 }
 
+/* Press-only fill effect */
 .gamelogger .quick-btn:active {
+  background-color: #3c64b9 !important;        /* Same as border */
+  border-color: #3c64b9 !important;
+  color: #ffffff !important;                   /* Flip text to white */
   transform: scale(0.98);
 }
 

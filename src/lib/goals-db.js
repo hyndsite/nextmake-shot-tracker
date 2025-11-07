@@ -65,23 +65,30 @@ export async function listGoalSetsWithGoals() {
 
 /**
  * Create a new goal set for the current user.
- * @param {{ name: string, type: "practice" | "game", dueDate: string }} input
- */
-export async function createGoalSet({ name, type, dueDate }) {
-  const userId = await requireUserId()
+ * @param {{
+*   name: string,
+*   type: "practice" | "game",
+*   dueDate: string,    // YYYY-MM-DD
+*   startDate?: string, // YYYY-MM-DD (defaults to today on the DB)
+* }} input
+*/
+export async function createGoalSet({ name, type, dueDate, startDate }) {
+ const userId = await requireUserId()
 
-  const { data, error } = await supabase
-    .from("goal_sets")
-    .insert([
-      {
-        user_id: userId,
-        name,
-        type, // "practice" | "game"
-        due_date: dueDate,
-      },
-    ])
-    .select("*")
-    .single()
+ const { data, error } = await supabase
+   .from("goal_sets")
+   .insert([
+     {
+       user_id: userId,
+       name,
+       type, // "practice" | "game"
+       due_date: dueDate,
+       // if caller passes nothing, DB default CURRENT_DATE is used
+       ...(startDate ? { start_date: startDate } : {}),
+     },
+   ])
+   .select("*")
+   .single()
 
   if (error) {
     console.error("[goals-db] createGoalSet error:", error)
@@ -162,28 +169,32 @@ export async function deleteGoalSet(id) {
  * }} input
  */
 export async function createGoal({
-  setId,
-  name,
-  details,
-  metric,
-  targetValue,
-  targetEndDate,
-}) {
-  const userId = await requireUserId()
-
-  const { data, error } = await supabase
-    .from("goals")
-    .insert([
-      {
-        user_id: userId,
-        set_id: setId,
-        name: name ?? null,
-        details: details ?? null,
-        metric,
-        target_value: targetValue,
-        target_end_date: targetEndDate,
-      },
-    ])
+    setId,
+    name,
+    details,
+    metric,
+    targetValue,
+    targetEndDate,
+    targetType = "percent",
+    zoneId = null,
+  }) {
+    const userId = await requireUserId()
+  
+    const { data, error } = await supabase
+        .from("goals")
+        .insert([
+        {
+            user_id: userId,
+            set_id: setId,
+            name: name ?? null,
+            details: details ?? null,
+            metric,
+            target_value: targetValue,
+            target_end_date: targetEndDate,
+            target_type: targetType,
+            zone_id: zoneId,
+        },
+        ])
     .select("*")
     .single()
 

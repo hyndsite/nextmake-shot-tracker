@@ -7,44 +7,32 @@ import {
   deleteGoalsBySet,
   listGoalSetsWithGoals,
   createGoal,
-  updateGoal,
   deleteGoal,
 } from "../lib/goals-db"
-import { ArrowLeft, Calendar, Edit2, Trash2 } from "lucide-react"
+import { supabase, getUser } from "../lib/supabase"
+import {
+  BASE_METRIC_OPTIONS,
+  GAME_ONLY_METRIC_OPTIONS,
+  computeGameMetricValue,
+  computePracticeMetricValue,
+  metricIsPercent,
+  formatMetricValue,
+} from "../lib/goal-metrics"
+import { ZONES } from "../constants/zones" // adjust path if needed
+import { ArrowLeft, Calendar, Edit2, Trash2, ChevronDown } from "lucide-react"
 import { MdEmojiObjects } from "react-icons/md"
 
-/**
- * Metric options for goals
- *
- * BASE_METRIC_OPTIONS = metrics valid for both Practice + Game
- * GAME_ONLY_METRIC_OPTIONS = metrics that only make sense for Game goal sets
- */
+// ------------------- helpers -------------------
 
-// Available for both Practice and Game goal sets
-const BASE_METRIC_OPTIONS = [
-  { value: "efg_overall", label: "eFG% (overall)" },
-  { value: "three_pct_overall", label: "3P% (overall)" },
-  { value: "ft_pct", label: "FT%" },
-  { value: "fg_pct_zone", label: "FG% (by zone)" },
-  { value: "off_dribble_fg", label: "Off-Dribble FG%" },
-  { value: "pressured_fg", label: "Pressured FG%" },
-  { value: "makes", label: "Makes (count)" },
-  { value: "attempts", label: "Attempts (count)" },
-]
-
-// Only for Game goal sets (we track these only in games)
-const GAME_ONLY_METRIC_OPTIONS = [
-  { value: "points_total", label: "Total Points (Game)" },
-  { value: "steals_total", label: "Steals (Game)" },
-  { value: "assists_total", label: "Assists (Game)" },
-  { value: "rebounds_total", label: "Rebounds (Game)" },
-]
-
-// Used for label lookup everywhere (Goal cards, etc.)
 const ALL_METRIC_OPTIONS = [...BASE_METRIC_OPTIONS, ...GAME_ONLY_METRIC_OPTIONS]
 
 function metricLabel(value) {
   return ALL_METRIC_OPTIONS.find((m) => m.value === value)?.label || value
+}
+
+function zoneLabel(zoneId) {
+  if (!zoneId) return null
+  return ZONES.find((z) => z.id === zoneId)?.label || zoneId
 }
 
 function formatDueDate(iso) {
@@ -70,13 +58,82 @@ function daysLeft(iso) {
   return diffDays
 }
 
+/**
+ * Compute the current metric value + progress against a goal.
+ */
+function computeGoalProgress({ goal, set, gameEvents, practiceEntries }) {
+  const metricKey = goal.metric
+  const targetRaw = Number(goal.target_value ?? 0)
+  const targetType = goal.target_type || "percent"
+  const isPercentMetric = metricIsPercent(metricKey)
+
+  // Date window + zone
+  const startDate = set?.start_date || undefined
+  const endDate = goal.target_end_date || set?.due_date || undefined
+  const zoneId = goal.zone_id || undefined
+  const range = { startDate, endDate, zoneId }
+
+  let currentRaw = 0
+  if (set.type === "game") {
+    currentRaw = computeGameMetricValue(metricKey, gameEvents, range)
+  } else {
+    currentRaw = computePracticeMetricValue(metricKey, practiceEntries, range)
+  }
+
+  const safeTarget = Number.isFinite(targetRaw) ? targetRaw : 0
+  const safeCurrent = Number.isFinite(currentRaw) ? currentRaw : 0
+
+  const progressPct =
+    safeTarget > 0
+      ? Math.min(100, Math.round((safeCurrent / safeTarget) * 100))
+      : 0
+
+  // Target label
+  let targetLabel
+  if (!safeTarget) {
+    targetLabel = "—"
+  } else if (isPercentMetric || targetType === "percent") {
+    targetLabel = `${safeTarget}%`
+  } else {
+    targetLabel = String(safeTarget)
+  }
+
+  // Current label
+  let currentLabel
+  if (isPercentMetric) {
+    currentLabel = formatMetricValue(metricKey, safeCurrent)
+  } else if (targetType === "percent") {
+    const v = Math.round(safeCurrent * 10) / 10
+    currentLabel = `${v}%`
+  } else {
+    currentLabel = String(Math.round(safeCurrent))
+  }
+
+  return {
+    targetRaw: safeTarget,
+    currentRaw: safeCurrent,
+    progressPct,
+    targetLabel,
+    currentLabel,
+  }
+}
+
+// ------------------- component -------------------
+
 export default function GoalsManager({ navigate }) {
   const [loading, setLoading] = useState(true)
   const [goalSets, setGoalSets] = useState([])
 
+  // Game / practice data for metric calculations
+  const [gameEvents, setGameEvents] = useState([])
+  const [practiceEntries, setPracticeEntries] = useState([])
+
   // Create/Edit set state
   const [setName, setSetName] = useState("")
   const [setType, setSetType] = useState("practice")
+  const [setStartDate, setSetStartDate] = useState(
+    () => new Date().toISOString().slice(0, 10),
+  )
   const [setDueDate, setSetDueDate] = useState("")
   const [editingSetId, setEditingSetId] = useState(null)
 
@@ -89,20 +146,67 @@ export default function GoalsManager({ navigate }) {
   )
   const [goalTarget, setGoalTarget] = useState("")
   const [goalEndDate, setGoalEndDate] = useState("")
+  const [goalTargetType, setGoalTargetType] = useState("percent")
+  const [goalZoneId, setGoalZoneId] = useState("")
 
-  // Which sets are expanded in the list
+  // expanded sets in list
   const [expandedSetIds, setExpandedSetIds] = useState(new Set())
 
-  // Initial load of all goal sets/goals (from Supabase via goals-db.js)
+  // accordion state for forms
+  const [openCreateSet, setOpenCreateSet] = useState(true)
+  const [openAddGoal, setOpenAddGoal] = useState(true)
+
+  // Initial load of goal sets + game/practice data
   useEffect(() => {
     let cancelled = false
 
     async function load() {
       setLoading(true)
       try {
-        const sets = await listGoalSetsWithGoals()
+        const [sets, user] = await Promise.all([
+          listGoalSetsWithGoals(),
+          getUser(),
+        ])
+
+        let gameEv = []
+        let pracEv = []
+
+        if (user?.id) {
+          const userId = user.id
+          const [{ data: gameData, error: gameErr }, { data: pracData, error: pracErr }] =
+            await Promise.all([
+              supabase
+                .from("game_events")
+                .select("*")
+                .eq("user_id", userId)
+                .order("ts", { ascending: true }),
+              supabase
+                .from("practice_entries")
+                .select("*")
+                .eq("user_id", userId)
+                .order("ts", { ascending: true }),
+            ])
+
+          if (gameErr) {
+            console.warn("[GoalsManager] game_events fetch error:", gameErr)
+          }
+          if (pracErr) {
+            console.warn(
+              "[GoalsManager] practice_entries fetch error:",
+              pracErr,
+            )
+          }
+
+          gameEv = gameData || []
+          pracEv = pracData || []
+        }
+
         if (cancelled) return
+
         setGoalSets(sets || [])
+        setGameEvents(gameEv)
+        setPracticeEntries(pracEv)
+
         if (!selectedSetIdForGoal && sets && sets.length) {
           setSelectedSetIdForGoal(sets[0].id)
         }
@@ -110,6 +214,8 @@ export default function GoalsManager({ navigate }) {
         console.warn("[GoalsManager] load error:", err)
         if (!cancelled) {
           setGoalSets([])
+          setGameEvents([])
+          setPracticeEntries([])
         }
       } finally {
         if (!cancelled) setLoading(false)
@@ -138,7 +244,7 @@ export default function GoalsManager({ navigate }) {
 
   // Metric options depend on selected set type:
   // - Practice set → base metrics
-  // - Game set → base metrics + game-only metrics
+  // - Game set → base + game-only metrics
   const availableMetricOptions = useMemo(() => {
     if (!selectedSetForGoal) return BASE_METRIC_OPTIONS
     if (selectedSetForGoal.type === "game") {
@@ -147,7 +253,7 @@ export default function GoalsManager({ navigate }) {
     return BASE_METRIC_OPTIONS
   }, [selectedSetForGoal])
 
-  // Keep goalEndDate aligned with selected set (default to set due date)
+  // Default goalEndDate to selected set's due date
   useEffect(() => {
     if (selectedSetForGoal?.due_date) {
       setGoalEndDate((prev) => prev || selectedSetForGoal.due_date)
@@ -156,7 +262,7 @@ export default function GoalsManager({ navigate }) {
     }
   }, [selectedSetForGoal])
 
-  // Ensure goalMetric is always valid for the currently selected set type
+  // Make sure goalMetric is always valid for current set type
   useEffect(() => {
     if (!availableMetricOptions.length) return
     const isValid = availableMetricOptions.some((opt) => opt.value === goalMetric)
@@ -168,19 +274,21 @@ export default function GoalsManager({ navigate }) {
   function resetSetForm() {
     setSetName("")
     setSetType("practice")
+    setSetStartDate(new Date().toISOString().slice(0, 10))
     setSetDueDate("")
     setEditingSetId(null)
   }
 
   async function handleCreateOrUpdateSet(e) {
     e.preventDefault()
-    if (!setName || !setDueDate) return
+    if (!setName || !setStartDate || !setDueDate) return
 
     try {
       if (editingSetId) {
         const updated = await updateGoalSet(editingSetId, {
           name: setName,
           type: setType,
+          start_date: setStartDate,
           due_date: setDueDate,
         })
         setGoalSets((prev) =>
@@ -190,6 +298,7 @@ export default function GoalsManager({ navigate }) {
         const created = await createGoalSet({
           name: setName,
           type: setType,
+          startDate: setStartDate,
           dueDate: setDueDate,
         })
         setGoalSets((prev) => [...prev, { ...created, goals: [] }])
@@ -206,7 +315,12 @@ export default function GoalsManager({ navigate }) {
     setEditingSetId(set.id)
     setSetName(set.name || "")
     setSetType(set.type || "practice")
+    setSetStartDate(
+      set.start_date || new Date().toISOString().slice(0, 10),
+    )
     setSetDueDate(set.due_date || "")
+    // Open the accordion when editing
+    setOpenCreateSet(true)
   }
 
   async function handleDeleteSet(set) {
@@ -235,11 +349,16 @@ export default function GoalsManager({ navigate }) {
       !selectedSetIdForGoal ||
       !goalMetric ||
       !goalTarget ||
-      !goalEndDate
+      !goalEndDate ||
+      !goalTargetType
     )
       return
 
-    // Safety: ensure end date does not exceed set due date (in case max attr is bypassed)
+    if (goalMetric === "fg_pct_zone" && !goalZoneId) {
+      alert("Please select a zone for FG% (by zone) goals.")
+      return
+    }
+
     if (
       selectedSetForGoal?.due_date &&
       goalEndDate > selectedSetForGoal.due_date
@@ -252,10 +371,16 @@ export default function GoalsManager({ navigate }) {
       const created = await createGoal({
         setId: selectedSetIdForGoal,
         name: goalName || metricLabel(goalMetric),
-        details: goalDetails || "",
+        details:
+          goalDetails ||
+          (goalMetric === "fg_pct_zone" && goalZoneId
+            ? zoneLabel(goalZoneId)
+            : ""),
         metric: goalMetric,
         targetValue: Number(goalTarget),
         targetEndDate: goalEndDate,
+        targetType: goalTargetType,
+        zoneId: goalMetric === "fg_pct_zone" ? goalZoneId || null : null,
       })
 
       setGoalSets((prev) =>
@@ -265,12 +390,16 @@ export default function GoalsManager({ navigate }) {
             : s,
         ),
       )
+
       setGoalName("")
       setGoalDetails("")
       setGoalMetric(availableMetricOptions[0]?.value || "")
       setGoalTarget("")
       setGoalEndDate(selectedSetForGoal?.due_date || "")
+      setGoalTargetType("percent")
+      setGoalZoneId("")
       setExpandedSetIds((old) => new Set(old).add(selectedSetIdForGoal))
+      setOpenAddGoal(true)
     } catch (err) {
       console.warn("[GoalsManager] handleAddGoal error:", err)
       alert("Could not add goal.")
@@ -303,6 +432,15 @@ export default function GoalsManager({ navigate }) {
     })
   }
 
+  const addGoalDisabled =
+    !selectedSetIdForGoal ||
+    !goalMetric ||
+    !goalTarget ||
+    !goalEndDate ||
+    (goalMetric === "fg_pct_zone" && !goalZoneId)
+
+  // ------------------- render -------------------
+
   return (
     <div className="min-h-dvh bg-white">
       {/* Header */}
@@ -319,143 +457,220 @@ export default function GoalsManager({ navigate }) {
           <h2 className="text-sm font-semibold text-slate-900">
             Goal Management
           </h2>
-          {/* right-side avatar placeholder */}
           <div className="w-8 h-8 rounded-full bg-slate-200" />
         </div>
       </header>
 
       <main className="max-w-screen-sm mx-auto p-4 pb-24 space-y-4">
-        {/* Create New Goal Set */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
-          <h2 className="text-xs font-semibold text-slate-800">
-            Create New Goal Set
-          </h2>
-
-          <form className="space-y-3" onSubmit={handleCreateOrUpdateSet}>
-            <input
-              type="text"
-              className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900 placeholder:text-slate-400"
-              placeholder="Set name (e.g., Preseason Block)"
-              value={setName}
-              onChange={(e) => setSetName(e.target.value)}
+        {/* Create New Goal Set (Accordion) */}
+        <section className="rounded-2xl border border-slate-200 bg-white">
+          <button
+            type="button"
+            onClick={() => setOpenCreateSet((v) => !v)}
+            className="w-full flex items-center justify-between px-4 py-3 accordion-header"
+          >
+            <span className="text-xs font-semibold text-slate-800">
+              Create New Goal Set
+            </span>
+            <ChevronDown
+              size={18}
+              className={`transition-transform ${
+                openCreateSet ? "rotate-180" : ""
+              }`}
             />
+          </button>
 
-            <select
-              className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900"
-              value={setType}
-              onChange={(e) => setSetType(e.target.value)}
-            >
-              <option value="practice">Practice</option>
-              <option value="game">Game</option>
-            </select>
+          {openCreateSet && (
+            <div className="border-t border-slate-100 p-4 space-y-3">
+              <form className="space-y-3" onSubmit={handleCreateOrUpdateSet}>
+                <input
+                  type="text"
+                  className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900 placeholder:text-slate-400"
+                  placeholder="Set name (e.g., December Shooting Block)"
+                  value={setName}
+                  onChange={(e) => setSetName(e.target.value)}
+                />
 
-            <div className="relative">
-              <input
-                type="date"
-                className="w-full h-10 rounded-lg border border-slate-300 px-3 pr-9 text-sm text-slate-900 placeholder:text-slate-400"
-                value={setDueDate}
-                onChange={(e) => setSetDueDate(e.target.value)}
-              />
-              <Calendar
-                size={16}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-              />
+                <select
+                  className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900"
+                  value={setType}
+                  onChange={(e) => setSetType(e.target.value)}
+                >
+                  <option value="practice">Practice</option>
+                  <option value="game">Game</option>
+                </select>
+
+                {/* Start Date */}
+                <div className="relative">
+                  <input
+                    type="date"
+                    className="w-full h-10 rounded-lg border border-slate-300 px-3 pr-9 text-sm text-slate-900 placeholder:text-slate-400"
+                    value={setStartDate}
+                    onChange={(e) => setSetStartDate(e.target.value)}
+                  />
+                  <Calendar
+                    size={16}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+                </div>
+
+                {/* Due Date */}
+                <div className="relative">
+                  <input
+                    type="date"
+                    className="w-full h-10 rounded-lg border border-slate-300 px-3 pr-9 text-sm text-slate-900 placeholder:text-slate-400"
+                    value={setDueDate}
+                    onChange={(e) => setSetDueDate(e.target.value)}
+                  />
+                  <Calendar
+                    size={16}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="btn btn-primary w-full h-10 rounded-lg bg-sky-600 text-white text-sm font-semibold"
+                >
+                  {editingSetId ? "Update Set" : "Create Set"}
+                </button>
+              </form>
             </div>
-
-            <button
-              type="submit"
-              className="btn btn-primary w-full h-10 rounded-lg bg-sky-600 text-white text-sm font-semibold"
-            >
-              {editingSetId ? "Update Set" : "Create Set"}
-            </button>
-          </form>
+          )}
         </section>
 
-        {/* Add Goal to Set */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
-          <h2 className="text-xs font-semibold text-slate-800">
-            Add Goal to Set
-          </h2>
-
-          <form className="space-y-3" onSubmit={handleAddGoal}>
-            <select
-              className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900"
-              value={selectedSetIdForGoal}
-              onChange={(e) => setSelectedSetIdForGoal(e.target.value)}
-            >
-              <option value="">Select Goal Set</option>
-              {sortedSets.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.type === "game" ? "Game" : "Practice"})
-                </option>
-              ))}
-            </select>
-
-            <input
-              type="text"
-              className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900 placeholder:text-slate-400"
-              placeholder="Goal Name (e.g., FG% by Zone)"
-              value={goalName}
-              onChange={(e) => setGoalName(e.target.value)}
+        {/* Add Goal to Set (Accordion) */}
+        <section className="rounded-2xl border border-slate-200 bg-white">
+          <button
+            type="button"
+            onClick={() => setOpenAddGoal((v) => !v)}
+            className="w-full flex items-center justify-between px-4 py-3 accordion-header"
+          >
+            <span className="text-xs font-semibold text-slate-800">
+              Add Goal to Set
+            </span>
+            <ChevronDown
+              size={18}
+              className={`transition-transform ${
+                openAddGoal ? "rotate-180" : ""
+              }`}
             />
+          </button>
 
-            <input
-              type="text"
-              className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900 placeholder:text-slate-400"
-              placeholder="Details (e.g., 30 days · Wing Right)"
-              value={goalDetails}
-              onChange={(e) => setGoalDetails(e.target.value)}
-            />
+          {openAddGoal && (
+            <div className="border-t border-slate-100 p-4 space-y-3">
+              <form className="space-y-3" onSubmit={handleAddGoal}>
+                <select
+                  className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900"
+                  value={selectedSetIdForGoal}
+                  onChange={(e) => setSelectedSetIdForGoal(e.target.value)}
+                >
+                  <option value="">Select Goal Set</option>
+                  {sortedSets.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.type === "game" ? "Game" : "Practice"})
+                    </option>
+                  ))}
+                </select>
 
-            {/* Metric options now depend on set type */}
-            <select
-              className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900"
-              value={goalMetric}
-              onChange={(e) => setGoalMetric(e.target.value)}
-            >
-              {availableMetricOptions.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
+                <input
+                  type="text"
+                  className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900 placeholder:text-slate-400"
+                  placeholder="Goal Name (e.g., FG% by Zone)"
+                  value={goalName}
+                  onChange={(e) => setGoalName(e.target.value)}
+                />
 
-            {/* Target End Date (per goal, cannot exceed set due date) */}
-            <div className="relative">
-              <input
-                type="date"
-                className="w-full h-10 rounded-lg border border-slate-300 px-3 pr-9 text-sm text-slate-900 placeholder:text-slate-400"
-                value={goalEndDate}
-                onChange={(e) => setGoalEndDate(e.target.value)}
-                max={selectedSetForGoal?.due_date || undefined}
-              />
-              <Calendar
-                size={16}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-              />
+                <input
+                  type="text"
+                  className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900 placeholder:text-slate-400"
+                  placeholder="Details (e.g., Left Wing 3s · 30 days)"
+                  value={goalDetails}
+                  onChange={(e) => setGoalDetails(e.target.value)}
+                />
+
+                {/* Metric */}
+                <select
+                  className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900"
+                  value={goalMetric}
+                  onChange={(e) => {
+                    setGoalMetric(e.target.value)
+                    if (e.target.value !== "fg_pct_zone") {
+                      setGoalZoneId("")
+                    }
+                  }}
+                >
+                  {availableMetricOptions.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Zone selector: only when FG% (by zone) */}
+                {goalMetric === "fg_pct_zone" && (
+                  <select
+                    className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900"
+                    value={goalZoneId}
+                    onChange={(e) => setGoalZoneId(e.target.value)}
+                  >
+                    <option value="">Select Zone</option>
+                    {ZONES.map((z) => (
+                      <option key={z.id} value={z.id}>
+                        {z.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                {/* Target End Date */}
+                <div className="relative">
+                  <input
+                    type="date"
+                    className="w-full h-10 rounded-lg border border-slate-300 px-3 pr-9 text-sm text-slate-900 placeholder:text-slate-400"
+                    value={goalEndDate}
+                    onChange={(e) => setGoalEndDate(e.target.value)}
+                    max={selectedSetForGoal?.due_date || undefined}
+                  />
+                  <Calendar
+                    size={16}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+                </div>
+
+                {/* Target value + type */}
+                <label className="block text-xs font-medium text-slate-700">
+                  Target
+                  <div className="mt-1 grid grid-cols-3 gap-2">
+                    <input
+                      type="number"
+                      className="col-span-2 h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900 placeholder:text-slate-400"
+                      placeholder="Target Value (e.g., 44)"
+                      value={goalTarget}
+                      onChange={(e) => setGoalTarget(e.target.value)}
+                    />
+
+                    <select
+                      className="col-span-1 h-10 rounded-lg border border-slate-300 px-2 text-sm text-slate-900"
+                      value={goalTargetType}
+                      onChange={(e) => setGoalTargetType(e.target.value)}
+                    >
+                      <option value="total">Total</option>
+                      <option value="percent">%</option>
+                    </select>
+                  </div>
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={addGoalDisabled}
+                  className="btn btn-primary w-full h-10 rounded-lg bg-sky-600 text-white text-sm font-semibold disabled:bg-slate-200 disabled:text-slate-400"
+                >
+                  Add Goal
+                </button>
+              </form>
             </div>
-
-            <input
-              type="number"
-              className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900 placeholder:text-slate-400"
-              placeholder="Target Value (e.g., 45)"
-              value={goalTarget}
-              onChange={(e) => setGoalTarget(e.target.value)}
-            />
-
-            <button
-              type="submit"
-              disabled={
-                !selectedSetIdForGoal ||
-                !goalMetric ||
-                !goalTarget ||
-                !goalEndDate
-              }
-              className="btn btn-primary w-full h-10 rounded-lg bg-sky-600 text-white text-sm font-semibold disabled:bg-slate-200 disabled:text-slate-400"
-            >
-              Add Goal
-            </button>
-          </form>
+          )}
         </section>
 
         {/* Active Goal Sets */}
@@ -512,7 +727,13 @@ export default function GoalsManager({ navigate }) {
                       <div className="text-sm font-semibold text-slate-900">
                         {set.name}
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                        {set.start_date && (
+                          <span className="flex items-center gap-1">
+                            <span className="font-medium">From:</span>
+                            {formatDueDate(set.start_date)}
+                          </span>
+                        )}
                         {set.due_date && (
                           <span className="flex items-center gap-1">
                             <Calendar size={12} />
@@ -550,7 +771,7 @@ export default function GoalsManager({ navigate }) {
                         e.stopPropagation()
                         startEditSet(set)
                       }}
-                      className="edit-btn p-1 rounded-full hover:bg-slate-100"
+                      className="p-1 rounded-full hover:bg-slate-100"
                       aria-label="Edit goal set"
                     >
                       <Edit2 size={14} className="text-slate-500" />
@@ -561,10 +782,10 @@ export default function GoalsManager({ navigate }) {
                         e.stopPropagation()
                         handleDeleteSet(set)
                       }}
-                      className="trash-btn p-1 rounded-full hover:bg-slate-100"
+                      className="p-1 rounded-full hover:bg-slate-100"
                       aria-label="Delete goal set"
                     >
-                      <Trash2 size={14} className="trash-can text-red-500" />
+                      <Trash2 size={14} className="text-red-500" />
                     </button>
                   </div>
                 </div>
@@ -573,13 +794,23 @@ export default function GoalsManager({ navigate }) {
                 {isExpanded && (
                   <div className="border-t border-slate-100 px-4 py-3 space-y-3">
                     {set.goals && set.goals.length > 0 ? (
-                      set.goals.map((g) => (
-                        <GoalCard
-                          key={g.id}
-                          goal={g}
-                          onDelete={() => handleDeleteGoal(g)}
-                        />
-                      ))
+                      set.goals.map((g) => {
+                        const progress = computeGoalProgress({
+                          goal: g,
+                          set,
+                          gameEvents,
+                          practiceEntries,
+                        })
+
+                        return (
+                          <GoalCard
+                            key={g.id}
+                            goal={g}
+                            progress={progress}
+                            onDelete={() => handleDeleteGoal(g)}
+                          />
+                        )
+                      })
                     ) : (
                       <div className="text-xs text-slate-500">
                         No goals yet in this set.
@@ -596,13 +827,13 @@ export default function GoalsManager({ navigate }) {
   )
 }
 
-/* ---------------- goal card ---------------- */
+// ------------------- goal card -------------------
 
-function GoalCard({ goal, onDelete }) {
-  const target = Number(goal.target_value ?? 0)
-  const current = Number(goal.current_value ?? 0)
-  const pct =
-    target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0
+function GoalCard({ goal, progress, onDelete }) {
+  const { progressPct, targetLabel, currentLabel, targetRaw } = progress || {}
+  const pct = Number.isFinite(progressPct) ? progressPct : 0
+  const zoneName =
+    goal.metric === "fg_pct_zone" ? zoneLabel(goal.zone_id) : null
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 space-y-2">
@@ -611,8 +842,12 @@ function GoalCard({ goal, onDelete }) {
           <div className="text-sm font-semibold text-slate-900">
             {goal.name || metricLabel(goal.metric)}
           </div>
-          {goal.details && (
-            <div className="text-xs text-slate-500">{goal.details}</div>
+          {(goal.details || zoneName) && (
+            <div className="text-xs text-slate-500">
+              {goal.details}
+              {goal.details && zoneName ? " · " : ""}
+              {zoneName}
+            </div>
           )}
           {goal.target_end_date && (
             <div className="text-[11px] text-slate-400">
@@ -623,7 +858,7 @@ function GoalCard({ goal, onDelete }) {
         <button
           type="button"
           onClick={onDelete}
-          className="trash-btn h-7 px-3 rounded-full bg-red-50 text-[11px] font-semibold text-red-600"
+          className="h-7 px-3 rounded-full bg-red-50 text-[11px] font-semibold text-red-600"
         >
           Delete
         </button>
@@ -638,9 +873,9 @@ function GoalCard({ goal, onDelete }) {
           />
         </div>
         <div className="text-[11px] text-slate-600 whitespace-nowrap">
-          {target
-            ? `Target: ${target} · Value: ${current || 0}`
-            : `Target: — · Value: ${current || 0}`}
+          {targetRaw
+            ? `Target: ${targetLabel} · Value: ${currentLabel}`
+            : `Target: — · Value: ${currentLabel}`}
         </div>
       </div>
     </div>

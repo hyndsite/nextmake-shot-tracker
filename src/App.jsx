@@ -95,13 +95,11 @@ export default function App() {
           setBootPhase("ready")
           return
         }
-
-        // active user → load data from Supabase before showing app
-        setScreen("app")
+        // active user → load data, then go to ModeGate instead of auto-entering app
         setBootPhase("bootstrapping")
 
         try {
-          await bootstrapAllData() // fetch game + practice → IDB (clean)
+          await bootstrapAllData()
         } catch (err) {
           console.error("[App] bootstrapAllData failed", err)
         }
@@ -109,6 +107,9 @@ export default function App() {
         if (cancelled) return
         restoreLastRoute()
         setBootPhase("ready")
+
+      // Show ModeGate as the first screen after refresh
+      setScreen("mode")
       } catch (err) {
         console.error("[App] auth check failed", err)
         if (!cancelled) {
