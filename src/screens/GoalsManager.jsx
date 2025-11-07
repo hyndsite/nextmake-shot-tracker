@@ -771,7 +771,7 @@ export default function GoalsManager({ navigate }) {
                         e.stopPropagation()
                         startEditSet(set)
                       }}
-                      className="p-1 rounded-full hover:bg-slate-100"
+                      className="edit-btn p-1 rounded-full hover:bg-slate-100"
                       aria-label="Edit goal set"
                     >
                       <Edit2 size={14} className="text-slate-500" />
@@ -782,7 +782,7 @@ export default function GoalsManager({ navigate }) {
                         e.stopPropagation()
                         handleDeleteSet(set)
                       }}
-                      className="p-1 rounded-full hover:bg-slate-100"
+                      className="trash-btn p-1 rounded-full hover:bg-slate-100"
                       aria-label="Delete goal set"
                     >
                       <Trash2 size={14} className="text-red-500" />
