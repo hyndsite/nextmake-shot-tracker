@@ -50,6 +50,7 @@ export async function addPracticeSession({ dateISO = todayISO() } = {}) {
   const row = {
     id,
     user_id: null,
+    // `mode` is local-only; never sent to Supabase
     mode: "practice",
     date_iso: dateISO,
     started_at: nowISO(),
@@ -105,7 +106,7 @@ export async function addEntry({
   const row = {
     id,
     user_id: null,
-    mode: "practice",
+    mode: "practice", // local-only
     session_id: sessionId,
     zone_id: zoneId,
     shot_type: shotType,
@@ -128,7 +129,7 @@ export async function addMarker({ sessionId, label = "", ts = nowISO() }) {
   const row = {
     id,
     user_id: null,
-    mode: "practice",
+    mode: "practice", // local-only
     session_id: sessionId,
     label,
     ts,
@@ -176,11 +177,6 @@ export async function getTodaySummary() {
 }
 
 // ---- High-level delete (user-facing) ----
-/**
- * Mark a practice session and its entries/markers as deleted (tombstones)
- * so the sync engine can hard-delete them from Supabase. Does NOT
- * immediately remove them from IndexedDB.
- */
 export async function deletePracticeSession(id) {
   if (!id) return
   // mark entries
@@ -294,9 +290,25 @@ export async function listEntriesBySession(sessionId) {
  * ---------------------------*/
 
 /**
- * Upsert remote practice_sessions into IndexedDB as "clean" rows.
+ * Upsert remote practice_sessions into IndexedDB as "clean" rows,
+ * and remove any local clean rows that no longer exist remotely.
  */
 export async function upsertPracticeSessionsFromRemote(rows = []) {
+  const remoteIds = new Set(rows.map((r) => r.id).filter(Boolean))
+
+  // Purge local clean, non-remote sessions (Supabase is master for clean rows)
+  const localIds = await readIndex(st.practice.sessions)
+  for (const id of localIds) {
+    const local = await get(id, st.practice.sessions)
+    if (!local) continue
+    if (local._dirty) continue // keep unsynced local changes
+    if (!remoteIds.has(id)) {
+      await del(id, st.practice.sessions)
+      await removeFromIndex(st.practice.sessions, id)
+    }
+  }
+
+  // Upsert / merge remote sessions
   for (const remote of rows) {
     if (!remote?.id) continue
     const existing = await get(remote.id, st.practice.sessions)
@@ -313,9 +325,23 @@ export async function upsertPracticeSessionsFromRemote(rows = []) {
 }
 
 /**
- * Upsert remote practice_entries into IndexedDB as "clean" rows.
+ * Upsert remote practice_entries into IndexedDB as "clean" rows,
+ * and remove any local clean rows that no longer exist remotely.
  */
 export async function upsertPracticeEntriesFromRemote(rows = []) {
+  const remoteIds = new Set(rows.map((r) => r.id).filter(Boolean))
+
+  const localIds = await readIndex(st.practice.entries)
+  for (const id of localIds) {
+    const local = await get(id, st.practice.entries)
+    if (!local) continue
+    if (local._dirty) continue
+    if (!remoteIds.has(id)) {
+      await del(id, st.practice.entries)
+      await removeFromIndex(st.practice.entries, id)
+    }
+  }
+
   for (const remote of rows) {
     if (!remote?.id) continue
     const existing = await get(remote.id, st.practice.entries)
@@ -332,9 +358,23 @@ export async function upsertPracticeEntriesFromRemote(rows = []) {
 }
 
 /**
- * Upsert remote practice_markers into IndexedDB as "clean" rows.
+ * Upsert remote practice_markers into IndexedDB as "clean" rows,
+ * and remove any local clean rows that no longer exist remotely.
  */
 export async function upsertPracticeMarkersFromRemote(rows = []) {
+  const remoteIds = new Set(rows.map((r) => r.id).filter(Boolean))
+
+  const localIds = await readIndex(st.practice.markers)
+  for (const id of localIds) {
+    const local = await get(id, st.practice.markers)
+    if (!local) continue
+    if (local._dirty) continue
+    if (!remoteIds.has(id)) {
+      await del(id, st.practice.markers)
+      await removeFromIndex(st.practice.markers, id)
+    }
+  }
+
   for (const remote of rows) {
     if (!remote?.id) continue
     const existing = await get(remote.id, st.practice.markers)

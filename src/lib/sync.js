@@ -86,7 +86,7 @@ export async function bootstrapAllData() {
   if (pracEntryErr) throw pracEntryErr
   if (pracMarkErr) throw pracMarkErr
 
-  // 3) Store them locally as "clean"
+  // 3) Store them locally as "clean" (with reconciliation handled in helpers)
   await Promise.all([
     upsertGameSessionsFromRemote(gameSessions || []),
     upsertGameEventsFromRemote(gameEvents || []),
@@ -105,7 +105,7 @@ export async function bootstrapAllData() {
   }
 }
 
-// Backwards compatibility: old name still works, just calls the new function
+// Backwards compatibility
 export async function bootstrapGameData() {
   return bootstrapAllData()
 }
@@ -124,7 +124,8 @@ async function getUserId() {
 function toArray(bucket) {
   if (!bucket) return []
   if (Array.isArray(bucket)) return bucket
-  if (typeof bucket === "object") return Object.values(bucket).flat().filter(Boolean)
+  if (typeof bucket === "object")
+    return Object.values(bucket).flat().filter(Boolean)
   return []
 }
 
@@ -139,14 +140,16 @@ function normalizeHomeAwayValue(v) {
 function sanitizeForUpsert(rows) {
   return rows.map(({ _dirty, _table, _deleted, ...r }) => {
     // normalize timestamps
-    if (typeof r.ts === "number") r.ts = new Date(r.ts).toISOString()
+    if (typeof r.ts === "number")
+      r.ts = new Date(r.ts).toISOString()
     if (typeof r.started_at === "number")
       r.started_at = new Date(r.started_at).toISOString()
     if (typeof r.ended_at === "number")
       r.ended_at = new Date(r.ended_at).toISOString()
 
     // ensure date_iso is just YYYY-MM-DD (string) if present
-    if (r.date_iso instanceof Date) r.date_iso = r.date_iso.toISOString().slice(0, 10)
+    if (r.date_iso instanceof Date)
+      r.date_iso = r.date_iso.toISOString().slice(0, 10)
     if (typeof r.date_iso === "string" && r.date_iso.length > 10)
       r.date_iso = r.date_iso.slice(0, 10)
 
@@ -156,6 +159,49 @@ function sanitizeForUpsert(rows) {
       if (!r.date_iso) r.date_iso = new Date().toISOString().slice(0, 10)
     }
 
+    // ---- practice table whitelists ----
+    if (_table === "practice_sessions") {
+      const {
+        id,
+        user_id,
+        date_iso,
+        started_at,
+        ended_at,
+        status,
+      } = r
+      return { id, user_id, date_iso, started_at, ended_at, status }
+    }
+
+    if (_table === "practice_entries") {
+      const {
+        id,
+        user_id,
+        session_id,
+        zone_id,
+        shot_type,
+        pressured,
+        attempts,
+        makes,
+        ts,
+      } = r
+      return {
+        id,
+        user_id,
+        session_id,
+        zone_id,
+        shot_type,
+        pressured,
+        attempts,
+        makes,
+        ts,
+      }
+    }
+
+    if (_table === "practice_markers") {
+      const { id, user_id, session_id, label, ts } = r
+      return { id, user_id, session_id, label, ts }
+    }
+
     return r
   })
 }
@@ -163,9 +209,13 @@ function sanitizeForUpsert(rows) {
 async function pushTableUpserts(table, rows) {
   if (!rows.length) return
   const cleanRows = sanitizeForUpsert(rows)
-  const { error } = await supabase.from(table).upsert(cleanRows, { onConflict: "id" })
+  const { error } = await supabase.from(table).upsert(cleanRows, {
+    onConflict: "id",
+  })
   if (error) {
-    console.warn(`[sync] upsert error on ${table}`, error, { sample: cleanRows[0] })
+    console.warn(`[sync] upsert error on ${table}`, error, {
+      sample: cleanRows[0],
+    })
     throw error
   }
 }
@@ -176,7 +226,9 @@ async function pushTableDeletes(table, rows) {
   if (!ids.length) return
   const { error } = await supabase.from(table).delete().in("id", ids)
   if (error) {
-    console.warn(`[sync] delete error on ${table}`, error, { sample: ids[0] })
+    console.warn(`[sync] delete error on ${table}`, error, {
+      sample: ids[0],
+    })
     throw error
   }
 }
@@ -304,4 +356,10 @@ export function teardownAutoSync() {
     intervalId = null
   }
   inited = false
+}
+
+// Used by sync-hooks (manual / status-based syncing)
+export async function syncAll() {
+  await doSync()
+  await bootstrapAllData()
 }
