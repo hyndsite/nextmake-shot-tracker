@@ -24,9 +24,12 @@ import {
   getPracticePerformance,
 } from "../lib/performance-db"
 
+const DEFAULT_RANGE_ID = TIME_RANGES[0]?.id || "30d"
+
+// Pill group for Game / Practice time range selection
 function TimeRangePills({ value, onChange }) {
   return (
-    <div className="inline-flex rounded-full bg-slate-100 p-1 text-xs">
+    <div className="time-pill-group">
       {TIME_RANGES.map((r) => {
         const active = r.id === value
         return (
@@ -34,12 +37,7 @@ function TimeRangePills({ value, onChange }) {
             key={r.id}
             type="button"
             onClick={() => onChange(r.id)}
-            className={
-              "px-3 py-1 rounded-full font-semibold transition " +
-              (active
-                ? "bg-sky-600 text-white shadow-sm"
-                : "bg-transparent text-slate-600 hover:text-slate-900")
-            }
+            className={"time-pill" + (active ? " time-pill--active" : "")}
           >
             {r.label}
           </button>
@@ -52,7 +50,9 @@ function TimeRangePills({ value, onChange }) {
 function MetricCard({ label, fgPct, attemptsLabel, goalPct }) {
   const pctVal = isFinite(fgPct) ? Math.round(fgPct) : 0
   const goalVal =
-    typeof goalPct === "number" && isFinite(goalPct) ? Math.round(goalPct) : null
+    typeof goalPct === "number" && isFinite(goalPct)
+      ? Math.round(goalPct)
+      : null
 
   const progressPct =
     goalVal && goalVal > 0
@@ -91,8 +91,24 @@ function MetricCard({ label, fgPct, attemptsLabel, goalPct }) {
   )
 }
 
-function TrendChart({ title, data }) {
-  if (!Array.isArray(data) || data.length === 0) {
+// Helper to slice trend data for weekly vs monthly view
+function sliceTrendForMode(trend, mode) {
+  if (!Array.isArray(trend)) return []
+  if (mode === "weekly") {
+    const n = trend.length
+    const keep = Math.min(7, n)
+    return trend.slice(n - keep)
+  }
+  return trend
+}
+
+function TrendChart({ title, data, mode = "weekly", onToggleMode }) {
+  const chartData = useMemo(
+    () => sliceTrendForMode(data, mode),
+    [data, mode],
+  )
+
+  if (!Array.isArray(chartData) || chartData.length === 0) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs text-slate-500 text-center">
         Not enough shot data yet to show a trend.
@@ -100,19 +116,42 @@ function TrendChart({ title, data }) {
     )
   }
 
+  const handleToggle = (e) => {
+    e?.stopPropagation?.()
+    if (typeof onToggleMode === "function") {
+      onToggleMode()
+    }
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      handleToggle(e)
+    }
+  }
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
       <div className="flex items-center justify-between mb-2">
         <div className="text-xs font-semibold text-slate-800">{title}</div>
-        <div className="flex items-center gap-1 text-[11px] text-slate-500">
+        <div
+          className="flex items-center gap-1 text-[11px] text-slate-500"
+          role="button"
+          tabIndex={0}
+          onClick={handleToggle}
+          onKeyDown={handleKeyDown}
+        >
           <FilterIcon size={13} />
-          <span>Monthly</span>
+          <span>{mode === "weekly" ? "Weekly" : "Monthly"}</span>
         </div>
       </div>
 
       <div className="h-40">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 4, right: 10, left: -20, bottom: 0 }}>
+          <LineChart
+            data={chartData}
+            margin={{ top: 4, right: 10, left: -20, bottom: 0 }}
+          >
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
             <XAxis
               dataKey="monthLabel"
@@ -131,7 +170,11 @@ function TrendChart({ title, data }) {
               formatter={(v) => `${Math.round(v)}%`}
               labelFormatter={(l) => l}
             />
-            <Legend verticalAlign="bottom" height={24} wrapperStyle={{ fontSize: 10 }} />
+            <Legend
+              verticalAlign="bottom"
+              height={24}
+              wrapperStyle={{ fontSize: 10 }}
+            />
             <Line
               type="monotone"
               dataKey="efgPct"
@@ -162,7 +205,7 @@ function SectionHeader({ title, expanded, onToggle }) {
     <button
       type="button"
       onClick={onToggle}
-      className="w-full flex items-center justify-between py-1"
+      className="w-full flex items-center justify-between px-4 py-3 accordion-header"
     >
       <span className="text-xs font-semibold text-slate-900">{title}</span>
       {expanded ? (
@@ -178,8 +221,13 @@ export default function Performance({ navigate }) {
   const [gameExpanded, setGameExpanded] = useState(true)
   const [practiceExpanded, setPracticeExpanded] = useState(true)
 
-  const [gameRangeId, setGameRangeId] = useState("30d")
-  const [practiceRangeId, setPracticeRangeId] = useState("30d")
+  // Default pill selection to the first time range (e.g., 30 days)
+  const [gameRangeId, setGameRangeId] = useState(DEFAULT_RANGE_ID)
+  const [practiceRangeId, setPracticeRangeId] = useState(DEFAULT_RANGE_ID)
+
+  // Chart filter modes (Weekly / Monthly), default Weekly
+  const [gameTrendMode, setGameTrendMode] = useState("weekly")
+  const [practiceTrendMode, setPracticeTrendMode] = useState("weekly")
 
   const [gameLoading, setGameLoading] = useState(false)
   const [practiceLoading, setPracticeLoading] = useState(false)
@@ -368,6 +416,12 @@ export default function Performance({ navigate }) {
                 <TrendChart
                   title="Game eFG% vs FG% Trend"
                   data={gameData.trend}
+                  mode={gameTrendMode}
+                  onToggleMode={() =>
+                    setGameTrendMode((prev) =>
+                      prev === "weekly" ? "monthly" : "weekly",
+                    )
+                  }
                 />
               </div>
             </>
@@ -423,6 +477,12 @@ export default function Performance({ navigate }) {
                 <TrendChart
                   title="Practice eFG% vs FG% Trend"
                   data={practiceData.trend}
+                  mode={practiceTrendMode}
+                  onToggleMode={() =>
+                    setPracticeTrendMode((prev) =>
+                      prev === "weekly" ? "monthly" : "weekly",
+                    )
+                  }
                 />
               </div>
             </>

@@ -271,3 +271,45 @@ html, body, #root {
   .accordion-header * {
     color: inherit;
   }
+
+  /* Time range pill group (Performance screen) */
+.time-pill-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  border-radius: 9999px;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0; /* slate-200-ish */
+  font-size: 12px;
+}
+
+/* Base pill */
+.time-pill {
+  border-radius: 9999px;
+  padding: 4px 12px;
+  font-weight: 600;
+  border: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  color: #0369a1; /* sky-700-ish */
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+/* Hover state when NOT active */
+.time-pill:not(.time-pill--active):hover {
+  border-color: #0ea5e9; /* sky-500 */
+  color: #0284c7;        /* sky-600 */
+}
+
+/* Active pill = match primary button blue */
+.time-pill--active {
+  background-color: #0284c7; /* sky-600 / btn-primary */
+  border-color: #0284c7;
+  color: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18); /* subtle shadow */
+}

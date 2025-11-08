@@ -70,7 +70,7 @@ export default function Login({ onSuccess }){
         </form>
 
         <div className="mt-3 text-center">
-          <button className="btn btn-ghost text-sm" onClick={checkSession}>I clicked the link</button>
+          <button className="btn btn-primary btn-ghost text-sm" onClick={checkSession}>I clicked the link</button>
         </div>
       </div>
     </div>
