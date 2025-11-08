@@ -342,10 +342,26 @@ export async function _purgeGameRow(row) {
  * ---------------------------*/
 
 /**
- * Upsert remote game_sessions into IndexedDB as "clean" rows.
+ * Upsert remote game_sessions into IndexedDB as "clean" rows
+ * AND remove any local clean rows that no longer exist remotely.
+ * Supabase is the source of truth for all non-dirty rows.
  */
 export async function upsertGameSessionsFromRemote(rows = []) {
   await ready
+  const remoteIds = new Set(rows.map((r) => r.id).filter(Boolean))
+
+  // 1) Remove any local clean sessions that don't exist remotely
+  const localKeys = await keys(st.game.sessions)
+  for (const k of localKeys) {
+    const local = await get(k, st.game.sessions)
+    if (!local) continue
+    if (local._dirty) continue // keep unsynced offline changes
+    if (!remoteIds.has(local.id)) {
+      await del(k, st.game.sessions)
+    }
+  }
+
+  // 2) Upsert / merge remote sessions as clean
   for (const remote of rows) {
     if (!remote?.id) continue
     const existing = await get(remote.id, st.game.sessions)
@@ -362,10 +378,25 @@ export async function upsertGameSessionsFromRemote(rows = []) {
 }
 
 /**
- * Upsert remote game_events into IndexedDB as "clean" rows.
+ * Upsert remote game_events into IndexedDB as "clean" rows
+ * AND remove any local clean events that no longer exist remotely.
  */
 export async function upsertGameEventsFromRemote(rows = []) {
   await ready
+  const remoteIds = new Set(rows.map((r) => r.id).filter(Boolean))
+
+  // 1) Remove any local clean events that don't exist remotely
+  const localKeys = await keys(st.game.events)
+  for (const k of localKeys) {
+    const local = await get(k, st.game.events)
+    if (!local) continue
+    if (local._dirty) continue // keep unsynced offline changes
+    if (!remoteIds.has(local.id)) {
+      await del(k, st.game.events)
+    }
+  }
+
+  // 2) Upsert / merge remote events as clean
   for (const remote of rows) {
     if (!remote?.id) continue
     const existing = await get(remote.id, st.game.events)
