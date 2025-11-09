@@ -26,6 +26,9 @@ import { MdEmojiObjects } from "react-icons/md"
 
 const ALL_METRIC_OPTIONS = [...BASE_METRIC_OPTIONS, ...GAME_ONLY_METRIC_OPTIONS]
 
+// zone-based metrics (need zone_id and zone selector)
+const ZONE_METRICS = new Set(["fg_pct_zone", "attempts_zone"])
+
 function metricLabel(value) {
   return ALL_METRIC_OPTIONS.find((m) => m.value === value)?.label || value
 }
@@ -152,7 +155,7 @@ export default function GoalsManager({ navigate }) {
   // expanded sets in list
   const [expandedSetIds, setExpandedSetIds] = useState(new Set())
 
-  // accordion state for forms
+  // accordion state for forms (collapsed by default)
   const [openCreateSet, setOpenCreateSet] = useState(false)
   const [openAddGoal, setOpenAddGoal] = useState(false)
 
@@ -173,19 +176,21 @@ export default function GoalsManager({ navigate }) {
 
         if (user?.id) {
           const userId = user.id
-          const [{ data: gameData, error: gameErr }, { data: pracData, error: pracErr }] =
-            await Promise.all([
-              supabase
-                .from("game_events")
-                .select("*")
-                .eq("user_id", userId)
-                .order("ts", { ascending: true }),
-              supabase
-                .from("practice_entries")
-                .select("*")
-                .eq("user_id", userId)
-                .order("ts", { ascending: true }),
-            ])
+          const [
+            { data: gameData, error: gameErr },
+            { data: pracData, error: pracErr },
+          ] = await Promise.all([
+            supabase
+              .from("game_events")
+              .select("*")
+              .eq("user_id", userId)
+              .order("ts", { ascending: true }),
+            supabase
+              .from("practice_entries")
+              .select("*")
+              .eq("user_id", userId)
+              .order("ts", { ascending: true }),
+          ])
 
           if (gameErr) {
             console.warn("[GoalsManager] game_events fetch error:", gameErr)
@@ -265,7 +270,9 @@ export default function GoalsManager({ navigate }) {
   // Make sure goalMetric is always valid for current set type
   useEffect(() => {
     if (!availableMetricOptions.length) return
-    const isValid = availableMetricOptions.some((opt) => opt.value === goalMetric)
+    const isValid = availableMetricOptions.some(
+      (opt) => opt.value === goalMetric,
+    )
     if (!isValid) {
       setGoalMetric(availableMetricOptions[0].value)
     }
@@ -354,8 +361,10 @@ export default function GoalsManager({ navigate }) {
     )
       return
 
-    if (goalMetric === "fg_pct_zone" && !goalZoneId) {
-      alert("Please select a zone for FG% (by zone) goals.")
+    const isZoneMetric = ZONE_METRICS.has(goalMetric)
+
+    if (isZoneMetric && !goalZoneId) {
+      alert("Please select a zone for this zone-based goal.")
       return
     }
 
@@ -373,14 +382,12 @@ export default function GoalsManager({ navigate }) {
         name: goalName || metricLabel(goalMetric),
         details:
           goalDetails ||
-          (goalMetric === "fg_pct_zone" && goalZoneId
-            ? zoneLabel(goalZoneId)
-            : ""),
+          (isZoneMetric && goalZoneId ? zoneLabel(goalZoneId) : ""),
         metric: goalMetric,
         targetValue: Number(goalTarget),
         targetEndDate: goalEndDate,
         targetType: goalTargetType,
-        zoneId: goalMetric === "fg_pct_zone" ? goalZoneId || null : null,
+        zoneId: isZoneMetric ? goalZoneId || null : null,
       })
 
       setGoalSets((prev) =>
@@ -437,7 +444,7 @@ export default function GoalsManager({ navigate }) {
     !goalMetric ||
     !goalTarget ||
     !goalEndDate ||
-    (goalMetric === "fg_pct_zone" && !goalZoneId)
+    (ZONE_METRICS.has(goalMetric) && !goalZoneId)
 
   // ------------------- render -------------------
 
@@ -594,8 +601,9 @@ export default function GoalsManager({ navigate }) {
                   className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900"
                   value={goalMetric}
                   onChange={(e) => {
-                    setGoalMetric(e.target.value)
-                    if (e.target.value !== "fg_pct_zone") {
+                    const nextMetric = e.target.value
+                    setGoalMetric(nextMetric)
+                    if (!ZONE_METRICS.has(nextMetric)) {
                       setGoalZoneId("")
                     }
                   }}
@@ -607,8 +615,8 @@ export default function GoalsManager({ navigate }) {
                   ))}
                 </select>
 
-                {/* Zone selector: only when FG% (by zone) */}
-                {goalMetric === "fg_pct_zone" && (
+                {/* Zone selector: for any zone-based metric (FG% by zone, Attempts by zone, etc.) */}
+                {ZONE_METRICS.has(goalMetric) && (
                   <select
                     className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm text-slate-900"
                     value={goalZoneId}
@@ -832,8 +840,9 @@ export default function GoalsManager({ navigate }) {
 function GoalCard({ goal, progress, onDelete }) {
   const { progressPct, targetLabel, currentLabel, targetRaw } = progress || {}
   const pct = Number.isFinite(progressPct) ? progressPct : 0
-  const zoneName =
-    goal.metric === "fg_pct_zone" ? zoneLabel(goal.zone_id) : null
+
+  const isZoneMetric = ZONE_METRICS.has(goal.metric)
+  const zoneName = isZoneMetric ? zoneLabel(goal.zone_id) : null
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 space-y-2">

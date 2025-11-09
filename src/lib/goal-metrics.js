@@ -15,6 +15,7 @@ export const BASE_METRIC_OPTIONS = [
   { value: "pressured_fg", label: "Pressured FG%" },
   { value: "makes", label: "Makes (count)" },
   { value: "attempts", label: "Attempts (count)" },
+  { value: "attempts_zone", label: "Attempts (by zone)" }
 ]
 
 // Only for game goal sets (we track these only in games)
@@ -38,6 +39,7 @@ const PERCENT_METRICS = new Set([
 const COUNT_METRICS = new Set([
   "makes",
   "attempts",
+  "attempts_zone",
   "points_total",
   "steals_total",
   "assists_total",
@@ -256,6 +258,16 @@ export function computeGameMetricValue(
       return att ? (makes / att) * 100 : 0
     }
 
+    case "attempts_zone": {
+        if (!zoneId) {
+            // no specific zone: you *could* return total FGA here;
+            // but since it's a "by zone" metric, treating no-zone as 0 is safer.
+            return 0
+        }
+        const att = stats.zoneFga.get(zoneId) || 0
+        return att
+    }
+
     case "off_dribble_fg": {
       const { offDribbleMakes, offDribbleAtt } = stats
       return offDribbleAtt ? (offDribbleMakes / offDribbleAtt) * 100 : 0
@@ -469,6 +481,12 @@ export function computePracticeMetricValue(
       const makes = stats.zoneFgm.get(zoneId) || 0
       const att = stats.zoneFga.get(zoneId) || 0
       return att ? (makes / att) * 100 : 0
+    }
+
+    case "attempts_zone": {
+        if (!zoneId) return 0
+        const att = stats.zoneFga.get(zoneId) || 0
+        return att
     }
 
     case "off_dribble_fg": {
