@@ -1,8 +1,9 @@
 // src/lib/performance-db.js
 //
 // Helper to compute performance metrics from IndexedDB.
-// NO new Supabase tables. Uses existing local data that your sync layer
-// already populates: game_sessions, game_events, practice_entries.
+// Uses existing local data that your sync layer already populates:
+// - game_sessions, game_events
+// - practice_sessions, practice_entries
 
 import dayjs from "dayjs"
 import { get, keys } from "idb-keyval"
@@ -34,6 +35,18 @@ if (Array.isArray(ZONES)) {
   ZONES.forEach((z) => {
     if (!z || !z.id) return
     zoneIsThreeMap.set(z.id, !!z.isThree)
+  })
+}
+
+// Set of zone ids that represent free throws (id or label-contains "free throw")
+const ftZoneIds = new Set()
+if (Array.isArray(ZONES)) {
+  ZONES.forEach((z) => {
+    if (!z || !z.id) return
+    const labelLc = (z.label || z.name || "").toLowerCase()
+    if (z.id === "free_throw" || labelLc.includes("free throw")) {
+      ftZoneIds.add(z.id)
+    }
   })
 }
 
@@ -221,6 +234,10 @@ export async function getGamePerformance({ days }) {
  *  - Consider only entries that belong to in-range sessions
  *  - Aggregate attempts/makes per zone
  *  - Build FG% / eFG% trend over time
+ *
+ * And we now treat FREE THROWS the same way as game:
+ *  - They appear as their own "Free Throw" zone card
+ *  - They do NOT affect FG% / eFG% / trend
  */
 export async function getPracticePerformance({ days }) {
   await ready
@@ -269,44 +286,62 @@ export async function getPracticePerformance({ days }) {
     if (!sessionIds.has(row.session_id)) continue
     if (fromDate && !withinRange(row.ts, fromDate)) continue
 
-    const zoneKey = row.zone_id || "practice_unknown"
-    const label =
-      labelForZone(row.zone_id) || row.drill_label || "Practice"
+    const attempts =
+      typeof row.attempts === "number"
+        ? row.attempts
+        : row.attempts
+        ? Number(row.attempts)
+        : 1
 
-    // Attempt/make counts: practice_entries are aggregated
-    // attempts / makes rows, but we stay defensive.
-    let attempts = 0
-    let makes = 0
-
-    if (typeof row.attempts === "number") {
-      attempts = row.attempts
-      if (typeof row.makes === "number") {
-        makes = row.makes
-      } else if (typeof row.made === "boolean") {
-        makes = row.made ? attempts : 0
-      }
-    } else {
-      // Fallback: assume one attempt per entry
-      attempts = 1
-      makes = row.made ? 1 : 0
-    }
+    let makes =
+      typeof row.makes === "number"
+        ? row.makes
+        : row.made
+        ? attempts
+        : 0
 
     if (!attempts) continue
 
-    // Per-zone agg for metric cards
+    const zoneId = row.zone_id || "practice_unknown"
+    const label =
+      labelForZone(zoneId) || row.drill_label || "Practice"
+
+    // --- Free throw detection (practice) ---
+    // Free throws:
+    //  - zone is one of the FT zones ("free_throw" or label includes "free throw"), OR
+    //  - type === "freethrow" (if we ever add type), OR
+    //  - shot_type normalized mentions "free throw"
+    const typeLower = String(row.type || "").toLowerCase()
+    const shotTypeLower = String(row.shot_type || "").toLowerCase()
+    const isFt =
+      ftZoneIds.has(zoneId) ||
+      (shotTypeLower && shotTypeLower.includes("free throw")) ||
+      typeLower === "freethrow"
+
+    // Per-zone aggregation: always count, including FTs,
+    // so they show as their own "Free Throw" card if FT zone exists.
+    const zoneKey = isFt ? "free_throw" : zoneId
+    const zoneLabel = isFt ? "Free Throw" : label
+
     let rec = zoneAgg.get(zoneKey)
     if (!rec) {
-      rec = { id: zoneKey, label, makes: 0, attempts: 0 }
+      rec = { id: zoneKey, label: zoneLabel, makes: 0, attempts: 0 }
       zoneAgg.set(zoneKey, rec)
     }
     rec.attempts += attempts
     rec.makes += makes
 
-    // Global FG / eFG and trend
+    // For FG% / eFG% / trend we treat practice like games:
+    //  - free throws do NOT count as field goal attempts.
+    if (isFt) {
+      continue
+    }
+
+    // Global FG / eFG and trend (field goals only)
     overallFga += attempts
     overallFgm += makes
 
-    const isThree = zoneIsThreeMap.get(row.zone_id) || false
+    const isThree = zoneIsThreeMap.get(zoneId) || false
     if (isThree) overallThreesMade += makes
 
     const mk = monthKeyFromTs(row.ts)

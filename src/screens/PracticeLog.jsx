@@ -14,6 +14,19 @@ import { ArrowLeft } from "lucide-react"
 const ZONE_OPTIONS = ZONES.map((z) => ({ value: z.id, label: z.label }))
 const SHOT_OPTIONS = SHOT_TYPES.map((s) => ({ value: s.id, label: s.label }))
 
+// Map for pretty zone labels in the drill list
+const ZONE_LABEL_BY_ID = Object.fromEntries(
+  ZONES.map((z) => [z.id, z.label || z.id]),
+)
+
+// Try to detect the free-throw zone ID from ZONES; fall back to "free_throw"
+const FREE_THROW_ZONE_ID =
+  ZONES.find(
+    (z) =>
+      z.id === "free_throw" ||
+      (z.label && z.label.toLowerCase().includes("free throw")),
+  )?.id || "free_throw"
+
 function fmtDT(iso) {
   try {
     return new Date(iso).toLocaleString()
@@ -53,6 +66,9 @@ export default function PracticeLog({ id, started_at, navigate }) {
 
   const [runningMakes, setRunningMakes] = useState(0)
   const [runningAttempts, setRunningAttempts] = useState(0)
+
+  // is current zone the Free Throw zone?
+  const isFreeThrowZone = zoneId === FREE_THROW_ZONE_ID
 
   // +/- handlers
   const dec = (setter) => setter((v) => Math.max(0, Number(v || 0) - 1))
@@ -138,11 +154,17 @@ export default function PracticeLog({ id, started_at, navigate }) {
     const m = Number(makes || 0)
     if (a <= 0 && m <= 0) return // nothing to save
 
+    // For Free Throws in practice:
+    // - shot_type should be null
+    // - pressured should be false
+    const effectiveShotType = isFreeThrowZone ? null : shotTypeId
+    const effectivePressured = isFreeThrowZone ? false : pressured
+
     const entry = await addEntry({
       sessionId: activeSession.id,
       zoneId,
-      shotType: shotTypeId,
-      pressured,
+      shotType: effectiveShotType,
+      pressured: effectivePressured,
       attempts: a,
       makes: m,
       ts: new Date().toISOString(),
@@ -338,7 +360,15 @@ export default function PracticeLog({ id, started_at, navigate }) {
               <select
                 className="input col-span-2"
                 value={zoneId}
-                onChange={(e) => setZoneId(e.target.value)}
+                onChange={(e) => {
+                  const newZoneId = e.target.value
+                  setZoneId(newZoneId)
+                  // If user switches into Free Throw zone, ensure
+                  // pressured is false; shot type will be ignored on save.
+                  if (newZoneId === FREE_THROW_ZONE_ID) {
+                    setPressured(false)
+                  }
+                }}
               >
                 {ZONE_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -354,6 +384,7 @@ export default function PracticeLog({ id, started_at, navigate }) {
                 className="input col-span-2"
                 value={shotTypeId}
                 onChange={(e) => setShotTypeId(e.target.value)}
+                disabled={isFreeThrowZone}
               >
                 {SHOT_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -367,12 +398,20 @@ export default function PracticeLog({ id, started_at, navigate }) {
               <label className="label col-span-1">Pressured</label>
               <button
                 type="button"
-                onClick={() => setPressured((p) => !p)}
+                onClick={() => {
+                  if (isFreeThrowZone) return
+                  setPressured((p) => !p)
+                }}
+                disabled={isFreeThrowZone}
                 className={`btn h-10 rounded-lg text-sm font-medium ${
                   pressured ? "btn-emerald" : "btn-outline-emerald"
-                }`}
+                } ${isFreeThrowZone ? "opacity-60 cursor-not-allowed" : ""}`}
               >
-                {pressured ? "Contested" : "Uncontested"}
+                {isFreeThrowZone
+                  ? "N/A for Free Throws"
+                  : pressured
+                  ? "Contested"
+                  : "Uncontested"}
               </button>
             </div>
 
@@ -480,22 +519,28 @@ export default function PracticeLog({ id, started_at, navigate }) {
               This Session – Logged Drills
             </div>
             <ul className="space-y-2">
-              {recentDrills.map((d) => (
-                <li
-                  key={d.id}
-                  className="flex items-center justify-between text-sm"
-                >
-                  <div className="flex flex-col">
-                    <span className="text-slate-900">
-                      {d.shotType} • {d.zoneId}
-                    </span>
-                    <span className="text-slate-500">{d.when}</span>
-                  </div>
-                  <div className="font-medium text-slate-900">
-                    {d.makes}/{d.attempts}
-                  </div>
-                </li>
-              ))}
+              {recentDrills.map((d) => {
+                const zoneLabel =
+                  ZONE_LABEL_BY_ID[d.zoneId] || d.zoneId || "Unknown"
+                const isFT = d.zoneId === FREE_THROW_ZONE_ID
+                const shotLabel = d.shotType || (isFT ? "Free Throw" : "—")
+                return (
+                  <li
+                    key={d.id}
+                    className="flex items-center justify-between text-sm"
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-slate-900">
+                        {shotLabel} • {zoneLabel}
+                      </span>
+                      <span className="text-slate-500">{d.when}</span>
+                    </div>
+                    <div className="font-medium text-slate-900">
+                      {d.makes}/{d.attempts}
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
           </section>
         )}

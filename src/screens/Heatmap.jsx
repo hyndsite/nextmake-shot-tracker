@@ -119,48 +119,63 @@ function TimeRangePills({ value, onChange }) {
 
 // ---------- data aggregation ----------
 
+function normalizeShotTypeLabel(raw) {
+  const s = String(raw || "").toLowerCase().trim()
+  if (!s) return null
+
+  if (s.includes("free") && s.includes("throw")) return "Free Throw"
+  if (s.includes("off") && s.includes("dribble")) return "Off-Dribble"
+  if (s.includes("catch") && s.includes("shoot")) return "Catch & Shoot"
+  if (s === "catch_shoot" || s === "catchshoot") return "Catch & Shoot"
+  if (s === "off_dribble" || s === "offdribble") return "Off-Dribble"
+
+  return null
+}
+
+function isFreeThrowEvent(e) {
+  const typeLower = String(e?.type || "").toLowerCase()
+  const zoneId = e?.zone_id
+  const shotLabel = normalizeShotTypeLabel(e?.shot_type)
+
+  return (
+    typeLower === "freethrow" ||
+    shotLabel === "Free Throw" ||
+    zoneId === "free_throw"
+  )
+}
+
 function computeZonesFromEvents(events, { mode, shotType, pressuredOnly }) {
   if (!Array.isArray(events) || !events.length) return []
 
+  // 1) Filter by shot type and pressuredOnly
   const filtered = events.filter((e) => {
-    const t = e?.type
-    const st = e?.shot_type
-    const isFtEvent = t === "freethrow" || st === "Free Throw"
+    const isFt = isFreeThrowEvent(e)
+    const shotLabel = normalizeShotTypeLabel(e?.shot_type)
+    const pressed = !!e?.pressured
 
-    // pressure filter
-    if (pressuredOnly && !e?.pressured) return false
+    // pressured-only filter
+    if (pressuredOnly && !pressed) return false
 
-    // shot type filter
+    // Shot type filter
     if (shotType === "Free Throw") {
-      return isFtEvent
-    }
-    if (shotType === "Catch & Shoot" || shotType === "Off-Dribble") {
-      if (isFtEvent) return false
-      return st === shotType
+      return isFt
     }
 
-    // default: all
+    if (shotType === "Catch & Shoot" || shotType === "Off-Dribble") {
+      if (isFt) return false // FT never counted as C&S or Off-Dribble
+      return shotLabel === shotType
+    }
+
+    // "All" (we don't have an All pill, but default state is effectively all)
     return true
   })
 
   if (!filtered.length) return []
 
-  const normalShots = filtered.filter((e) => {
-    const t = e?.type
-    const st = e?.shot_type
-    const isFt = t === "freethrow" || st === "Free Throw"
-    return !isFt
-  })
-
-  const ftShots = filtered.filter((e) => {
-    const t = e?.type
-    const st = e?.shot_type
-    return t === "freethrow" || st === "Free Throw"
-  })
-
+  // 2) Aggregate into zones; respect attempts/makes when present
   const zoneMap = new Map()
 
-  function ensureZone(id) {
+  function ensureZone(id, isFtZone = false) {
     if (!zoneMap.has(id)) {
       const meta = ZONES.find((z) => z.id === id) || { label: id }
       zoneMap.set(id, {
@@ -170,40 +185,58 @@ function computeZonesFromEvents(events, { mode, shotType, pressuredOnly }) {
         makes: 0,
         volumePct: 0,
         fgPct: 0,
-        isFreeThrowZone: id === "free_throw",
+        isFreeThrowZone: isFtZone || id === "free_throw",
       })
     }
     return zoneMap.get(id)
   }
 
-  // non-FT field goal shots
-  for (const e of normalShots) {
-    const zId = e.zone_id || "unknown"
-    const row = ensureZone(zId)
-    row.attempts += 1
-    if (e.made) row.makes += 1
-  }
+  for (const e of filtered) {
+    const isFt = isFreeThrowEvent(e)
 
-  // free throws aggregated to one zone
-  if (ftShots.length) {
-    const ftRow = ensureZone("free_throw")
-    for (const e of ftShots) {
-      ftRow.attempts += 1
-      if (e.made) ftRow.makes += 1
+    // aggregated vs per-shot
+    const attempts =
+      typeof e.attempts === "number"
+        ? e.attempts
+        : e.attempts
+        ? Number(e.attempts)
+        : 1
+
+    const makes =
+      typeof e.makes === "number"
+        ? e.makes
+        : e.made
+        ? 1
+        : 0
+
+    if (!attempts) continue
+
+    if (isFt) {
+      const row = ensureZone("free_throw", true)
+      row.attempts += attempts
+      row.makes += makes
+    } else {
+      const zId = e.zone_id || "unknown"
+      const row = ensureZone(zId, false)
+      row.attempts += attempts
+      row.makes += makes
     }
   }
 
   const all = Array.from(zoneMap.values())
+  if (!all.length) return []
 
+  // 3) Compute totalAttempts depending on shotType
   let totalAttempts
   if (shotType === "Free Throw") {
-    totalAttempts = all.find((z) => z.id === "free_throw")?.attempts || 0
+    totalAttempts = all.find((z) => z.isFreeThrowZone)?.attempts || 0
   } else {
     totalAttempts = all
       .filter((z) => !z.isFreeThrowZone)
       .reduce((sum, z) => sum + z.attempts, 0)
   }
 
+  // 4) Derive FG% and volume% per zone
   for (const z of all) {
     if (z.attempts > 0) {
       z.fgPct = Math.round((z.makes / z.attempts) * 100)
@@ -213,8 +246,9 @@ function computeZonesFromEvents(events, { mode, shotType, pressuredOnly }) {
     }
   }
 
+  // 5) For explicit "Free Throw" mode, only show FT zone; else show non-FT zones
   if (shotType === "Free Throw") {
-    const ft = all.find((z) => z.id === "free_throw")
+    const ft = all.find((z) => z.isFreeThrowZone)
     return ft && ft.attempts ? [ft] : []
   }
 

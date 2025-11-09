@@ -83,11 +83,19 @@ export function filterEventsByDate(events, { startDate, endDate } = {}) {
   })
 }
 
-// Map of three-point zones for practice eFG
+// Map of three-point zones for eFG / 3P calc
 const ZONE_IS_THREE = new Map()
+// Set of zone ids that represent free throws (by id or label)
+const FREE_THROW_ZONE_IDS = new Set()
+
 for (const z of ZONES || []) {
   if (!z || !z.id) continue
   ZONE_IS_THREE.set(z.id, !!z.isThree)
+
+  const labelLc = (z.label || z.name || "").toLowerCase()
+  if (z.id === "free_throw" || labelLc.includes("free throw")) {
+    FREE_THROW_ZONE_IDS.add(z.id)
+  }
 }
 
 // ----------------- Game aggregation & metrics --------------------------
@@ -338,7 +346,12 @@ function aggregatePracticeEntries(entries) {
 
   for (const e of entries || []) {
     const attempts =
-      typeof e.attempts === "number" ? e.attempts : e.attempts ? Number(e.attempts) : 1
+      typeof e.attempts === "number"
+        ? e.attempts
+        : e.attempts
+        ? Number(e.attempts)
+        : 1
+
     const makes =
       typeof e.makes === "number"
         ? e.makes
@@ -350,14 +363,20 @@ function aggregatePracticeEntries(entries) {
 
     const zoneId = e.zone_id || "unknown"
     const shotType = (e.shot_type || e.shotType || "").toLowerCase()
+    const typeLower = String(e.type || "").toLowerCase()
 
+    // 🚩 Unified FT detection for practice:
+    // - Zone id is one of the FT zones ("free_throw" or label contains "free throw")
+    // - OR shot_type mentions "free throw" / is "ft"
+    // - OR type is "freethrow" (if we ever add type column for practice)
     const isFt =
-      shotType.includes("free throw") ||
+      FREE_THROW_ZONE_IDS.has(zoneId) ||
+      (shotType && shotType.includes("free throw")) ||
       shotType === "ft" ||
-      e.type === "freethrow"
+      typeLower === "freethrow"
 
     if (isFt) {
-      // Free throws are separate from FG attempts for eFG, like games
+      // Free throws are separate from FG attempts for eFG, same as games
       ftAtt += attempts
       ftMakes += makes
       continue
@@ -367,8 +386,7 @@ function aggregatePracticeEntries(entries) {
     fga += attempts
     fgm += makes
 
-    const isThree =
-      ZONE_IS_THREE.get(zoneId) || !!e.is_three
+    const isThree = ZONE_IS_THREE.get(zoneId) || !!e.is_three
 
     if (isThree) {
       threesAtt += attempts
@@ -421,6 +439,10 @@ function aggregatePracticeEntries(entries) {
  *
  * We only expect BASE_METRIC_OPTIONS on practice sets (GoalsManager enforces
  * that), so we focus on those keys. Any game-only metrics return 0.
+ *
+ * Importantly: the formulas for FG%, eFG%, 3P%, FT%, zone FG, off-dribble FG,
+ * pressured FG, makes, and attempts are now the SAME as for games — the only
+ * difference is which dataset (practice vs game) we aggregate.
  */
 export function computePracticeMetricValue(
   metricKey,

@@ -153,8 +153,8 @@ export default function GoalsManager({ navigate }) {
   const [expandedSetIds, setExpandedSetIds] = useState(new Set())
 
   // accordion state for forms
-  const [openCreateSet, setOpenCreateSet] = useState(true)
-  const [openAddGoal, setOpenAddGoal] = useState(true)
+  const [openCreateSet, setOpenCreateSet] = useState(false)
+  const [openAddGoal, setOpenAddGoal] = useState(false)
 
   // Initial load of goal sets + game/practice data
   useEffect(() => {
