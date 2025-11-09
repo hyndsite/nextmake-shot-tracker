@@ -351,14 +351,6 @@ export default function Performance({ navigate }) {
       {/* Header */}
       <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-200">
         <div className="max-w-screen-sm mx-auto px-4 py-3 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => navigate?.("home")}
-            className="btn-back flex items-center gap-1"
-          >
-            <ArrowLeft size={16} />
-            <span className="text-sm font-medium">Back</span>
-          </button>
           <h2 className="text-sm font-semibold text-slate-900">
             Player Performance
           </h2>

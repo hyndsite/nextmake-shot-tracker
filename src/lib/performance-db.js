@@ -5,9 +5,10 @@
 // already populates: game_sessions, game_events, practice_entries.
 
 import dayjs from "dayjs"
-import { createStore, get, keys } from "idb-keyval"
+import { get, keys } from "idb-keyval"
 import { whenIdbReady } from "./idb-init"
 import { st as gameSt } from "./game-db"
+import { st as practiceSt } from "./practice-db"
 import { ZONES } from "../constants/zones"
 
 const ready = whenIdbReady()
@@ -27,10 +28,13 @@ function labelForZone(zoneId) {
   return zoneLabelMap.get(zoneId) || zoneId
 }
 
-// ---------- Practice stores (mirror of practice-db.js) ----------
-// We don't depend on practice-db.js exports; we just open the same DB + stores.
-const practiceStores = {
-  entries: createStore("practice", "entries"),
+// Map of three-point zones for eFG% in practice
+const zoneIsThreeMap = new Map()
+if (Array.isArray(ZONES)) {
+  ZONES.forEach((z) => {
+    if (!z || !z.id) return
+    zoneIsThreeMap.set(z.id, !!z.isThree)
+  })
 }
 
 // ---------- Shared helpers ----------
@@ -73,9 +77,10 @@ function withinRange(ts, fromDate) {
 export async function getGamePerformance({ days }) {
   await ready
 
-  const fromDate = typeof days === "number"
-    ? dayjs().subtract(days, "day").startOf("day")
-    : null
+  const fromDate =
+    typeof days === "number"
+      ? dayjs().subtract(days, "day").startOf("day")
+      : null
 
   // 1) Determine which game sessions are in range & not deleted
   const sessionIds = new Set()
@@ -209,38 +214,67 @@ export async function getGamePerformance({ days }) {
 // ---------- PRACTICE PERFORMANCE ----------
 
 /**
- * Compute practice performance from local IndexedDB (practice_entries).
+ * Compute practice performance from local IndexedDB (practice_sessions + practice_entries).
  *
- * This is defensive about schema:
- * - Treats each row as either:
- *   • per-shot: row.made (boolean), or
- *   • aggregated: row.makes / row.attempts
- *
- * @param {{ days: number | null }} opts
+ * We mirror the same pattern as game:
+ *  - Filter sessions by date range (days back from today)
+ *  - Consider only entries that belong to in-range sessions
+ *  - Aggregate attempts/makes per zone
+ *  - Build FG% / eFG% trend over time
  */
 export async function getPracticePerformance({ days }) {
   await ready
 
-  const fromDate = typeof days === "number"
-    ? dayjs().subtract(days, "day").startOf("day")
-    : null
+  const fromDate =
+    typeof days === "number"
+      ? dayjs().subtract(days, "day").startOf("day")
+      : null
 
+  // 1) Determine which practice sessions are in range & not deleted
+  const sessionIds = new Set()
+  {
+    const sessKeys = await keys(practiceSt.practice.sessions)
+    for (const k of sessKeys) {
+      const row = await get(k, practiceSt.practice.sessions)
+      if (!row || row._deleted) continue
+      const okDate = fromDate
+        ? withinRange(row.date_iso || row.started_at || row.ts, fromDate)
+        : true
+      if (!okDate) continue
+      sessionIds.add(row.id)
+    }
+  }
+
+  if (!sessionIds.size) {
+    return {
+      metrics: [],
+      trend: [],
+      overallFgPct: 0,
+      overallEfgPct: 0,
+      totalAttempts: 0,
+    }
+  }
+
+  // 2) Walk all practice entries that belong to those sessions
   const zoneAgg = new Map() // key → { label, makes, attempts }
   const trendAgg = new Map() // monthKey → { fgm, fga, threesMade }
   let overallFgm = 0,
     overallFga = 0,
     overallThreesMade = 0
 
-  const entryKeys = await keys(practiceStores.entries)
+  const entryKeys = await keys(practiceSt.practice.entries)
   for (const k of entryKeys) {
-    const row = await get(k, practiceStores.entries)
+    const row = await get(k, practiceSt.practice.entries)
     if (!row || row._deleted) continue
+    if (!sessionIds.has(row.session_id)) continue
     if (fromDate && !withinRange(row.ts, fromDate)) continue
 
     const zoneKey = row.zone_id || "practice_unknown"
-    const label = labelForZone(row.zone_id) || row.drill_label || "Practice"
+    const label =
+      labelForZone(row.zone_id) || row.drill_label || "Practice"
 
-    // Attempt/make counts: support both per-shot and aggregated rows
+    // Attempt/make counts: practice_entries are aggregated
+    // attempts / makes rows, but we stay defensive.
     let attempts = 0
     let makes = 0
 
@@ -259,6 +293,7 @@ export async function getPracticePerformance({ days }) {
 
     if (!attempts) continue
 
+    // Per-zone agg for metric cards
     let rec = zoneAgg.get(zoneKey)
     if (!rec) {
       rec = { id: zoneKey, label, makes: 0, attempts: 0 }
@@ -267,11 +302,12 @@ export async function getPracticePerformance({ days }) {
     rec.attempts += attempts
     rec.makes += makes
 
-    // For now, treat all practice entries as "field goals" for FG/eFG trend.
-    // If you distinguish FTs in practice, you can add a type check similar to game.
+    // Global FG / eFG and trend
     overallFga += attempts
     overallFgm += makes
-    if (row.is_three) overallThreesMade += makes
+
+    const isThree = zoneIsThreeMap.get(row.zone_id) || false
+    if (isThree) overallThreesMade += makes
 
     const mk = monthKeyFromTs(row.ts)
     if (mk) {
@@ -282,7 +318,17 @@ export async function getPracticePerformance({ days }) {
       }
       t.fga += attempts
       t.fgm += makes
-      if (row.is_three) t.threesMade += makes
+      if (isThree) t.threesMade += makes
+    }
+  }
+
+  if (!overallFga) {
+    return {
+      metrics: [],
+      trend: [],
+      overallFgPct: 0,
+      overallEfgPct: 0,
+      totalAttempts: 0,
     }
   }
 
