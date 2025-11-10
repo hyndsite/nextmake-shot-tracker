@@ -866,10 +866,7 @@ function GoalCard({ goal, progress, onDelete }) {
         </div>
         <button
           type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onDelete
-          }}
+          onClick={onDelete}
           className="trash-btn p-1 rounded-full hover:bg-slate-100"
           aria-label="Delete goal set"
         >
