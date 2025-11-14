@@ -15,7 +15,7 @@ export const BASE_METRIC_OPTIONS = [
   { value: "pressured_fg", label: "Pressured FG%" },
   { value: "makes", label: "Makes (count)" },
   { value: "attempts", label: "Attempts (count)" },
-  { value: "attempts_zone", label: "Attempts (by zone)" }
+  { value: "attempts_zone", label: "Attempts (by zone)" },
 ]
 
 // Only for game goal sets (we track these only in games)
@@ -59,7 +59,6 @@ export function metricIsCount(metricKey) {
 function normalizeDate(d) {
   if (!d) return null
   if (d instanceof Date) return d
-  // can be "2025-01-01", ISO string, or ms number
   if (typeof d === "number") return new Date(d)
   return new Date(String(d))
 }
@@ -104,7 +103,8 @@ for (const z of ZONES || []) {
 
 /**
  * Aggregate core stats from a set of game events.
- * This mirrors the logic already used in GameLogger stats.
+ * - Field goals: type === "shot"
+ * - Free throws: type === "freethrow"
  */
 export function aggregateGameEvents(events) {
   let assists = 0
@@ -122,8 +122,8 @@ export function aggregateGameEvents(events) {
   let totalPoints = 0
 
   // Extra buckets for more specific metrics
-  let zoneFgm = new Map() // zoneId -> makes
-  let zoneFga = new Map() // zoneId -> attempts
+  let zoneFgm = new Map() // zoneId -> makes (field goals only)
+  let zoneFga = new Map() // zoneId -> attempts (field goals only)
 
   let offDribbleMakes = 0
   let offDribbleAtt = 0
@@ -143,6 +143,8 @@ export function aggregateGameEvents(events) {
         steals++
         break
       case "freethrow": {
+        // Free throws track their own makes/attempts and FT%,
+        // but do NOT affect FG% / eFG% / Attempts metrics.
         ftAtt++
         if (e.made) {
           ftMakes++
@@ -151,6 +153,7 @@ export function aggregateGameEvents(events) {
         break
       }
       case "shot": {
+        // Field goal: counts for FG% / eFG% / Attempts / Makes
         fga++
         const isThree = !!e.is_three
         const made = !!e.made
@@ -179,7 +182,7 @@ export function aggregateGameEvents(events) {
           if (made) offDribbleMakes++
         }
 
-        // Pressured shots (requires e.pressured to be stored)
+        // Pressured shots
         if (e.pressured) {
           pressuredAtt++
           if (made) pressuredMakes++
@@ -228,7 +231,7 @@ export function aggregateGameEvents(events) {
  *
  * `options`:
  *   - startDate / endDate: optional date range
- *   - zoneId: for FG% by zone goal (if omitted, returns overall FG%)
+ *   - zoneId: for FG% / Attempts (by zone) goals
  */
 export function computeGameMetricValue(
   metricKey,
@@ -249,7 +252,6 @@ export function computeGameMetricValue(
       return stats.ftPct || 0
 
     case "fg_pct_zone": {
-      // If a specific zone is provided, use that; otherwise overall FG%
       if (!zoneId) {
         return stats.fgPct || 0
       }
@@ -259,13 +261,9 @@ export function computeGameMetricValue(
     }
 
     case "attempts_zone": {
-        if (!zoneId) {
-            // no specific zone: you *could* return total FGA here;
-            // but since it's a "by zone" metric, treating no-zone as 0 is safer.
-            return 0
-        }
-        const att = stats.zoneFga.get(zoneId) || 0
-        return att
+      if (!zoneId) return 0
+      const att = stats.zoneFga.get(zoneId) || 0
+      return att
     }
 
     case "off_dribble_fg": {
@@ -279,13 +277,13 @@ export function computeGameMetricValue(
     }
 
     case "makes": {
-      // total made shots + made FTs
-      return stats.fgm + stats.ftMakes
+      // 🔄 Only field-goal makes, NOT free throws
+      return stats.fgm
     }
 
     case "attempts": {
-      // total shot + FT attempts
-      return stats.fga + stats.ftAtt
+      // 🔄 Only field-goal attempts, NOT free throws
+      return stats.fga
     }
 
     // ---- game-only count metrics ----
@@ -316,7 +314,6 @@ export function formatMetricValue(metricKey, rawValue) {
   if (rawValue == null || Number.isNaN(rawValue)) return "0"
 
   if (metricIsPercent(metricKey)) {
-    // round to one decimal for display
     const v = Math.round(rawValue * 10) / 10
     return `${v}%`
   }
@@ -377,7 +374,7 @@ function aggregatePracticeEntries(entries) {
     const shotType = (e.shot_type || e.shotType || "").toLowerCase()
     const typeLower = String(e.type || "").toLowerCase()
 
-    // 🚩 Unified FT detection for practice:
+    // Unified FT detection for practice:
     // - Zone id is one of the FT zones ("free_throw" or label contains "free throw")
     // - OR shot_type mentions "free throw" / is "ft"
     // - OR type is "freethrow" (if we ever add type column for practice)
@@ -394,7 +391,7 @@ function aggregatePracticeEntries(entries) {
       continue
     }
 
-    // Field goals
+    // Field goals (non-FT)
     fga += attempts
     fgm += makes
 
@@ -449,12 +446,10 @@ function aggregatePracticeEntries(entries) {
 /**
  * Compute practice metric value from practice_entries.
  *
- * We only expect BASE_METRIC_OPTIONS on practice sets (GoalsManager enforces
- * that), so we focus on those keys. Any game-only metrics return 0.
- *
- * Importantly: the formulas for FG%, eFG%, 3P%, FT%, zone FG, off-dribble FG,
- * pressured FG, makes, and attempts are now the SAME as for games — the only
- * difference is which dataset (practice vs game) we aggregate.
+ * Shot metrics are now treated exactly like game:
+ *  - Field-goal metrics (FG%, eFG%, Attempts, Makes, Attempts by zone, etc.)
+ *    exclude free throws.
+ *  - FT% uses only practice FT attempts/makes.
  */
 export function computePracticeMetricValue(
   metricKey,
@@ -484,9 +479,9 @@ export function computePracticeMetricValue(
     }
 
     case "attempts_zone": {
-        if (!zoneId) return 0
-        const att = stats.zoneFga.get(zoneId) || 0
-        return att
+      if (!zoneId) return 0
+      const att = stats.zoneFga.get(zoneId) || 0
+      return att
     }
 
     case "off_dribble_fg": {
@@ -500,13 +495,13 @@ export function computePracticeMetricValue(
     }
 
     case "makes": {
-      // total made field goals + made FTs
-      return stats.fgm + stats.ftMakes
+      // 🔄 Only field-goal makes, NOT free throws
+      return stats.fgm
     }
 
     case "attempts": {
-      // total attempts (FG + FT)
-      return stats.fga + stats.ftAtt
+      // 🔄 Only field-goal attempts, NOT free throws
+      return stats.fga
     }
 
     // Game-only metrics don't apply to practice; return 0 safely

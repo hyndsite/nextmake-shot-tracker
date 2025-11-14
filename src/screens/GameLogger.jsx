@@ -320,7 +320,7 @@ export default function GameLogger({ id: gameId, navigate }) {
           type="number"
           inputMode="numeric"
           min="0"
-          className="w-14 h-8 rounded-lg border border-slate-300 text-center text-sm"
+          className="w-14 h-8 rounded-lg border border-slate-300 text-center text-sm bg-white text-slate-900 placeholder-slate-400"
           value={teamScore}
           onChange={(e) => setTeamScore(e.target.value)}
           placeholder="Us"
@@ -330,7 +330,7 @@ export default function GameLogger({ id: gameId, navigate }) {
           type="number"
           inputMode="numeric"
           min="0"
-          className="w-14 h-8 rounded-lg border border-slate-300 text-center text-sm"
+          className="w-14 h-8 rounded-lg border border-slate-300 text-center text-sm bg-white text-slate-900 placeholder-slate-400"
           value={oppScore}
           onChange={(e) => setOppScore(e.target.value)}
           placeholder="Them"
