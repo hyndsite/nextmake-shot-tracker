@@ -5,7 +5,6 @@ import { notifyLocalMutate } from "./sync-notify"
 import { whenIdbReady } from "./idb-init"
 import { supabase } from "./supabase"
 
-
 const ready = whenIdbReady()
 const nowISO = () => new Date().toISOString()
 
@@ -202,6 +201,10 @@ export async function addGameEvent(input) {
   const mode = input.mode ?? "game"
   const user_id = input.user_id ?? null
 
+  // NEW: layup metadata (optional) – supports both snakeCase + camelCase inputs
+  const pickup_type = input.pickup_type ?? input.pickupType ?? null
+  const finish_type = input.finish_type ?? input.finishType ?? null
+
   if (!game_id) throw new Error("[game-db] addGameEvent: game_id is required")
   if (!type) throw new Error("[game-db] addGameEvent: type is required")
 
@@ -223,6 +226,9 @@ export async function addGameEvent(input) {
     shot_type,
     is_three,
     made,
+    // NEW: layup metadata stored but doesn't affect existing scoring logic
+    pickup_type,
+    finish_type,
     ts: tsISO,
     _dirty: true,
     _deleted: false,
@@ -263,7 +269,6 @@ export async function addGameEvent(input) {
   notifyLocalMutate()
   return row
 }
-
 
 export async function listGameEventsBySession(gameId) {
   await ready

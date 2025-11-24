@@ -101,6 +101,9 @@ export async function addEntry({
   attempts = 0,
   makes = 0,
   ts = nowISO(),
+  // NEW layup-specific metadata (optional)
+  pickupType = null,
+  finishType = null,
 }) {
   const id = uuid()
   const row = {
@@ -110,6 +113,9 @@ export async function addEntry({
     session_id: sessionId,
     zone_id: zoneId,
     shot_type: shotType,
+    // NEW: layup metadata (stored but doesn't affect existing logic)
+    pickup_type: pickupType,
+    finish_type: finishType,
     pressured: !!pressured,
     attempts: Number(attempts),
     makes: Number(makes),

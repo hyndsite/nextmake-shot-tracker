@@ -27,6 +27,26 @@ const FREE_THROW_ZONE_ID =
       (z.label && z.label.toLowerCase().includes("free throw")),
   )?.id || "free_throw"
 
+// Try to detect the layup shot type from SHOT_TYPES; fall back to "layup"
+const LAYUP_SHOT_TYPE_ID =
+  SHOT_TYPES.find(
+    (s) =>
+      s.id === "layup" ||
+      (s.label && s.label.toLowerCase().includes("layup")),
+  )?.id || "layup"
+
+// Layup metadata options (practice side)
+const LAYUP_PICKUP_TYPES = [
+  { value: "low_pickup", label: "Low Pickup" },
+  { value: "football", label: "Football" },
+  { value: "overhead", label: "Overhead" },
+]
+
+const LAYUP_FINISH_TYPES = [
+  { value: "underhand", label: "Underhand" },
+  { value: "overhand", label: "Overhand" },
+]
+
 function fmtDT(iso) {
   try {
     return new Date(iso).toLocaleString()
@@ -67,8 +87,13 @@ export default function PracticeLog({ id, started_at, navigate }) {
   const [runningMakes, setRunningMakes] = useState(0)
   const [runningAttempts, setRunningAttempts] = useState(0)
 
+  // NEW: layup metadata for practice entries
+  const [pickupType, setPickupType] = useState(null)
+  const [finishType, setFinishType] = useState(null)
+
   // is current zone the Free Throw zone?
   const isFreeThrowZone = zoneId === FREE_THROW_ZONE_ID
+  const isLayupShotType = shotTypeId === LAYUP_SHOT_TYPE_ID
 
   // +/- handlers
   const dec = (setter) => setter((v) => Math.max(0, Number(v || 0) - 1))
@@ -160,6 +185,9 @@ export default function PracticeLog({ id, started_at, navigate }) {
     const effectiveShotType = isFreeThrowZone ? null : shotTypeId
     const effectivePressured = isFreeThrowZone ? false : pressured
 
+    // For layup shot type, we also send pickupType/finishType
+    const isLayup = effectiveShotType === LAYUP_SHOT_TYPE_ID
+
     const entry = await addEntry({
       sessionId: activeSession.id,
       zoneId,
@@ -168,6 +196,8 @@ export default function PracticeLog({ id, started_at, navigate }) {
       attempts: a,
       makes: m,
       ts: new Date().toISOString(),
+      pickupType: isLayup ? pickupType : null,
+      finishType: isLayup ? finishType : null,
     })
 
     await addMarker({ sessionId: activeSession.id, label: "Set" })
@@ -191,6 +221,9 @@ export default function PracticeLog({ id, started_at, navigate }) {
     // reset inputs
     setAttempts(0)
     setMakes(0)
+    // reset layup metadata so they don't bleed into the next set
+    setPickupType(null)
+    setFinishType(null)
 
     // refresh running eFG
     await refreshEFG(activeSession.id)
@@ -383,7 +416,15 @@ export default function PracticeLog({ id, started_at, navigate }) {
               <select
                 className="input col-span-2"
                 value={shotTypeId}
-                onChange={(e) => setShotTypeId(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setShotTypeId(v)
+                  // If leaving layup, clear layup metadata so it's not reused accidentally
+                  if (v !== LAYUP_SHOT_TYPE_ID) {
+                    setPickupType(null)
+                    setFinishType(null)
+                  }
+                }}
                 disabled={isFreeThrowZone}
               >
                 {SHOT_OPTIONS.map((o) => (
@@ -393,6 +434,61 @@ export default function PracticeLog({ id, started_at, navigate }) {
                 ))}
               </select>
             </div>
+
+            {/* Layup metadata: pickup + finish, only when layup shot type (and not FT zone) */}
+            {isLayupShotType && !isFreeThrowZone && (
+              <>
+                <div className="grid grid-cols-3 gap-3 items-center">
+                  <label className="label col-span-1">Pickup Type</label>
+                  <div className="col-span-2 flex flex-wrap gap-2">
+                    {LAYUP_PICKUP_TYPES.map((opt) => {
+                      const selected = pickupType === opt.value
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() =>
+                            setPickupType(
+                              selected ? null : opt.value,
+                            )
+                          }
+                          className={`btn btn-xs ${
+                            selected ? "btn-emerald" : "btn-outline-emerald"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 items-center">
+                  <label className="label col-span-1">Finish Type</label>
+                  <div className="col-span-2 flex flex-wrap gap-2">
+                    {LAYUP_FINISH_TYPES.map((opt) => {
+                      const selected = finishType === opt.value
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() =>
+                            setFinishType(
+                              selected ? null : opt.value,
+                            )
+                          }
+                          className={`btn btn-xs ${
+                            selected ? "btn-emerald" : "btn-outline-emerald"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="grid grid-cols-3 gap-3 items-center">
               <label className="label col-span-1">Pressured</label>

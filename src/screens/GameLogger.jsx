@@ -17,6 +17,7 @@ import { X, Target, Hand, Plus } from "lucide-react"
 import { MdSportsBasketball } from "react-icons/md"
 import "../styles/GameLogger.css"
 import { ArrowLeft } from "lucide-react"
+
 /* ---------------------------------------------------------
    Anchor helpers (handles object map or array inputs)
 --------------------------------------------------------- */
@@ -37,8 +38,12 @@ function anchorsToArray(anchors) {
   }))
 }
 function detectCoordMode(arr) {
-  let maxX = -Infinity, maxY = -Infinity
-  for (const a of arr) { maxX = Math.max(maxX, a.x || 0); maxY = Math.max(maxY, a.y || 0) }
+  let maxX = -Infinity,
+    maxY = -Infinity
+  for (const a of arr) {
+    maxX = Math.max(maxX, a.x || 0)
+    maxY = Math.max(maxY, a.y || 0)
+  }
   if (maxX <= 1 && maxY <= 1) return "fraction"
   if (maxX > 100 || maxY > 100) return "pixel"
   return "percent"
@@ -46,9 +51,16 @@ function detectCoordMode(arr) {
 function toPercentAnchors(arr, mode, imgW, imgH) {
   return arr.map((a) => {
     let leftPct, topPct
-    if (mode === "fraction") { leftPct = a.x * 100; topPct = a.y * 100 }
-    else if (mode === "pixel") { leftPct = (a.x / imgW) * 100; topPct = (a.y / imgH) * 100 }
-    else { leftPct = a.x; topPct = a.y }
+    if (mode === "fraction") {
+      leftPct = a.x * 100
+      topPct = a.y * 100
+    } else if (mode === "pixel") {
+      leftPct = (a.x / imgW) * 100
+      topPct = (a.y / imgH) * 100
+    } else {
+      leftPct = a.x
+      topPct = a.y
+    }
     return { id: a.id, label: a.label, leftPct, topPct }
   })
 }
@@ -92,7 +104,9 @@ export default function GameLogger({ id: gameId, navigate }) {
     return m
   }, [])
 
-  const pct = (m, a) => { return a ? ((m / a) * 100).toFixed(1) : 0}
+  const pct = (m, a) => {
+    return a ? ((m / a) * 100).toFixed(1) : 0
+  }
 
   // Load game + events
   async function refresh() {
@@ -103,7 +117,7 @@ export default function GameLogger({ id: gameId, navigate }) {
     ])
     setGame(g || null)
     setEvents(ev || [])
-  
+
     if (g) {
       setTeamScore(g.team_score ?? "")
       setOppScore(g.opponent_score ?? "")
@@ -111,11 +125,13 @@ export default function GameLogger({ id: gameId, navigate }) {
       setTeamScore("")
       setOppScore("")
     }
-  
+
     setLoading(false)
   }
-  
-  useEffect(() => { void refresh() }, [gameId])
+
+  useEffect(() => {
+    void refresh()
+  }, [gameId])
 
   // read image intrinsic size (once on load)
   function onImgLoad(e) {
@@ -141,7 +157,7 @@ export default function GameLogger({ id: gameId, navigate }) {
     let fgm = 0,
       fga = 0,
       threesMade = 0
-  
+
     for (const e of events) {
       switch (e.type) {
         case "assist":
@@ -168,16 +184,16 @@ export default function GameLogger({ id: gameId, navigate }) {
           break
       }
     }
-  
+
     const fgPct = fga ? Math.round((fgm / fga) * 100) : 0
     const efgPct = fga
       ? Math.round(((fgm + 0.5 * threesMade) / fga) * 100)
       : 0
-  
+
     const twoPtMakes = fgm - threesMade
     const threePtMakes = threesMade
     const totalPoints = twoPtMakes * 2 + threePtMakes * 3 + ftMakes
-  
+
     return {
       assists,
       rebounds,
@@ -193,7 +209,6 @@ export default function GameLogger({ id: gameId, navigate }) {
       totalPoints,
     }
   }, [events])
-  
 
   // Actions
   async function logQuick(type) {
@@ -201,8 +216,15 @@ export default function GameLogger({ id: gameId, navigate }) {
     await refresh()
   }
   async function logFreeThrow(made) {
-    await addGameEvent({ game_id: gameId, mode: "game", type: "freethrow", made, ts: Date.now() })
-    setFtModalOpen(false); await refresh()
+    await addGameEvent({
+      game_id: gameId,
+      mode: "game",
+      type: "freethrow",
+      made,
+      ts: Date.now(),
+    })
+    setFtModalOpen(false)
+    await refresh()
   }
   function openShot(zoneId) {
     const z = zoneMap.get(zoneId)
@@ -211,11 +233,21 @@ export default function GameLogger({ id: gameId, navigate }) {
       zoneId,
       zoneLabel: z?.label || zoneId,
       isThree: !!z?.isThree,
-      shotType: defaultType,      // null initially → must select
-      pressured: null,            // null initially → must select after shot type
+      shotType: defaultType, // null initially → must select
+      pressured: null, // null initially → must select after shot type
     })
   }
-  async function commitShot({ zoneId, isThree, shotType, pressured, made }) {
+
+  // 🔁 now also accepts pickupType / finishType and passes them through
+  async function commitShot({
+    zoneId,
+    isThree,
+    shotType,
+    pressured,
+    made,
+    pickupType,
+    finishType,
+  }) {
     await addGameEvent({
       game_id: gameId,
       mode: "game",
@@ -225,21 +257,25 @@ export default function GameLogger({ id: gameId, navigate }) {
       shot_type: shotType,
       pressured: !!pressured,
       made: !!made,
+      // layup metadata (optional, only set when provided)
+      pickupType,
+      finishType,
       ts: Date.now(),
     })
-    setShotModal(null); await refresh()
+    setShotModal(null)
+    await refresh()
   }
-  
+
   async function onEndGame() {
     if (!game) return
     const ok = window.confirm("End this game?")
     if (!ok) return
-  
+
     const teamScoreInt =
       teamScore === "" ? null : Number.parseInt(teamScore, 10)
     const oppScoreInt =
       oppScore === "" ? null : Number.parseInt(oppScore, 10)
-  
+
     await endGameSession(game.id, {
       team_score:
         Number.isFinite(teamScoreInt) && teamScoreInt >= 0
@@ -250,7 +286,7 @@ export default function GameLogger({ id: gameId, navigate }) {
           ? oppScoreInt
           : null,
     })
-  
+
     navigate?.("gate")
   }
 
@@ -277,15 +313,15 @@ export default function GameLogger({ id: gameId, navigate }) {
   function getShotColor(event) {
     const type = (event.shot_type || event.shotType || "").toLowerCase()
     const isLayup = type === "layup"
-  
+
     // Layups override normal make/miss colors
-    if (isLayup && event.made) return "#2563eb"   // blue: made layup
-    if (isLayup && !event.made) return "#eab308"  // yellow: missed layup
-  
-    if (event.made) return "#059669"             // green: made shot
-    return "#dc2626"                             // red: missed shot
+    if (isLayup && event.made) return "#2563eb" // blue: made layup
+    if (isLayup && !event.made) return "#eab308" // yellow: missed layup
+
+    if (event.made) return "#059669" // green: made shot
+    return "#dc2626" // red: missed shot
   }
-  
+
   function LegendRow({ color, label }) {
     return (
       <div className="flex items-center gap-1 text-[11px] leading-tight">
@@ -294,11 +330,10 @@ export default function GameLogger({ id: gameId, navigate }) {
       </div>
     )
   }
-  
 
   return (
     <div className="page gamelogger">
-       <div className="relative mb-3 h-10 flex items-center justify-center">
+      <div className="relative mb-3 h-10 flex items-center justify-center">
         <button
           type="button"
           onClick={() => navigate?.("gate")}
@@ -347,7 +382,7 @@ export default function GameLogger({ id: gameId, navigate }) {
           onLoad={onImgLoad}
         />
 
-        {/* Plotted makes/misses (unchanged logic, just ensure they use .zone-marker) */}
+        {/* Plotted makes/misses */}
         <div className="absolute inset-0 pointer-events-none">
           {Array.isArray(events) &&
             events
@@ -364,10 +399,9 @@ export default function GameLogger({ id: gameId, navigate }) {
                       top: `${anchor.topPct}%`,
                     }}
                   >
-                    <MdSportsBasketball 
+                    <MdSportsBasketball
                       color={getShotColor(e)}
                       style={{ filter: "drop-shadow(0 0 1px rgba(0,0,0,0.25))" }}
-                      
                     />
                   </div>
                 )
@@ -399,13 +433,25 @@ export default function GameLogger({ id: gameId, navigate }) {
 
       {/* Quick stat buttons — white bg + blue border */}
       <div className="gamelogger mt-3 grid grid-cols-3 gap-2">
-        <button type="button" onClick={() => logQuick("steal")} className="quick-btn">
+        <button
+          type="button"
+          onClick={() => logQuick("steal")}
+          className="quick-btn"
+        >
           <Hand size={16} /> Steals
         </button>
-        <button type="button" onClick={() => logQuick("rebound")} className="quick-btn">
+        <button
+          type="button"
+          onClick={() => logQuick("rebound")}
+          className="quick-btn"
+        >
           <MdSportsBasketball size={16} /> Rebounds
         </button>
-        <button type="button" onClick={() => logQuick("assist")} className="quick-btn">
+        <button
+          type="button"
+          onClick={() => logQuick("assist")}
+          className="quick-btn"
+        >
           <Target size={16} /> Assists
         </button>
       </div>
@@ -447,6 +493,7 @@ export default function GameLogger({ id: gameId, navigate }) {
           <StatCard label="eFG%" value={`${stats.efgPct}%`} tint="sky" />
         </div>
       </section>
+
       {/* Shot Attempts Log */}
       <section className="section mt-3">
         <h3 className="text-sm font-semibold text-slate-700 mb-2">
@@ -460,12 +507,15 @@ export default function GameLogger({ id: gameId, navigate }) {
             </div>
           )}
 
-{events
+          {events
             .filter((e) => e.type === "shot")
             .slice() // create a shallow copy before reverse
             .reverse() // newest at top
             .map((e) => {
-              const { shotValue, zoneLabel, shotType, result } = describeShot(e, zoneMap)
+              const { shotValue, zoneLabel, shotType, result } = describeShot(
+                e,
+                zoneMap,
+              )
               return (
                 <div
                   key={e.id}
@@ -492,8 +542,9 @@ export default function GameLogger({ id: gameId, navigate }) {
             })}
         </div>
       </section>
-        {/* Full-width bottom End Game button */}
-      <div className=" rounded-xl bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-200 p-3">
+
+      {/* Full-width bottom End Game button */}
+      <div className="rounded-xl bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-200 p-3">
         <button
           type="button"
           onClick={onEndGame}
@@ -502,27 +553,38 @@ export default function GameLogger({ id: gameId, navigate }) {
           End Game
         </button>
       </div>
- 
-
 
       {/* Shot modal */}
       {shotModal && (
         <ShotModal
           data={shotModal}
           onClose={() => setShotModal(null)}
-          onMake={(payload) => commitShot({ ...shotModal, ...payload, made: true })}
-          onMiss={(payload) => commitShot({ ...shotModal, ...payload, made: false })}
+          onMake={(payload) =>
+            commitShot({ ...shotModal, ...payload, made: true })
+          }
+          onMiss={(payload) =>
+            commitShot({ ...shotModal, ...payload, made: false })
+          }
         />
       )}
 
       {/* FT sheet */}
       {ftModalOpen && (
-        <BottomSheet title="Log Free Throw" onClose={() => setFtModalOpen(false)}>
+        <BottomSheet
+          title="Log Free Throw"
+          onClose={() => setFtModalOpen(false)}
+        >
           <div className="grid grid-cols-2 gap-2">
-            <button className="btn btn-emerald h-11 rounded-xl" onClick={() => logFreeThrow(true)}>
+            <button
+              className="btn btn-emerald h-11 rounded-xl"
+              onClick={() => logFreeThrow(true)}
+            >
               Make
             </button>
-            <button className="btn btn-danger h-11 rounded-xl" onClick={() => logFreeThrow(false)}>
+            <button
+              className="btn btn-danger h-11 rounded-xl"
+              onClick={() => logFreeThrow(false)}
+            >
               Miss
             </button>
           </div>
@@ -537,9 +599,11 @@ export default function GameLogger({ id: gameId, navigate }) {
 --------------------------------------------------------- */
 function StatCard({ label, value, tint }) {
   const tintClass =
-    tint === "peach" ? "bg-orange-50"
-    : tint === "sky" ? "bg-sky-50"
-    : "bg-white"
+    tint === "peach"
+      ? "bg-orange-50"
+      : tint === "sky"
+      ? "bg-sky-50"
+      : "bg-white"
   return (
     <div className={`rounded-2xl border border-slate-200 ${tintClass} px-4 py-3`}>
       <div className="text-slate-500 text-sm">{label}</div>
@@ -555,7 +619,10 @@ function BottomSheet({ title, onClose, children }) {
       <div className="absolute left-0 right-0 bottom-0 rounded-t-2xl bg-white p-4 shadow-2xl">
         <div className="flex items-center justify-between mb-2">
           <div className="text-slate-900 font-semibold">{title}</div>
-          <button className="p-1 rounded-lg bg-transparent hover:bg-slate-100" onClick={onClose}>
+          <button
+            className="p-1 rounded-lg bg-transparent hover:bg-slate-100"
+            onClick={onClose}
+          >
             <X size={18} />
           </button>
         </div>
@@ -571,6 +638,7 @@ function BottomSheet({ title, onClose, children }) {
    - After Shot Type is selected:
        * Contested toggle is enabled (optional).
        * Make and Miss are enabled regardless of Contested.
+   - If Shot Type is Layup, optional pickup/finish metadata can be set.
 --------------------------------------------------------- */
 function ShotModal({ data, onClose, onMake, onMiss }) {
   // Start from data, but allow null → user must pick shot type
@@ -578,6 +646,10 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
   const [pressured, setPressured] = useState(
     typeof data.pressured === "boolean" ? data.pressured : false,
   )
+
+  // NEW: layup metadata for game events
+  const [pickupType, setPickupType] = useState(null)
+  const [finishType, setFinishType] = useState(null)
 
   const TYPES =
     Array.isArray(SHOT_TYPES) && SHOT_TYPES.length
@@ -591,6 +663,19 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
   const canToggleContested = hasShotType
   const isContested = !!pressured
   const canSubmit = hasShotType // Make/Miss require Shot Type ONLY
+
+  const isLayup =
+    (shotType || "").toLowerCase().includes("layup")
+
+  const LAYUP_PICKUP_TYPES = [
+    "Low Pickup",
+    "Football",
+    "Overhead",
+  ]
+  const LAYUP_FINISH_TYPES = [
+    "Underhand",
+    "Overhand",
+  ]
 
   return (
     <div className="fixed inset-0 z-50 shotmodal">
@@ -622,6 +707,53 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
           </div>
         </div>
 
+        {/* If layup: pickup & finish metadata */}
+        {isLayup && (
+          <div className="mb-3 space-y-3">
+            <div>
+              <div className="text-sm text-slate-700 mb-1">
+                Pickup Type (Layup)
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {LAYUP_PICKUP_TYPES.map((pt) => {
+                  const selected = pickupType === pt
+                  return (
+                    <button
+                      key={pt}
+                      type="button"
+                      onClick={() => setPickupType(pt)}
+                      className={`shot-type-btn ${selected ? "selected" : ""}`}
+                    >
+                      {pt}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-sm text-slate-700 mb-1">
+                Finish Type (Layup)
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {LAYUP_FINISH_TYPES.map((ft) => {
+                  const selected = finishType === ft
+                  return (
+                    <button
+                      key={ft}
+                      type="button"
+                      onClick={() => setFinishType(ft)}
+                      className={`shot-type-btn ${selected ? "selected" : ""}`}
+                    >
+                      {ft}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Contested toggle (optional, but only after shot type chosen) */}
         <div className="mb-4">
           <div className="text-sm text-slate-700 mb-1">Shot Context</div>
@@ -648,7 +780,14 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
                 ? "btn btn-danger h-11 rounded-xl"
                 : "h-11 rounded-xl bg-slate-100 text-slate-400 cursor-not-allowed"
             }
-            onClick={() => onMiss({ shotType, pressured: isContested })}
+            onClick={() =>
+              onMiss({
+                shotType,
+                pressured: isContested,
+                pickupType,
+                finishType,
+              })
+            }
           >
             Miss
           </button>
@@ -659,7 +798,14 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
                 ? "btn btn-emerald h-11 rounded-xl"
                 : "h-11 rounded-xl bg-slate-100 text-slate-400 cursor-not-allowed"
             }
-            onClick={() => onMake({ shotType, pressured: isContested })}
+            onClick={() =>
+              onMake({
+                shotType,
+                pressured: isContested,
+                pickupType,
+                finishType,
+              })
+            }
           >
             Make
           </button>
