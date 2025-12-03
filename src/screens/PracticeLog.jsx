@@ -504,7 +504,7 @@ export default function PracticeLog({ id, started_at, navigate }) {
                 } ${isFreeThrowZone ? "opacity-60 cursor-not-allowed" : ""}`}
               >
                 {isFreeThrowZone
-                  ? "N/A for Free Throws"
+                  ? "N/A"
                   : pressured
                   ? "Contested"
                   : "Uncontested"}
