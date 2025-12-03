@@ -147,11 +147,12 @@ export default function GameLogger({ id: gameId, navigate }) {
     return `${g.team_name} vs ${g.opponent_name} · ${ha} · ${g.level || ""}`.trim()
   }
 
-  // Live stats
+  // Live stats (now includes forced turnovers)
   const stats = useMemo(() => {
     let assists = 0,
       rebounds = 0,
-      steals = 0
+      steals = 0,
+      forcedTO = 0
     let ftMakes = 0,
       ftAtt = 0
     let fgm = 0,
@@ -168,6 +169,9 @@ export default function GameLogger({ id: gameId, navigate }) {
           break
         case "steal":
           steals++
+          break
+        case "forced_turnover":
+          forcedTO++
           break
         case "freethrow":
           ftAtt++
@@ -198,6 +202,7 @@ export default function GameLogger({ id: gameId, navigate }) {
       assists,
       rebounds,
       steals,
+      forcedTO,
       ftMakes,
       ftAtt,
       fgm,
@@ -215,6 +220,7 @@ export default function GameLogger({ id: gameId, navigate }) {
     await addGameEvent({ game_id: gameId, mode: "game", type, ts: Date.now() })
     await refresh()
   }
+
   async function logFreeThrow(made) {
     await addGameEvent({
       game_id: gameId,
@@ -226,6 +232,7 @@ export default function GameLogger({ id: gameId, navigate }) {
     setFtModalOpen(false)
     await refresh()
   }
+
   function openShot(zoneId) {
     const z = zoneMap.get(zoneId)
     const defaultType = null // force user to choose shot type first
@@ -238,7 +245,7 @@ export default function GameLogger({ id: gameId, navigate }) {
     })
   }
 
-  // 🔁 now also accepts pickupType / finishType and passes them through
+  // Accepts pickupType / finishType and passes them through to DB
   async function commitShot({
     zoneId,
     isThree,
@@ -431,8 +438,8 @@ export default function GameLogger({ id: gameId, navigate }) {
         </div>
       </div>
 
-      {/* Quick stat buttons — white bg + blue border */}
-      <div className="gamelogger mt-3 grid grid-cols-3 gap-2">
+      {/* Quick stat buttons — now 4 wide including Forced TO */}
+      <div className="gamelogger mt-3 grid grid-cols-4 gap-2 text-sm">
         <button
           type="button"
           onClick={() => logQuick("steal")}
@@ -453,6 +460,13 @@ export default function GameLogger({ id: gameId, navigate }) {
           className="quick-btn"
         >
           <Target size={16} /> Assists
+        </button>
+        <button
+          type="button"
+          onClick={() => logQuick("forced_turnover")}
+          className="quick-btn"
+        >
+          <X size={16} /> Forced TO
         </button>
       </div>
 
@@ -477,11 +491,12 @@ export default function GameLogger({ id: gameId, navigate }) {
           <MiniStat label="TP" value={stats.totalPoints} />
         </div>
 
-        {/* Existing 2-column stat grid */}
+        {/* 2-column stat grid now includes Forced TOs */}
         <div className="grid grid-cols-2 gap-3">
           <StatCard label="Assists" value={stats.assists} />
           <StatCard label="Rebounds" value={stats.rebounds} />
           <StatCard label="Steals" value={stats.steals} />
+          <StatCard label="Forced TO" value={stats.forcedTO} />
           <StatCard label="FG%" value={`${stats.fgPct}%`} />
           <StatCard label="Makes" value={stats.fgm} />
           <StatCard label="Misses" value={stats.fga - stats.fgm} />
@@ -633,12 +648,7 @@ function BottomSheet({ title, onClose, children }) {
 }
 
 /* ---------------------------------------------------------
-   Shot details modal (updated behavior)
-   - Must select Shot Type first.
-   - After Shot Type is selected:
-       * Contested toggle is enabled (optional).
-       * Make and Miss are enabled regardless of Contested.
-   - If Shot Type is Layup, optional pickup/finish metadata can be set.
+   Shot details modal (unchanged from your latest)
 --------------------------------------------------------- */
 function ShotModal({ data, onClose, onMake, onMiss }) {
   // Start from data, but allow null → user must pick shot type
@@ -647,7 +657,7 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
     typeof data.pressured === "boolean" ? data.pressured : false,
   )
 
-  // NEW: layup metadata for game events
+  // Layup metadata for game events
   const [pickupType, setPickupType] = useState(null)
   const [finishType, setFinishType] = useState(null)
 
@@ -664,18 +674,10 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
   const isContested = !!pressured
   const canSubmit = hasShotType // Make/Miss require Shot Type ONLY
 
-  const isLayup =
-    (shotType || "").toLowerCase().includes("layup")
+  const isLayup = (shotType || "").toLowerCase().includes("layup")
 
-  const LAYUP_PICKUP_TYPES = [
-    "Low Pickup",
-    "Football",
-    "Overhead",
-  ]
-  const LAYUP_FINISH_TYPES = [
-    "Underhand",
-    "Overhand",
-  ]
+  const LAYUP_PICKUP_TYPES = ["Low Pickup", "Football", "Overhead"]
+  const LAYUP_FINISH_TYPES = ["Underhand", "Overhand"]
 
   return (
     <div className="fixed inset-0 z-50 shotmodal">
