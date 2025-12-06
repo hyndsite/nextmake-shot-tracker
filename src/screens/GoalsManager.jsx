@@ -8,6 +8,7 @@ import {
   listGoalSetsWithGoals,
   createGoal,
   deleteGoal,
+  archiveGoalSet,
 } from "../lib/goals-db"
 import { supabase, getUser } from "../lib/supabase"
 import {
@@ -19,7 +20,14 @@ import {
   formatMetricValue,
 } from "../lib/goal-metrics"
 import { ZONES } from "../constants/zones" // adjust path if needed
-import { ArrowLeft, Calendar, Edit2, Trash2, ChevronDown } from "lucide-react"
+import {
+  ArrowLeft,
+  Calendar,
+  Edit2,
+  Trash2,
+  ChevronDown,
+  Archive,
+} from "lucide-react"
 import { MdEmojiObjects } from "react-icons/md"
 
 // ------------------- helpers -------------------
@@ -158,6 +166,7 @@ export default function GoalsManager({ navigate }) {
   // accordion state for forms (collapsed by default)
   const [openCreateSet, setOpenCreateSet] = useState(false)
   const [openAddGoal, setOpenAddGoal] = useState(false)
+  const [openArchived, setOpenArchived] = useState(false)
 
   // Initial load of goal sets + game/practice data
   useEffect(() => {
@@ -212,8 +221,11 @@ export default function GoalsManager({ navigate }) {
         setGameEvents(gameEv)
         setPracticeEntries(pracEv)
 
+        // default selected set for Add Goal (first active one)
         if (!selectedSetIdForGoal && sets && sets.length) {
-          setSelectedSetIdForGoal(sets[0].id)
+          const firstActive =
+            sets.find((s) => !s.archived) || sets[0]
+          setSelectedSetIdForGoal(firstActive.id)
         }
       } catch (err) {
         console.warn("[GoalsManager] load error:", err)
@@ -234,11 +246,28 @@ export default function GoalsManager({ navigate }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const sortedSets = useMemo(
+  // Split into active and archived sets
+  const activeSorted = useMemo(
     () =>
-      [...goalSets].sort((a, b) =>
-        (a.due_date || "").localeCompare(b.due_date || ""),
-      ),
+      [...goalSets]
+        .filter((s) => !s.archived)
+        .sort((a, b) =>
+          (a.due_date || "").localeCompare(b.due_date || ""),
+        ),
+    [goalSets],
+  )
+
+  const archivedSorted = useMemo(
+    () =>
+      [...goalSets]
+        .filter((s) => s.archived)
+        .sort((a, b) => {
+          // most recently archived first, if archived_at exists;
+          // otherwise fall back to due_date
+          const aKey = a.archived_at || a.due_date || ""
+          const bKey = b.archived_at || b.due_date || ""
+          return (bKey || "").localeCompare(aKey || "")
+        }),
     [goalSets],
   )
 
@@ -309,7 +338,9 @@ export default function GoalsManager({ navigate }) {
           dueDate: setDueDate,
         })
         setGoalSets((prev) => [...prev, { ...created, goals: [] }])
-        if (!selectedSetIdForGoal) setSelectedSetIdForGoal(created.id)
+        if (!selectedSetIdForGoal && !created.archived) {
+          setSelectedSetIdForGoal(created.id)
+        }
       }
       resetSetForm()
     } catch (err) {
@@ -341,12 +372,36 @@ export default function GoalsManager({ navigate }) {
       setGoalSets((prev) => prev.filter((s) => s.id !== set.id))
 
       if (selectedSetIdForGoal === set.id) {
-        const remaining = goalSets.filter((s) => s.id !== set.id)
+        const remaining = activeSorted.filter((s) => s.id !== set.id)
         setSelectedSetIdForGoal(remaining[0]?.id || "")
       }
     } catch (err) {
       console.warn("[GoalsManager] handleDeleteSet error:", err)
       alert("Could not delete goal set.")
+    }
+  }
+
+  async function handleArchiveSet(set) {
+    const ok = window.confirm(
+      "Archive this Goal Set? It will move under 'Archived Goal Sets' and be hidden from the active list.",
+    )
+    if (!ok) return
+
+    try {
+      const updated = await archiveGoalSet(set.id)
+      setGoalSets((prev) =>
+        prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)),
+      )
+
+      // If the archived set is currently selected for Add Goal,
+      // move selection to the first remaining active set (if any).
+      if (selectedSetIdForGoal === set.id) {
+        const remainingActive = activeSorted.filter((s) => s.id !== set.id)
+        setSelectedSetIdForGoal(remainingActive[0]?.id || "")
+      }
+    } catch (err) {
+      console.warn("[GoalsManager] handleArchiveSet error:", err)
+      alert("Could not archive goal set.")
     }
   }
 
@@ -573,7 +628,7 @@ export default function GoalsManager({ navigate }) {
                   onChange={(e) => setSelectedSetIdForGoal(e.target.value)}
                 >
                   <option value="">Select Goal Set</option>
-                  {sortedSets.map((s) => (
+                  {activeSorted.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name} ({s.type === "game" ? "Game" : "Practice"})
                     </option>
@@ -691,13 +746,13 @@ export default function GoalsManager({ navigate }) {
             <div className="text-sm text-slate-500">Loading goals…</div>
           )}
 
-          {!loading && sortedSets.length === 0 && (
+          {!loading && activeSorted.length === 0 && (
             <div className="text-sm text-slate-500">
-              No goal sets yet. Create one above to get started.
+              No active goal sets. Create one above to get started.
             </div>
           )}
 
-          {sortedSets.map((set) => {
+          {activeSorted.map((set) => {
             const dLeft = daysLeft(set.due_date)
             const tagLabel =
               set.type === "game"
@@ -795,6 +850,17 @@ export default function GoalsManager({ navigate }) {
                     >
                       <Trash2 size={14} className="text-red-500" />
                     </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleArchiveSet(set)
+                      }}
+                      className="archive-btn p-1 rounded-full hover:bg-slate-100"
+                      aria-label="Archive goal set"
+                    >
+                      <Archive size={14} className="text-slate-500" />
+                    </button>
                   </div>
                 </div>
 
@@ -830,6 +896,137 @@ export default function GoalsManager({ navigate }) {
             )
           })}
         </section>
+
+        {/* Archived Goal Sets (Accordion) */}
+        <section className="rounded-2xl border border-slate-200 bg-white">
+          <button
+            type="button"
+            onClick={() => setOpenArchived((v) => !v)}
+            className="w-full flex items-center justify-between px-4 py-3 accordion-header"
+          >
+            <span className="text-xs font-semibold text-slate-800">
+              Archived Goal Sets
+            </span>
+            <ChevronDown
+              size={18}
+              className={`transition-transform ${
+                openArchived ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+
+          {openArchived && (
+            <div className="border-t border-slate-100 p-4 space-y-2">
+              {!loading && archivedSorted.length === 0 && (
+                <div className="text-sm text-slate-500">
+                  No archived goal sets.
+                </div>
+              )}
+
+              {archivedSorted.map((set) => {
+                const dLeft = daysLeft(set.due_date)
+                const tagLabel =
+                  set.type === "game"
+                    ? "Game"
+                    : set.type === "practice"
+                    ? "Practice"
+                    : set.type
+
+                const isExpanded = expandedSetIds.has(set.id)
+
+                return (
+                  <div
+                    key={set.id}
+                    className="rounded-2xl border border-slate-200 bg-white"
+                  >
+                    {/* Set header (read-only except expand) */}
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => toggleExpanded(set.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault()
+                          toggleExpanded(set.id)
+                        }
+                      }}
+                      className="w-full flex items-center justify-between px-4 py-3 cursor-pointer"
+                    >
+                      <div className="flex items-start gap-2 text-left">
+                        <MdEmojiObjects
+                          size={18}
+                          className="mt-0.5 text-amber-500"
+                        />
+                        <div>
+                          <div className="text-sm font-semibold text-slate-900">
+                            {set.name}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                            {set.start_date && (
+                              <span className="flex items-center gap-1">
+                                <span className="font-medium">From:</span>
+                                {formatDueDate(set.start_date)}
+                              </span>
+                            )}
+                            {set.due_date && (
+                              <span className="flex items-center gap-1">
+                                <Calendar size={12} />
+                                {formatDueDate(set.due_date)}
+                              </span>
+                            )}
+                            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium bg-slate-100 text-slate-700">
+                              Archived
+                            </span>
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                set.type === "game"
+                                  ? "bg-sky-50 text-sky-700"
+                                  : "bg-emerald-50 text-emerald-700"
+                              }`}
+                            >
+                              {tagLabel}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Goals list */}
+                    {isExpanded && (
+                      <div className="border-t border-slate-100 px-4 py-3 space-y-3">
+                        {set.goals && set.goals.length > 0 ? (
+                          set.goals.map((g) => {
+                            const progress = computeGoalProgress({
+                              goal: g,
+                              set,
+                              gameEvents,
+                              practiceEntries,
+                            })
+
+                            return (
+                              <GoalCard
+                                key={g.id}
+                                goal={g}
+                                progress={progress}
+                                // archived sets: read-only, no delete button
+                                onDelete={null}
+                              />
+                            )
+                          })
+                        ) : (
+                          <div className="text-xs text-slate-500">
+                            No goals in this archived set.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </section>
+
       </main>
     </div>
   )
@@ -864,14 +1061,16 @@ function GoalCard({ goal, progress, onDelete }) {
             </div>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onDelete}
-          className="trash-btn p-1 rounded-full hover:bg-slate-100"
-          aria-label="Delete goal set"
-        >
-          <Trash2 size={14} className="text-red-500" />
-        </button>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="trash-btn p-1 rounded-full hover:bg-slate-100"
+            aria-label="Delete goal"
+          >
+            <Trash2 size={14} className="text-red-500" />
+          </button>
+        )}
       </div>
 
       {/* Progress bar */}
