@@ -80,6 +80,31 @@ function withinRange(ts, fromDate) {
   return d.isAfter(fromDate) || d.isSame(fromDate, "day")
 }
 
+// Normalize to a YYYY-MM-DD "day key"
+function dayKeyFromTs(ts) {
+  if (!ts) return null
+  const d = dayjs(ts)
+  if (!d.isValid()) return null
+  return d.format("YYYY-MM-DD")
+}
+
+// Use the start-of-week date as a week key
+function weekKeyFromTs(ts) {
+  if (!ts) return null
+  const d = dayjs(ts)
+  if (!d.isValid()) return null
+  return d.startOf("week").format("YYYY-MM-DD")
+}
+
+function weekLabelFromKey(key) {
+  try {
+    const d = dayjs(key)
+    return d.isValid() ? d.format("MMM D") : key
+  } catch {
+    return key
+  }
+}
+
 // ---------- GAME PERFORMANCE ----------
 
 /**
@@ -97,6 +122,7 @@ export async function getGamePerformance({ days }) {
 
   // 1) Determine which game sessions are in range & not deleted
   const sessionIds = new Set()
+  const sessionsById = new Map()
   {
     const sessKeys = await keys(gameSt.game.sessions)
     for (const k of sessKeys) {
@@ -107,6 +133,7 @@ export async function getGamePerformance({ days }) {
         : true
       if (!okDate) continue
       sessionIds.add(row.id)
+      sessionsById.set(row.id, row)
     }
   }
 
@@ -117,12 +144,19 @@ export async function getGamePerformance({ days }) {
       overallFgPct: 0,
       overallEfgPct: 0,
       totalAttempts: 0,
+      trendBuckets: {
+        daily: [],
+        weekly: [],
+        monthly: [],
+      },
     }
   }
 
   // 2) Walk all events in those sessions, in range
   const zoneAgg = new Map() // key → { label, makes, attempts }
-  const trendAgg = new Map() // monthKey → { fgm, fga, threesMade }
+  const trendAgg = new Map() // monthKey → { fgm, fga, threesMade } (monthly)
+  const trendDailyAgg = new Map() // gameId → { gameId, dateKey, fgm, fga, threesMade }
+  const trendWeeklyAgg = new Map() // weekKey → { fgm, fga, threesMade }
   let overallFgm = 0,
     overallFga = 0,
     overallThreesMade = 0
@@ -154,6 +188,7 @@ export async function getGamePerformance({ days }) {
         if (ev.is_three) overallThreesMade += 1
       }
 
+      // Monthly trend
       const mk = monthKeyFromTs(ev.ts)
       if (mk) {
         let t = trendAgg.get(mk)
@@ -165,6 +200,42 @@ export async function getGamePerformance({ days }) {
         if (ev.made) {
           t.fgm += 1
           if (ev.is_three) t.threesMade += 1
+        }
+      }
+
+      // Daily trend (per game within range)
+      const sess = sessionsById.get(ev.game_id)
+      const baseTs = sess?.date_iso || sess?.started_at || ev.ts
+      const dayKey = dayKeyFromTs(baseTs)
+      if (dayKey) {
+        let d = trendDailyAgg.get(ev.game_id)
+        if (!d) {
+          d = { gameId: ev.game_id, dateKey: dayKey, fgm: 0, fga: 0, threesMade: 0 }
+          trendDailyAgg.set(ev.game_id, d)
+        }
+        d.fga += 1
+        if (ev.made) {
+          d.fgm += 1
+          if (ev.is_three) d.threesMade += 1
+        }
+      }
+
+      // Weekly trend (aggregate all games in the same week)
+      const weekKey = weekKeyFromTs(
+        sessionsById.get(ev.game_id)?.date_iso ||
+          sessionsById.get(ev.game_id)?.started_at ||
+          ev.ts,
+      )
+      if (weekKey) {
+        let w = trendWeeklyAgg.get(weekKey)
+        if (!w) {
+          w = { fgm: 0, fga: 0, threesMade: 0 }
+          trendWeeklyAgg.set(weekKey, w)
+        }
+        w.fga += 1
+        if (ev.made) {
+          w.fgm += 1
+          if (ev.is_three) w.threesMade += 1
         }
       }
     } else if (ev.type === "freethrow") {
@@ -194,8 +265,8 @@ export async function getGamePerformance({ days }) {
     // sort by attempts desc
     .sort((a, b) => b.attempts - a.attempts)
 
-  // 4) Build monthly trend (FG% vs eFG%)
-  const trend = Array.from(trendAgg.entries())
+  // 4a) Monthly trend (FG% vs eFG%) – matches existing shape
+  const trendMonthly = Array.from(trendAgg.entries())
     .sort(([a], [b]) => (a < b ? -1 : 1))
     .map(([key, v]) => {
       const fgPctVal = pct(v.fgm, v.fga)
@@ -205,6 +276,39 @@ export async function getGamePerformance({ days }) {
       return {
         monthKey: key,
         monthLabel: monthLabel(key),
+        label: monthLabel(key),
+        fgPct: fgPctVal,
+        efgPct: efgPctVal,
+      }
+    })
+
+  // 4b) Daily trend: one point per game in range
+  const trendDaily = Array.from(trendDailyAgg.values())
+    .sort((a, b) => (a.dateKey < b.dateKey ? -1 : 1))
+    .map((g) => {
+      const fgPctVal = pct(g.fgm, g.fga)
+      const efgPctVal = g.fga
+        ? ((g.fgm + 0.5 * g.threesMade) / g.fga) * 100
+        : 0
+      return {
+        bucketKey: g.gameId,
+        label: dayjs(g.dateKey).format("MMM D"),
+        fgPct: fgPctVal,
+        efgPct: efgPctVal,
+      }
+    })
+
+  // 4c) Weekly trend: aggregate all games in each week
+  const trendWeekly = Array.from(trendWeeklyAgg.entries())
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([weekKey, v]) => {
+      const fgPctVal = pct(v.fgm, v.fga)
+      const efgPctVal = v.fga
+        ? ((v.fgm + 0.5 * v.threesMade) / v.fga) * 100
+        : 0
+      return {
+        bucketKey: weekKey,
+        label: weekLabelFromKey(weekKey),
         fgPct: fgPctVal,
         efgPct: efgPctVal,
       }
@@ -217,10 +321,16 @@ export async function getGamePerformance({ days }) {
 
   return {
     metrics,
-    trend,
+    // For backwards compatibility, `trend` is the monthly series
+    trend: trendMonthly,
     overallFgPct,
     overallEfgPct,
     totalAttempts: overallFga,
+    trendBuckets: {
+      daily: trendDaily,
+      weekly: trendWeekly,
+      monthly: trendMonthly,
+    },
   }
 }
 
@@ -249,6 +359,7 @@ export async function getPracticePerformance({ days }) {
 
   // 1) Determine which practice sessions are in range & not deleted
   const sessionIds = new Set()
+  const sessionsById = new Map()
   {
     const sessKeys = await keys(practiceSt.practice.sessions)
     for (const k of sessKeys) {
@@ -259,6 +370,7 @@ export async function getPracticePerformance({ days }) {
         : true
       if (!okDate) continue
       sessionIds.add(row.id)
+      sessionsById.set(row.id, row)
     }
   }
 
@@ -269,12 +381,19 @@ export async function getPracticePerformance({ days }) {
       overallFgPct: 0,
       overallEfgPct: 0,
       totalAttempts: 0,
+      trendBuckets: {
+        daily: [],
+        weekly: [],
+        monthly: [],
+      },
     }
   }
 
   // 2) Walk all practice entries that belong to those sessions
   const zoneAgg = new Map() // key → { label, makes, attempts }
   const trendAgg = new Map() // monthKey → { fgm, fga, threesMade }
+  const trendDailyAgg = new Map() // sessionId → { sessionId, dateKey, fgm, fga, threesMade }
+  const trendWeeklyAgg = new Map() // weekKey → { fgm, fga, threesMade }
   let overallFgm = 0,
     overallFga = 0,
     overallThreesMade = 0
@@ -344,6 +463,7 @@ export async function getPracticePerformance({ days }) {
     const isThree = zoneIsThreeMap.get(zoneId) || false
     if (isThree) overallThreesMade += makes
 
+    // Monthly trend
     const mk = monthKeyFromTs(row.ts)
     if (mk) {
       let t = trendAgg.get(mk)
@@ -355,6 +475,44 @@ export async function getPracticePerformance({ days }) {
       t.fgm += makes
       if (isThree) t.threesMade += makes
     }
+
+    // Daily trend (per practice session)
+    const sess = sessionsById.get(row.session_id)
+    const baseTs = sess?.date_iso || sess?.started_at || row.ts
+    const dayKey = dayKeyFromTs(baseTs)
+    if (dayKey) {
+      let d = trendDailyAgg.get(row.session_id)
+      if (!d) {
+        d = {
+          sessionId: row.session_id,
+          dateKey: dayKey,
+          fgm: 0,
+          fga: 0,
+          threesMade: 0,
+        }
+        trendDailyAgg.set(row.session_id, d)
+      }
+      d.fga += attempts
+      d.fgm += makes
+      if (isThree) d.threesMade += makes
+    }
+
+    // Weekly trend (aggregate all practice in the same week)
+    const weekKey = weekKeyFromTs(
+      sessionsById.get(row.session_id)?.date_iso ||
+        sessionsById.get(row.session_id)?.started_at ||
+        row.ts,
+    )
+    if (weekKey) {
+      let w = trendWeeklyAgg.get(weekKey)
+      if (!w) {
+        w = { fgm: 0, fga: 0, threesMade: 0 }
+        trendWeeklyAgg.set(weekKey, w)
+      }
+      w.fga += attempts
+      w.fgm += makes
+      if (isThree) w.threesMade += makes
+    }
   }
 
   if (!overallFga) {
@@ -364,6 +522,11 @@ export async function getPracticePerformance({ days }) {
       overallFgPct: 0,
       overallEfgPct: 0,
       totalAttempts: 0,
+      trendBuckets: {
+        daily: [],
+        weekly: [],
+        monthly: [],
+      },
     }
   }
 
@@ -377,7 +540,8 @@ export async function getPracticePerformance({ days }) {
     }))
     .sort((a, b) => b.attempts - a.attempts)
 
-  const trend = Array.from(trendAgg.entries())
+  // Monthly trend
+  const trendMonthly = Array.from(trendAgg.entries())
     .sort(([a], [b]) => (a < b ? -1 : 1))
     .map(([key, v]) => {
       const fgPctVal = pct(v.fgm, v.fga)
@@ -387,6 +551,39 @@ export async function getPracticePerformance({ days }) {
       return {
         monthKey: key,
         monthLabel: monthLabel(key),
+        label: monthLabel(key),
+        fgPct: fgPctVal,
+        efgPct: efgPctVal,
+      }
+    })
+
+  // Daily trend (per practice session)
+  const trendDaily = Array.from(trendDailyAgg.values())
+    .sort((a, b) => (a.dateKey < b.dateKey ? -1 : 1))
+    .map((s) => {
+      const fgPctVal = pct(s.fgm, s.fga)
+      const efgPctVal = s.fga
+        ? ((s.fgm + 0.5 * s.threesMade) / s.fga) * 100
+        : 0
+      return {
+        bucketKey: s.sessionId,
+        label: dayjs(s.dateKey).format("MMM D"),
+        fgPct: fgPctVal,
+        efgPct: efgPctVal,
+      }
+    })
+
+  // Weekly trend
+  const trendWeekly = Array.from(trendWeeklyAgg.entries())
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([weekKey, v]) => {
+      const fgPctVal = pct(v.fgm, v.fga)
+      const efgPctVal = v.fga
+        ? ((v.fgm + 0.5 * v.threesMade) / v.fga) * 100
+        : 0
+      return {
+        bucketKey: weekKey,
+        label: weekLabelFromKey(weekKey),
         fgPct: fgPctVal,
         efgPct: efgPctVal,
       }
@@ -399,9 +596,15 @@ export async function getPracticePerformance({ days }) {
 
   return {
     metrics,
-    trend,
+    // Backwards compatible: monthly series
+    trend: trendMonthly,
     overallFgPct,
     overallEfgPct,
     totalAttempts: overallFga,
+    trendBuckets: {
+      daily: trendDaily,
+      weekly: trendWeekly,
+      monthly: trendMonthly,
+    },
   }
 }

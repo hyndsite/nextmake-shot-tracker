@@ -26,7 +26,8 @@ import {
 
 const DEFAULT_RANGE_ID = TIME_RANGES[0]?.id || "30d"
 
-// Pill group for Game / Practice time range selection
+// ---- Pill component ----
+
 function TimeRangePills({ value, onChange }) {
   return (
     <div className="time-pill-group">
@@ -46,6 +47,8 @@ function TimeRangePills({ value, onChange }) {
     </div>
   )
 }
+
+// ---- Metric card ----
 
 function MetricCard({ label, fgPct, attemptsLabel, goalPct }) {
   const pctVal = isFinite(fgPct) ? Math.round(fgPct) : 0
@@ -91,24 +94,70 @@ function MetricCard({ label, fgPct, attemptsLabel, goalPct }) {
   )
 }
 
-// Helper to slice trend data for weekly vs monthly view
-function sliceTrendForMode(trend, mode) {
-  if (!Array.isArray(trend)) return []
-  if (mode === "weekly") {
-    const n = trend.length
-    const keep = Math.min(7, n)
-    return trend.slice(n - keep)
-  }
-  return trend
+// ---- Trend chart + tick helpers ----
+
+// Convert #days to a coarse range key so we don't depend on pill IDs
+function rangeKeyFromDays(days) {
+  if (days == null) return "all"
+  if (days <= 30) return "30"
+  if (days <= 60) return "60"
+  if (days <= 180) return "180"
+  return "all"
 }
 
-function TrendChart({ title, data, mode = "weekly", onToggleMode }) {
-  const chartData = useMemo(
-    () => sliceTrendForMode(data, mode),
-    [data, mode],
-  )
+/**
+ * Max ticks per mode / range key, based on your description:
+ *
+ * - Daily
+ *   - 30: max 7 (≈ every ~5 days)
+ *   - 60: max 8
+ *   - 180: max 8
+ *   - all:  max 8
+ * - Weekly
+ *   - all ranges: max 4
+ * - Monthly
+ *   - 30: 1 (single month)
+ *   - 60: 2 (two months)
+ *   - 180: 6
+ *   - all: 6
+ */
+const MAX_TICKS = {
+  daily: { "30": 7, "60": 8, "180": 8, all: 8 },
+  weekly: { "30": 4, "60": 4, "180": 4, all: 4 },
+  monthly: { "30": 1, "60": 2, "180": 6, all: 6 },
+}
 
-  if (!Array.isArray(chartData) || chartData.length === 0) {
+// Evenly sample labels from the data
+function selectLabelsEvenly(data, maxTicks) {
+  if (!Array.isArray(data) || data.length === 0 || !maxTicks) return undefined
+
+  const n = Math.min(maxTicks, data.length)
+  if (n <= 1) return [data[0].label]
+
+  const indices = []
+  const lastIndex = data.length - 1
+  for (let i = 0; i < n; i++) {
+    const idx = Math.round((i * lastIndex) / (n - 1))
+    indices.push(idx)
+  }
+
+  const labels = indices
+    .map((i) => data[i]?.label)
+    .filter((l) => typeof l === "string")
+
+  // Remove duplicates if data is sparse
+  return [...new Set(labels)]
+}
+
+function buildTicks(data, mode, days) {
+  const rangeKey = rangeKeyFromDays(days)
+  const cfg = MAX_TICKS[mode] || {}
+  const maxTicks = cfg[rangeKey] ?? cfg.all ?? 8
+  return selectLabelsEvenly(data, maxTicks)
+}
+
+function TrendChart({ title, data, mode = "daily", onModeChange, ticks }) {
+  if (!Array.isArray(data) || data.length === 0) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs text-slate-500 text-center">
         Not enough shot data yet to show a trend.
@@ -116,19 +165,24 @@ function TrendChart({ title, data, mode = "weekly", onToggleMode }) {
     )
   }
 
-  const handleToggle = (e) => {
+  const handleCycle = (e) => {
     e?.stopPropagation?.()
-    if (typeof onToggleMode === "function") {
-      onToggleMode()
+    if (typeof onModeChange === "function") {
+      const next =
+        mode === "daily" ? "weekly" : mode === "weekly" ? "monthly" : "daily"
+      onModeChange(next)
     }
   }
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault()
-      handleToggle(e)
+      handleCycle(e)
     }
   }
+
+  const modeLabel =
+    mode === "daily" ? "Daily" : mode === "weekly" ? "Weekly" : "Monthly"
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
@@ -138,23 +192,24 @@ function TrendChart({ title, data, mode = "weekly", onToggleMode }) {
           className="flex items-center gap-1 text-[11px] text-slate-500"
           role="button"
           tabIndex={0}
-          onClick={handleToggle}
+          onClick={handleCycle}
           onKeyDown={handleKeyDown}
         >
           <FilterIcon size={13} />
-          <span>{mode === "weekly" ? "Weekly" : "Monthly"}</span>
+          <span>{modeLabel}</span>
         </div>
       </div>
 
       <div className="h-40">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
-            data={chartData}
+            data={data}
             margin={{ top: 4, right: 10, left: -20, bottom: 0 }}
           >
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
             <XAxis
-              dataKey="monthLabel"
+              dataKey="label"
+              ticks={ticks}
               tick={{ fontSize: 10 }}
               axisLine={false}
               tickLine={false}
@@ -200,6 +255,8 @@ function TrendChart({ title, data, mode = "weekly", onToggleMode }) {
   )
 }
 
+// ---- Section header ----
+
 function SectionHeader({ title, expanded, onToggle }) {
   return (
     <button
@@ -217,17 +274,17 @@ function SectionHeader({ title, expanded, onToggle }) {
   )
 }
 
+// ---- Main component ----
+
 export default function Performance({ navigate }) {
   const [gameExpanded, setGameExpanded] = useState(true)
   const [practiceExpanded, setPracticeExpanded] = useState(true)
 
-  // Default pill selection to the first time range (e.g., 30 days)
   const [gameRangeId, setGameRangeId] = useState(DEFAULT_RANGE_ID)
   const [practiceRangeId, setPracticeRangeId] = useState(DEFAULT_RANGE_ID)
 
-  // Chart filter modes (Weekly / Monthly), default Weekly
-  const [gameTrendMode, setGameTrendMode] = useState("weekly")
-  const [practiceTrendMode, setPracticeTrendMode] = useState("weekly")
+  const [gameTrendMode, setGameTrendMode] = useState("daily")
+  const [practiceTrendMode, setPracticeTrendMode] = useState("daily")
 
   const [gameLoading, setGameLoading] = useState(false)
   const [practiceLoading, setPracticeLoading] = useState(false)
@@ -238,6 +295,7 @@ export default function Performance({ navigate }) {
     overallFgPct: 0,
     overallEfgPct: 0,
     totalAttempts: 0,
+    trendBuckets: { daily: [], weekly: [], monthly: [] },
   })
   const [practiceData, setPracticeData] = useState({
     metrics: [],
@@ -245,9 +303,10 @@ export default function Performance({ navigate }) {
     overallFgPct: 0,
     overallEfgPct: 0,
     totalAttempts: 0,
+    trendBuckets: { daily: [], weekly: [], monthly: [] },
   })
 
-  // Restore accordion state from localStorage
+  // Restore accordion state
   useEffect(() => {
     try {
       const g = window.localStorage.getItem("nm_perf_game_expanded")
@@ -268,7 +327,7 @@ export default function Performance({ navigate }) {
     [practiceRangeId],
   )
 
-  // Load Game performance when filter changes
+  // Load Game performance
   useEffect(() => {
     let cancelled = false
     async function load() {
@@ -285,6 +344,7 @@ export default function Performance({ navigate }) {
             overallFgPct: 0,
             overallEfgPct: 0,
             totalAttempts: 0,
+            trendBuckets: { daily: [], weekly: [], monthly: [] },
           })
         }
       } finally {
@@ -297,7 +357,7 @@ export default function Performance({ navigate }) {
     }
   }, [gameRange.days])
 
-  // Load Practice performance when filter changes
+  // Load Practice performance
   useEffect(() => {
     let cancelled = false
     async function load() {
@@ -314,6 +374,7 @@ export default function Performance({ navigate }) {
             overallFgPct: 0,
             overallEfgPct: 0,
             totalAttempts: 0,
+            trendBuckets: { daily: [], weekly: [], monthly: [] },
           })
         }
       } finally {
@@ -325,6 +386,36 @@ export default function Performance({ navigate }) {
       cancelled = true
     }
   }, [practiceRange.days])
+
+  // Derived trend series and ticks (Game)
+  const gameTrendData = useMemo(() => {
+    const buckets = gameData.trendBuckets || {}
+    if (gameTrendMode === "daily") return buckets.daily || []
+    if (gameTrendMode === "weekly") return buckets.weekly || []
+    if (gameTrendMode === "monthly")
+      return buckets.monthly || gameData.trend || []
+    return gameData.trend || []
+  }, [gameData, gameTrendMode])
+
+  const gameTrendTicks = useMemo(
+    () => buildTicks(gameTrendData, gameTrendMode, gameRange.days),
+    [gameTrendData, gameTrendMode, gameRange.days],
+  )
+
+  // Derived trend series and ticks (Practice)
+  const practiceTrendData = useMemo(() => {
+    const buckets = practiceData.trendBuckets || {}
+    if (practiceTrendMode === "daily") return buckets.daily || []
+    if (practiceTrendMode === "weekly") return buckets.weekly || []
+    if (practiceTrendMode === "monthly")
+      return buckets.monthly || practiceData.trend || []
+    return practiceData.trend || []
+  }, [practiceData, practiceTrendMode])
+
+  const practiceTrendTicks = useMemo(
+    () => buildTicks(practiceTrendData, practiceTrendMode, practiceRange.days),
+    [practiceTrendData, practiceTrendMode, practiceRange.days],
+  )
 
   function toggleGameExpanded() {
     setGameExpanded((prev) => {
@@ -407,13 +498,10 @@ export default function Performance({ navigate }) {
               <div className="mt-4">
                 <TrendChart
                   title="Game eFG% vs FG% Trend"
-                  data={gameData.trend}
+                  data={gameTrendData}
                   mode={gameTrendMode}
-                  onToggleMode={() =>
-                    setGameTrendMode((prev) =>
-                      prev === "weekly" ? "monthly" : "weekly",
-                    )
-                  }
+                  onModeChange={setGameTrendMode}
+                  ticks={gameTrendTicks}
                 />
               </div>
             </>
@@ -468,13 +556,10 @@ export default function Performance({ navigate }) {
               <div className="mt-4">
                 <TrendChart
                   title="Practice eFG% vs FG% Trend"
-                  data={practiceData.trend}
+                  data={practiceTrendData}
                   mode={practiceTrendMode}
-                  onToggleMode={() =>
-                    setPracticeTrendMode((prev) =>
-                      prev === "weekly" ? "monthly" : "weekly",
-                    )
-                  }
+                  onModeChange={setPracticeTrendMode}
+                  ticks={practiceTrendTicks}
                 />
               </div>
             </>
