@@ -1,10 +1,5 @@
-import React, {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react"
-import { SHOT_TYPES } from "../constants/shotTypes"
+import React, { useEffect, useMemo, useRef, useState } from "react"
+import { SHOT_TYPES, PICKUP_TYPES, FINISH_TYPES } from "../constants/shotTypes"
 import { ZONES } from "../constants/zones"
 import { ZONE_ANCHORS } from "../constants/zoneAnchors"
 import {
@@ -13,10 +8,9 @@ import {
   listGameEventsBySession,
   addGameEvent,
 } from "../lib/game-db"
-import { X, Target, Hand, Plus } from "lucide-react"
+import { X, Target, Hand, Plus, ArrowLeft } from "lucide-react"
 import { MdSportsBasketball } from "react-icons/md"
 import "../styles/GameLogger.css"
-import { ArrowLeft } from "lucide-react"
 
 /* ---------------------------------------------------------
    Anchor helpers (handles object map or array inputs)
@@ -65,10 +59,11 @@ function toPercentAnchors(arr, mode, imgW, imgH) {
   })
 }
 
-function describeShot(e, zoneMap) {
+function describeShot(e, zoneMap, shotTypeLabelById) {
   const zone = zoneMap.get(e.zone_id)
   const zoneLabel = zone?.label || e.zone_id || "Unknown Zone"
-  const shotType = e.shot_type || ""
+  const shotTypeId = e.shot_type || ""
+  const shotType = shotTypeLabelById.get(shotTypeId) || shotTypeId || ""
   const shotValue = e.is_three ? "3 pointer" : "2 pointer"
   const result = e.made ? "Make" : "Miss"
   return { shotValue, zoneLabel, shotType, result }
@@ -88,6 +83,7 @@ export default function GameLogger({ id: gameId, navigate }) {
   const imgRef = useRef(null)
   const [teamScore, setTeamScore] = useState("")
   const [oppScore, setOppScore] = useState("")
+
   // Court sizing / anchors
   const [imgNatural, setImgNatural] = useState({ w: 0, h: 0 })
   const ANCHORS_ARR = useMemo(() => anchorsToArray(ZONE_ANCHORS), [])
@@ -104,9 +100,12 @@ export default function GameLogger({ id: gameId, navigate }) {
     return m
   }, [])
 
-  const pct = (m, a) => {
-    return a ? ((m / a) * 100).toFixed(1) : 0
-  }
+  // Shot type id -> label map (for display only)
+  const shotTypeLabelById = useMemo(() => {
+    const m = new Map()
+    ;(SHOT_TYPES || []).forEach((st) => m.set(st.id, st.label))
+    return m
+  }, [])
 
   // Load game + events
   async function refresh() {
@@ -235,40 +234,44 @@ export default function GameLogger({ id: gameId, navigate }) {
 
   function openShot(zoneId) {
     const z = zoneMap.get(zoneId)
-    const defaultType = null // force user to choose shot type first
     setShotModal({
       zoneId,
       zoneLabel: z?.label || zoneId,
       isThree: !!z?.isThree,
-      shotType: defaultType, // null initially → must select
-      pressured: null, // null initially → must select after shot type
+      shotType: null, // must pick
+      pressured: null, // user sets (toggle)
     })
   }
 
-  // Accepts pickupType / finishType and passes them through to DB
+  // Commit shot: ensure canonical IDs and proper snake_case layup metadata
   async function commitShot({
     zoneId,
     isThree,
-    shotType,
+    shotType, // canonical id (e.g., 'layup')
     pressured,
     made,
-    pickupType,
-    finishType,
+    pickupType, // canonical value (e.g., 'football_pickup')
+    finishType, // canonical value (e.g., 'underhand')
   }) {
+    const isLayup = shotType === "layup"
+
     await addGameEvent({
       game_id: gameId,
       mode: "game",
       type: "shot",
       zone_id: zoneId,
       is_three: !!isThree,
-      shot_type: shotType,
+      shot_type: shotType, // store id, not label
       pressured: !!pressured,
       made: !!made,
-      // layup metadata (optional, only set when provided)
-      pickupType,
-      finishType,
+
+      // Only layups can carry these; otherwise force null
+      pickup_type: isLayup ? pickupType ?? null : null,
+      finish_type: isLayup ? finishType ?? null : null,
+
       ts: Date.now(),
     })
+
     setShotModal(null)
     await refresh()
   }
@@ -318,7 +321,7 @@ export default function GameLogger({ id: gameId, navigate }) {
   }
 
   function getShotColor(event) {
-    const type = (event.shot_type || event.shotType || "").toLowerCase()
+    const type = (event.shot_type || "").toLowerCase()
     const isLayup = type === "layup"
 
     // Layups override normal make/miss colors
@@ -383,7 +386,7 @@ export default function GameLogger({ id: gameId, navigate }) {
       <div className="relative w-full rounded-2xl overflow-hidden border border-slate-200 bg-white">
         <img
           ref={imgRef}
-          src="/court-half.svg" /* must exist in /public/court-half.svg */
+          src="/court-half.svg"
           alt="Half court"
           className="w-full h-auto block select-none pointer-events-none"
           onLoad={onImgLoad}
@@ -415,7 +418,7 @@ export default function GameLogger({ id: gameId, navigate }) {
               })}
         </div>
 
-        {/* Invisible / subtle click targets aligned to those anchors */}
+        {/* Invisible click targets aligned to anchors */}
         <div className="absolute inset-0">
           {pctAnchors.map((a) => (
             <button
@@ -430,6 +433,7 @@ export default function GameLogger({ id: gameId, navigate }) {
             </button>
           ))}
         </div>
+
         <div className="absolute bottom-2 right-2 bg-white/90 rounded-lg shadow px-2 py-1 space-y-1">
           <LegendRow color="#059669" label="made shot" />
           <LegendRow color="#dc2626" label="missed shot" />
@@ -438,7 +442,7 @@ export default function GameLogger({ id: gameId, navigate }) {
         </div>
       </div>
 
-      {/* Quick stat buttons — now 4 wide including Forced TO */}
+      {/* Quick stat buttons */}
       <div className="gamelogger mt-3 grid grid-cols-4 gap-2 text-sm">
         <button
           type="button"
@@ -470,7 +474,7 @@ export default function GameLogger({ id: gameId, navigate }) {
         </button>
       </div>
 
-      {/* Free throws — solid emerald */}
+      {/* Free throws */}
       <div className="mt-3">
         <button
           type="button"
@@ -483,7 +487,6 @@ export default function GameLogger({ id: gameId, navigate }) {
 
       {/* Stats */}
       <section className="section mt-3">
-        {/* Scoring summary row */}
         <div className="grid grid-cols-4 gap-2 mb-3">
           <MiniStat label="2PT" value={stats.twoPtMakes} />
           <MiniStat label="3PT" value={stats.threePtMakes} />
@@ -491,7 +494,6 @@ export default function GameLogger({ id: gameId, navigate }) {
           <MiniStat label="TP" value={stats.totalPoints} />
         </div>
 
-        {/* 2-column stat grid now includes Forced TOs */}
         <div className="grid grid-cols-2 gap-3">
           <StatCard label="Assists" value={stats.assists} />
           <StatCard label="Rebounds" value={stats.rebounds} />
@@ -524,12 +526,13 @@ export default function GameLogger({ id: gameId, navigate }) {
 
           {events
             .filter((e) => e.type === "shot")
-            .slice() // create a shallow copy before reverse
-            .reverse() // newest at top
+            .slice()
+            .reverse()
             .map((e) => {
               const { shotValue, zoneLabel, shotType, result } = describeShot(
                 e,
                 zoneMap,
+                shotTypeLabelById,
               )
               return (
                 <div
@@ -558,7 +561,7 @@ export default function GameLogger({ id: gameId, navigate }) {
         </div>
       </section>
 
-      {/* Full-width bottom End Game button */}
+      {/* End Game */}
       <div className="rounded-xl bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-200 p-3">
         <button
           type="button"
@@ -648,36 +651,42 @@ function BottomSheet({ title, onClose, children }) {
 }
 
 /* ---------------------------------------------------------
-   Shot details modal (unchanged from your latest)
+   Shot details modal
 --------------------------------------------------------- */
 function ShotModal({ data, onClose, onMake, onMiss }) {
-  // Start from data, but allow null → user must pick shot type
+  // store canonical shot type id (e.g., 'layup')
   const [shotType, setShotType] = useState(data.shotType || null)
+
   const [pressured, setPressured] = useState(
     typeof data.pressured === "boolean" ? data.pressured : false,
   )
 
-  // Layup metadata for game events
-  const [pickupType, setPickupType] = useState(null)
-  const [finishType, setFinishType] = useState(null)
+  // Layup metadata stored as canonical values
+  const [pickupType, setPickupType] = useState(null) // e.g., 'football_pickup'
+  const [finishType, setFinishType] = useState(null) // e.g., 'underhand'
 
   const TYPES =
     Array.isArray(SHOT_TYPES) && SHOT_TYPES.length
       ? SHOT_TYPES
       : [
-          { id: "jump", label: "Jump Shot" },
+          { id: "catch_shoot", label: "Catch & Shoot" },
           { id: "layup", label: "Layup" },
         ]
 
   const hasShotType = !!shotType
   const canToggleContested = hasShotType
   const isContested = !!pressured
-  const canSubmit = hasShotType // Make/Miss require Shot Type ONLY
+  const canSubmit = hasShotType
 
-  const isLayup = (shotType || "").toLowerCase().includes("layup")
+  const isLayup = shotType === "layup"
 
-  const LAYUP_PICKUP_TYPES = ["Low Pickup", "Football", "Overhead"]
-  const LAYUP_FINISH_TYPES = ["Underhand", "Overhand"]
+  // Prevent stale layup metadata from sticking when shot type changes
+  useEffect(() => {
+    if (!isLayup) {
+      setPickupType(null)
+      setFinishType(null)
+    }
+  }, [isLayup])
 
   return (
     <div className="fixed inset-0 z-50 shotmodal">
@@ -690,16 +699,17 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
           {data.isThree ? "3-pointer" : "2-pointer"}
         </div>
 
-        {/* Shot Type (must be selected before anything else is enabled) */}
+        {/* Shot Type */}
         <div className="mb-3">
           <div className="text-sm text-slate-700 mb-1">Shot Type</div>
           <div className="grid grid-cols-2 gap-2">
             {TYPES.map((st) => {
-              const selected = shotType === st.label
+              const selected = shotType === st.id
               return (
                 <button
-                  key={st.id || st.label}
-                  onClick={() => setShotType(st.label)}
+                  key={st.id}
+                  type="button"
+                  onClick={() => setShotType(st.id)}
                   className={`shot-type-btn ${selected ? "selected" : ""}`}
                 >
                   {st.label}
@@ -709,7 +719,7 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
           </div>
         </div>
 
-        {/* If layup: pickup & finish metadata */}
+        {/* Layup metadata */}
         {isLayup && (
           <div className="mb-3 space-y-3">
             <div>
@@ -717,16 +727,16 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
                 Pickup Type (Layup)
               </div>
               <div className="grid grid-cols-3 gap-2">
-                {LAYUP_PICKUP_TYPES.map((pt) => {
-                  const selected = pickupType === pt
+                {PICKUP_TYPES.map((pt) => {
+                  const selected = pickupType === pt.value
                   return (
                     <button
-                      key={pt}
+                      key={pt.value}
                       type="button"
-                      onClick={() => setPickupType(pt)}
+                      onClick={() => setPickupType(pt.value)}
                       className={`shot-type-btn ${selected ? "selected" : ""}`}
                     >
-                      {pt}
+                      {pt.label}
                     </button>
                   )
                 })}
@@ -738,16 +748,16 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
                 Finish Type (Layup)
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {LAYUP_FINISH_TYPES.map((ft) => {
-                  const selected = finishType === ft
+                {FINISH_TYPES.map((ft) => {
+                  const selected = finishType === ft.value
                   return (
                     <button
-                      key={ft}
+                      key={ft.value}
                       type="button"
-                      onClick={() => setFinishType(ft)}
+                      onClick={() => setFinishType(ft.value)}
                       className={`shot-type-btn ${selected ? "selected" : ""}`}
                     >
-                      {ft}
+                      {ft.label}
                     </button>
                   )
                 })}
@@ -756,12 +766,13 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
           </div>
         )}
 
-        {/* Contested toggle (optional, but only after shot type chosen) */}
+        {/* Contested toggle */}
         <div className="mb-4">
           <div className="text-sm text-slate-700 mb-1">Shot Context</div>
 
           <button
             disabled={!canToggleContested}
+            type="button"
             onClick={() =>
               canToggleContested && setPressured((prev) => !prev)
             }
@@ -773,7 +784,7 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
           </button>
         </div>
 
-        {/* Make / Miss buttons (enabled as soon as shot type is selected) */}
+        {/* Make / Miss */}
         <div className="grid grid-cols-2 gap-2">
           <button
             disabled={!canSubmit}
@@ -817,6 +828,7 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
           <button
             className="w-full text-sm text-slate-500 hover:text-slate-700"
             onClick={onClose}
+            type="button"
           >
             Cancel
           </button>
