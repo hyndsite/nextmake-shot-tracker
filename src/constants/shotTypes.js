@@ -12,8 +12,8 @@ export const PICKUP_TYPES = [
   { value: "low_pickup", label: "Low" },
   { value: "two_hand_pickup", label: "2-Hand" },
   { value: "football_pickup", label: "Football" },
-  { value: "inside_hand_pickup", label: "Ins-Hand" },
-  { value: "outside_hand_pickup", label: "Outs-Hand" },
+  { value: "inside_hand_pickup", label: "InHand" },
+  { value: "outside_hand_pickup", label: "OutHand" },
 ]
 
 export const FINISH_TYPES = [
