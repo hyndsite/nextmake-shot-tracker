@@ -137,19 +137,21 @@ function normalizeHomeAwayValue(v) {
   return "Home"
 }
 
+/**
+ * We keep the existing sanitizer, but we also use it for single-row upserts.
+ * NOTE: This file intentionally does not change event creation semantics—only push behavior.
+ */
 function sanitizeForUpsert(rows) {
   return rows.map(({ _dirty, _table, _deleted, ...r }) => {
     // normalize timestamps
-    if (typeof r.ts === "number")
-      r.ts = new Date(r.ts).toISOString()
+    if (typeof r.ts === "number") r.ts = new Date(r.ts).toISOString()
     if (typeof r.started_at === "number")
       r.started_at = new Date(r.started_at).toISOString()
     if (typeof r.ended_at === "number")
       r.ended_at = new Date(r.ended_at).toISOString()
 
     // ensure date_iso is just YYYY-MM-DD (string) if present
-    if (r.date_iso instanceof Date)
-      r.date_iso = r.date_iso.toISOString().slice(0, 10)
+    if (r.date_iso instanceof Date) r.date_iso = r.date_iso.toISOString().slice(0, 10)
     if (typeof r.date_iso === "string" && r.date_iso.length > 10)
       r.date_iso = r.date_iso.slice(0, 10)
 
@@ -161,14 +163,7 @@ function sanitizeForUpsert(rows) {
 
     // ---- practice table whitelists ----
     if (_table === "practice_sessions") {
-      const {
-        id,
-        user_id,
-        date_iso,
-        started_at,
-        ended_at,
-        status,
-      } = r
+      const { id, user_id, date_iso, started_at, ended_at, status } = r
       return { id, user_id, date_iso, started_at, ended_at, status }
     }
 
@@ -206,79 +201,153 @@ function sanitizeForUpsert(rows) {
   })
 }
 
-async function pushTableUpserts(table, rows) {
-  if (!rows.length) return
-  const cleanRows = sanitizeForUpsert(rows)
-  const { error } = await supabase.from(table).upsert(cleanRows, {
-    onConflict: "id",
-  })
+/**
+ * Supabase/Postgres errors we should treat as "non-retryable for this row"
+ * (i.e., quarantine/skip) so later rows can still sync.
+ *
+ * We intentionally keep this conservative:
+ * - 23*** = integrity constraint violations
+ * - 22*** = data exception / invalid text representation
+ */
+function isNonRetryableRowError(error) {
+  if (!error) return false
+  const code = String(error.code || "")
+  if (code.startsWith("23") || code.startsWith("22")) return true
+  // Some Supabase errors may not include a code but include HTTP-ish status.
+  const status = Number(error.status || error.statusCode || error?.cause?.status)
+  if (status === 400 || status === 401 || status === 403) return true
+  return false
+}
+
+async function upsertOne(table, row) {
+  const [cleanRow] = sanitizeForUpsert([row])
+  const { error } = await supabase.from(table).upsert([cleanRow], { onConflict: "id" })
   if (error) {
-    console.warn(`[sync] upsert error on ${table}`, error, {
-      sample: cleanRows[0],
-    })
+    console.warn(`[sync] upsert error on ${table}`, error, { sample: cleanRow })
     throw error
   }
 }
 
-async function pushTableDeletes(table, rows) {
-  if (!rows.length) return
-  const ids = rows.map((r) => r.id).filter(Boolean)
-  if (!ids.length) return
-  const { error } = await supabase.from(table).delete().in("id", ids)
+async function deleteOne(table, row) {
+  const id = row?.id
+  if (!id) return
+  const { error } = await supabase.from(table).delete().eq("id", id)
   if (error) {
-    console.warn(`[sync] delete error on ${table}`, error, {
-      sample: ids[0],
-    })
+    console.warn(`[sync] delete error on ${table}`, error, { sample: id })
     throw error
   }
 }
 
+/**
+ * Single-row push loop.
+ * Goals:
+ * - still allow working offline (local writes unchanged)
+ * - isolate failed events (one bad row does not block later rows)
+ * - allow saving good events that occur after failed events (continue loop)
+ *
+ * Approach:
+ * - Iterate all dirty rows in a stable order
+ * - Push each row independently
+ * - On retryable failure: leave dirty and continue (it will retry later)
+ * - On non-retryable failure: mark row clean but tagged as "sync_failed" so it no longer blocks
+ *
+ * NOTE:
+ * - This does NOT require changes to IndexedDB schema; it stores error metadata on the row itself.
+ * - This does NOT implement a UI for quarantined rows; it is a backend behavior change only.
+ */
 async function pushAll(userId) {
   const practiceDirty = toArray(await _allDirtyPractice())
   const gameDirty = toArray(await _allDirtyGame())
 
-  // attach user_id
+  // attach user_id (required server-side)
   for (const r of [...practiceDirty, ...gameDirty]) {
     r.user_id = userId
   }
 
-  const upsertsByTable = new Map()
-  const deletesByTable = new Map()
-
-  function addRow(map, table, row) {
-    if (!table) return
-    if (!map.has(table)) map.set(table, [])
-    map.get(table).push(row)
+  // Stable ordering: sessions before events, then by timestamp-ish fields
+  const typeRank = (t) => {
+    if (t === "practice_sessions") return 10
+    if (t === "practice_entries") return 20
+    if (t === "practice_markers") return 30
+    if (t === "game_sessions") return 40
+    if (t === "game_events") return 50
+    return 99
   }
 
-  for (const row of [...practiceDirty, ...gameDirty]) {
-    const table = row?._table
+  const tsValue = (row) => {
+    // best-effort ordering; missing values go last
+    const v =
+      row?.ts ||
+      row?.started_at ||
+      row?.ended_at ||
+      row?.date_iso ||
+      null
+    if (!v) return Number.MAX_SAFE_INTEGER
+    const d = new Date(v).getTime()
+    return Number.isFinite(d) ? d : Number.MAX_SAFE_INTEGER
+  }
+
+  const allDirty = [...practiceDirty, ...gameDirty]
+    .filter((r) => r && r._table && r.id)
+    .sort((a, b) => {
+      const ra = typeRank(a._table)
+      const rb = typeRank(b._table)
+      if (ra !== rb) return ra - rb
+      return tsValue(a) - tsValue(b)
+    })
+
+  for (const row of allDirty) {
+    const table = row._table
     if (!table) continue
-    if (row._deleted) {
-      addRow(deletesByTable, table, row)
-    } else {
-      addRow(upsertsByTable, table, row)
+
+    const isPractice = table.startsWith("practice_")
+    const markClean = isPractice ? _markCleanPractice : _markCleanGame
+    const purgeRow = isPractice ? _purgePracticeRow : _purgeGameRow
+
+    try {
+      if (row._deleted) {
+        await deleteOne(table, row)
+        await purgeRow(row)
+      } else {
+        await upsertOne(table, row)
+        await markClean(row)
+      }
+    } catch (err) {
+      // Non-retryable row error: quarantine/skip (do not block later rows)
+      if (isNonRetryableRowError(err)) {
+        console.warn(
+          `[sync] non-retryable row rejected; skipping row so later rows can sync`,
+          {
+            table,
+            id: row.id,
+            code: err?.code,
+            message: err?.message,
+          },
+        )
+
+        // Mark it "clean" so it does not block subsequent syncs, but keep an audit trail on the row.
+        // This does not require any other file changes: _markClean merges arbitrary fields.
+        await markClean({
+          ...row,
+          _sync_failed: true,
+          _sync_error_code: err?.code ?? null,
+          _sync_error_message: err?.message ?? null,
+          _sync_error_at: new Date().toISOString(),
+        })
+
+        // Continue to the next row
+        continue
+      }
+
+      // Retryable error: leave dirty and stop early if offline; otherwise continue
+      console.error("[sync] retryable push error (will retry later):", err)
+
+      // If we lost network mid-sync, bail early
+      if (!navigator.onLine) break
+
+      // Continue processing later rows (best effort)
+      continue
     }
-  }
-
-  // First upserts (create/update)
-  for (const [table, rows] of upsertsByTable) {
-    await pushTableUpserts(table, rows)
-  }
-
-  // Then deletes
-  for (const [table, rows] of deletesByTable) {
-    await pushTableDeletes(table, rows)
-  }
-
-  // Finally, update local flags / purge
-  for (const row of practiceDirty) {
-    if (row._deleted) await _purgePracticeRow(row)
-    else await _markCleanPractice(row)
-  }
-  for (const row of gameDirty) {
-    if (row._deleted) await _purgeGameRow(row)
-    else await _markCleanGame(row)
   }
 }
 
@@ -295,6 +364,7 @@ async function doSync() {
     await pushAll(userId)
     setLastSyncNow()
   } catch (err) {
+    // pushAll is best-effort now; this is a safety net
     console.error("[sync] push error:", err)
   } finally {
     syncing = false
