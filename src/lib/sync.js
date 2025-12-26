@@ -174,18 +174,28 @@ function sanitizeForUpsert(rows) {
         session_id,
         zone_id,
         shot_type,
+        // canonical column is contested; legacy queued rows may still have pressured
+        contested,
         pressured,
         attempts,
         makes,
         ts,
       } = r
+
+      const resolvedContested =
+        typeof contested !== "undefined"
+          ? !!contested
+          : typeof pressured !== "undefined"
+            ? !!pressured
+            : null
+
       return {
         id,
         user_id,
         session_id,
         zone_id,
         shot_type,
-        pressured,
+        contested: resolvedContested,
         attempts,
         makes,
         ts,
@@ -240,20 +250,6 @@ async function deleteOne(table, row) {
 
 /**
  * Single-row push loop.
- * Goals:
- * - still allow working offline (local writes unchanged)
- * - isolate failed events (one bad row does not block later rows)
- * - allow saving good events that occur after failed events (continue loop)
- *
- * Approach:
- * - Iterate all dirty rows in a stable order
- * - Push each row independently
- * - On retryable failure: leave dirty and continue (it will retry later)
- * - On non-retryable failure: mark row clean but tagged as "sync_failed" so it no longer blocks
- *
- * NOTE:
- * - This does NOT require changes to IndexedDB schema; it stores error metadata on the row itself.
- * - This does NOT implement a UI for quarantined rows; it is a backend behavior change only.
  */
 async function pushAll(userId) {
   const practiceDirty = toArray(await _allDirtyPractice())
@@ -275,13 +271,7 @@ async function pushAll(userId) {
   }
 
   const tsValue = (row) => {
-    // best-effort ordering; missing values go last
-    const v =
-      row?.ts ||
-      row?.started_at ||
-      row?.ended_at ||
-      row?.date_iso ||
-      null
+    const v = row?.ts || row?.started_at || row?.ended_at || row?.date_iso || null
     if (!v) return Number.MAX_SAFE_INTEGER
     const d = new Date(v).getTime()
     return Number.isFinite(d) ? d : Number.MAX_SAFE_INTEGER
@@ -313,7 +303,6 @@ async function pushAll(userId) {
         await markClean(row)
       }
     } catch (err) {
-      // Non-retryable row error: quarantine/skip (do not block later rows)
       if (isNonRetryableRowError(err)) {
         console.warn(
           `[sync] non-retryable row rejected; skipping row so later rows can sync`,
@@ -325,8 +314,6 @@ async function pushAll(userId) {
           },
         )
 
-        // Mark it "clean" so it does not block subsequent syncs, but keep an audit trail on the row.
-        // This does not require any other file changes: _markClean merges arbitrary fields.
         await markClean({
           ...row,
           _sync_failed: true,
@@ -335,17 +322,11 @@ async function pushAll(userId) {
           _sync_error_at: new Date().toISOString(),
         })
 
-        // Continue to the next row
         continue
       }
 
-      // Retryable error: leave dirty and stop early if offline; otherwise continue
       console.error("[sync] retryable push error (will retry later):", err)
-
-      // If we lost network mid-sync, bail early
       if (!navigator.onLine) break
-
-      // Continue processing later rows (best effort)
       continue
     }
   }
@@ -364,7 +345,6 @@ async function doSync() {
     await pushAll(userId)
     setLastSyncNow()
   } catch (err) {
-    // pushAll is best-effort now; this is a safety net
     console.error("[sync] push error:", err)
   } finally {
     syncing = false

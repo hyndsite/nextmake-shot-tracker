@@ -59,14 +59,37 @@ function toPercentAnchors(arr, mode, imgW, imgH) {
   })
 }
 
-function describeShot(e, zoneMap, shotTypeLabelById) {
+/* ---------------------------------------------------------
+   List row description
+--------------------------------------------------------- */
+function describeAttemptRow(e, zoneMap, shotTypeLabelById) {
+  if (e.type === "freethrow") {
+    const zoneLabel = e.zone_id
+      ? zoneMap.get(e.zone_id)?.label || e.zone_id
+      : "Free Throw"
+    return {
+      left: "Freethrow",
+      mid: zoneLabel,
+      sub: "",
+      right: e.made ? "Make" : "Miss",
+      isMade: !!e.made,
+    }
+  }
+
   const zone = zoneMap.get(e.zone_id)
   const zoneLabel = zone?.label || e.zone_id || "Unknown Zone"
   const shotTypeId = e.shot_type || ""
   const shotType = shotTypeLabelById.get(shotTypeId) || shotTypeId || ""
   const shotValue = e.is_three ? "3 pointer" : "2 pointer"
   const result = e.made ? "Make" : "Miss"
-  return { shotValue, zoneLabel, shotType, result }
+
+  return {
+    left: shotValue,
+    mid: zoneLabel,
+    sub: shotType,
+    right: result,
+    isMade: !!e.made,
+  }
 }
 
 /* ---------------------------------------------------------
@@ -78,7 +101,8 @@ export default function GameLogger({ id: gameId, navigate }) {
   const [loading, setLoading] = useState(true)
 
   // UI state
-  const [shotModal, setShotModal] = useState(null) // { zoneId, zoneLabel, isThree, shotType, pressured }
+  // shotModal supports NEW + EDIT via eventId
+  const [shotModal, setShotModal] = useState(null)
   const [ftModalOpen, setFtModalOpen] = useState(false)
   const imgRef = useRef(null)
   const [teamScore, setTeamScore] = useState("")
@@ -100,12 +124,20 @@ export default function GameLogger({ id: gameId, navigate }) {
     return m
   }, [])
 
-  // Shot type id -> label map (for display only)
+  // Shot type id -> label map (for display)
   const shotTypeLabelById = useMemo(() => {
     const m = new Map()
     ;(SHOT_TYPES || []).forEach((st) => m.set(st.id, st.label))
     return m
   }, [])
+
+  // Derived lists (hooks MUST stay above any conditional returns)
+  const shotAndFtEventsNewestFirst = useMemo(() => {
+    return (events || [])
+      .filter((e) => e.type === "shot" || e.type === "freethrow")
+      .slice()
+      .reverse()
+  }, [events])
 
   // Load game + events
   async function refresh() {
@@ -146,7 +178,7 @@ export default function GameLogger({ id: gameId, navigate }) {
     return `${g.team_name} vs ${g.opponent_name} · ${ha} · ${g.level || ""}`.trim()
   }
 
-  // Live stats (now includes forced turnovers)
+  // Live stats (includes forced turnovers)
   const stats = useMemo(() => {
     let assists = 0,
       rebounds = 0,
@@ -235,37 +267,60 @@ export default function GameLogger({ id: gameId, navigate }) {
   function openShot(zoneId) {
     const z = zoneMap.get(zoneId)
     setShotModal({
+      eventId: null, // NEW shot
       zoneId,
       zoneLabel: z?.label || zoneId,
       isThree: !!z?.isThree,
-      shotType: null, // must pick
-      pressured: null, // user sets (toggle)
+      shotTypeId: null, // must pick
+      contested: false,
+      pickupType: null,
+      finishType: null,
     })
   }
 
-  // Commit shot: ensure canonical IDs and proper snake_case layup metadata
+  // EDIT: clicking a shot row loads it into the modal (no pencil icon)
+  function openEditShotEvent(ev) {
+    if (!ev || ev.type !== "shot") return
+    const z = zoneMap.get(ev.zone_id)
+    setShotModal({
+      eventId: ev.id, // EDIT existing row
+      zoneId: ev.zone_id,
+      zoneLabel: z?.label || ev.zone_id,
+      isThree: !!ev.is_three,
+      shotTypeId: ev.shot_type || null, // stored as id
+      contested: !!ev.contested,
+      pickupType: ev.pickup_type ?? null,
+      finishType: ev.finish_type ?? null,
+    })
+  }
+
+  // Commit shot: NEW vs EDIT determined by eventId
   async function commitShot({
+    eventId,
     zoneId,
     isThree,
-    shotType, // canonical id (e.g., 'layup')
-    pressured,
+    shotTypeId, // canonical id (e.g., 'layup', 'catch_shoot', 'off_dribble')
+    contested,
     made,
     pickupType, // canonical value (e.g., 'football_pickup')
     finishType, // canonical value (e.g., 'underhand')
   }) {
-    const isLayup = shotType === "layup"
+    const isLayup = shotTypeId === "layup"
 
     await addGameEvent({
+      // If editing, pass the id so sync uses UPSERT/UPDATE
+      id: eventId || undefined,
+
       game_id: gameId,
       mode: "game",
       type: "shot",
       zone_id: zoneId,
       is_three: !!isThree,
-      shot_type: shotType, // store id, not label
-      pressured: !!pressured,
+      shot_type: shotTypeId,
+      contested: !!contested,
       made: !!made,
 
-      // Only layups can carry these; otherwise force null
+      // Only layups carry these; otherwise force null
       pickup_type: isLayup ? pickupType ?? null : null,
       finish_type: isLayup ? finishType ?? null : null,
 
@@ -300,15 +355,6 @@ export default function GameLogger({ id: gameId, navigate }) {
     navigate?.("gate")
   }
 
-  if (loading) {
-    return (
-      <div className="page">
-        <h1 className="screen-title">Game</h1>
-        <div className="section">Loading…</div>
-      </div>
-    )
-  }
-
   function MiniStat({ label, value }) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-center">
@@ -337,6 +383,15 @@ export default function GameLogger({ id: gameId, navigate }) {
       <div className="flex items-center gap-1 text-[11px] leading-tight">
         <MdSportsBasketball color={color} style={{ width: 12, height: 12 }} />
         <span className="text-slate-700">{label}</span>
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="page">
+        <h1 className="screen-title">Game</h1>
+        <div className="section">Loading…</div>
       </div>
     )
   }
@@ -511,57 +566,71 @@ export default function GameLogger({ id: gameId, navigate }) {
         </div>
       </section>
 
-      {/* Shot Attempts Log */}
+      {/* Shot Attempts Log (Shots + Freethrow; rows clickable for shots only) */}
       <section className="section mt-3">
         <h3 className="text-sm font-semibold text-slate-700 mb-2">
           Shot Attempts
         </h3>
 
         <div className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
-          {events.filter((e) => e.type === "shot").length === 0 && (
+          {shotAndFtEventsNewestFirst.length === 0 && (
             <div className="p-2 text-sm text-slate-500 text-center">
               No shots logged yet.
             </div>
           )}
 
-          {events
-            .filter((e) => e.type === "shot")
-            .slice()
-            .reverse()
-            .map((e) => {
-              const { shotValue, zoneLabel, shotType, result } = describeShot(
-                e,
-                zoneMap,
-                shotTypeLabelById,
-              )
-              return (
-                <div
-                  key={e.id}
-                  className="flex items-center justify-between px-3 py-1.5 text-sm"
-                >
-                  <div className="text-slate-800 font-medium w-[90px]">
-                    {shotValue}
-                  </div>
-                  <div className="flex-1 text-slate-600 truncate text-center">
-                    {zoneLabel}
-                  </div>
-                  <div className="flex-1 text-slate-600 truncate text-center">
-                    {shotType}
-                  </div>
-                  <div
-                    className={`w-[60px] text-right font-semibold ${
-                      e.made ? "text-emerald-600" : "text-red-600"
-                    }`}
-                  >
-                    {result}
-                  </div>
+          {shotAndFtEventsNewestFirst.map((e) => {
+            const d = describeAttemptRow(e, zoneMap, shotTypeLabelById)
+
+            const RowInner = (
+              <>
+                <div className="text-slate-800 font-medium w-[90px]">
+                  {d.left}
                 </div>
+                <div className="flex-1 text-slate-600 truncate text-center">
+                  {d.mid}
+                </div>
+                <div className="flex-1 text-slate-600 truncate text-center">
+                  {d.sub}
+                </div>
+                <div
+                  className={`w-[60px] text-right font-semibold ${
+                    d.isMade ? "text-emerald-600" : "text-red-600"
+                  }`}
+                >
+                  {d.right}
+                </div>
+              </>
+            )
+
+            // Entire row clickable for SHOTS (edit). Freethrows display-only for now.
+            if (e.type === "shot") {
+              return (
+                <button
+                  key={e.id}
+                  type="button"
+                  onClick={() => openEditShotEvent(e)}
+                  className="w-full flex items-center justify-between px-3 py-1.5 text-sm hover:bg-slate-50 active:bg-slate-100"
+                  aria-label="Edit shot"
+                >
+                  {RowInner}
+                </button>
               )
-            })}
+            }
+
+            return (
+              <div
+                key={e.id}
+                className="flex items-center justify-between px-3 py-1.5 text-sm"
+              >
+                {RowInner}
+              </div>
+            )
+          })}
         </div>
       </section>
 
-      {/* End Game */}
+      {/* Full-width bottom End Game button */}
       <div className="rounded-xl bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-200 p-3">
         <button
           type="button"
@@ -620,8 +689,8 @@ function StatCard({ label, value, tint }) {
     tint === "peach"
       ? "bg-orange-50"
       : tint === "sky"
-      ? "bg-sky-50"
-      : "bg-white"
+        ? "bg-sky-50"
+        : "bg-white"
   return (
     <div className={`rounded-2xl border border-slate-200 ${tintClass} px-4 py-3`}>
       <div className="text-slate-500 text-sm">{label}</div>
@@ -651,42 +720,44 @@ function BottomSheet({ title, onClose, children }) {
 }
 
 /* ---------------------------------------------------------
-   Shot details modal
+   Shot details modal (supports EDIT by preloading values)
 --------------------------------------------------------- */
 function ShotModal({ data, onClose, onMake, onMiss }) {
-  // store canonical shot type id (e.g., 'layup')
-  const [shotType, setShotType] = useState(data.shotType || null)
-
-  const [pressured, setPressured] = useState(
-    typeof data.pressured === "boolean" ? data.pressured : false,
+  const [shotTypeId, setShotTypeId] = useState(data.shotTypeId || null)
+  const [contested, setContested] = useState(
+    typeof data.contested === "boolean" ? data.contested : false,
   )
 
-  // Layup metadata stored as canonical values
-  const [pickupType, setPickupType] = useState(null) // e.g., 'football_pickup'
-  const [finishType, setFinishType] = useState(null) // e.g., 'underhand'
+  // Layup metadata uses canonical constraint values
+  const [pickupType, setPickupType] = useState(data.pickupType ?? null)
+  const [finishType, setFinishType] = useState(data.finishType ?? null)
 
   const TYPES =
     Array.isArray(SHOT_TYPES) && SHOT_TYPES.length
       ? SHOT_TYPES
       : [
           { id: "catch_shoot", label: "Catch & Shoot" },
+          { id: "off_dribble", label: "Off-Dribble" },
           { id: "layup", label: "Layup" },
+          { id: "floater", label: "Floater" },
         ]
 
-  const hasShotType = !!shotType
+  const hasShotType = !!shotTypeId
   const canToggleContested = hasShotType
-  const isContested = !!pressured
+  const isContested = !!contested
   const canSubmit = hasShotType
 
-  const isLayup = shotType === "layup"
+  const isLayup = shotTypeId === "layup"
 
-  // Prevent stale layup metadata from sticking when shot type changes
-  useEffect(() => {
-    if (!isLayup) {
-      setPickupType(null)
-      setFinishType(null)
-    }
-  }, [isLayup])
+  function pickupButtonLabel(pt) {
+    if (pt.value === "inside_hand_pickup") return "Inside"
+    if (pt.value === "outside_hand_pickup") return "Outside"
+    if (pt.value === "two_hand_pickup") return "2-Hand"
+    if (pt.value === "football_pickup") return "Football"
+    if (pt.value === "high_pickup") return "High"
+    if (pt.value === "low_pickup") return "Low"
+    return pt.label
+  }
 
   return (
     <div className="fixed inset-0 z-50 shotmodal">
@@ -704,12 +775,12 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
           <div className="text-sm text-slate-700 mb-1">Shot Type</div>
           <div className="grid grid-cols-2 gap-2">
             {TYPES.map((st) => {
-              const selected = shotType === st.id
+              const selected = shotTypeId === st.id
               return (
                 <button
                   key={st.id}
                   type="button"
-                  onClick={() => setShotType(st.id)}
+                  onClick={() => setShotTypeId(st.id)}
                   className={`shot-type-btn ${selected ? "selected" : ""}`}
                 >
                   {st.label}
@@ -727,7 +798,7 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
                 Pickup Type (Layup)
               </div>
               <div className="grid grid-cols-3 gap-2">
-                {PICKUP_TYPES.map((pt) => {
+                {(PICKUP_TYPES || []).map((pt) => {
                   const selected = pickupType === pt.value
                   return (
                     <button
@@ -735,8 +806,9 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
                       type="button"
                       onClick={() => setPickupType(pt.value)}
                       className={`shot-type-btn ${selected ? "selected" : ""}`}
+                      title={pt.label}
                     >
-                      {pt.label}
+                      {pickupButtonLabel(pt)}
                     </button>
                   )
                 })}
@@ -748,7 +820,7 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
                 Finish Type (Layup)
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {FINISH_TYPES.map((ft) => {
+                {(FINISH_TYPES || []).map((ft) => {
                   const selected = finishType === ft.value
                   return (
                     <button
@@ -773,9 +845,7 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
           <button
             disabled={!canToggleContested}
             type="button"
-            onClick={() =>
-              canToggleContested && setPressured((prev) => !prev)
-            }
+            onClick={() => canToggleContested && setContested((prev) => !prev)}
             className={`w-full contested-btn ${
               isContested ? "selected" : ""
             } ${!canToggleContested ? "disabled" : ""}`}
@@ -795,8 +865,8 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
             }
             onClick={() =>
               onMiss({
-                shotType,
-                pressured: isContested,
+                shotTypeId,
+                contested: isContested,
                 pickupType,
                 finishType,
               })
@@ -813,8 +883,8 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
             }
             onClick={() =>
               onMake({
-                shotType,
-                pressured: isContested,
+                shotTypeId,
+                contested: isContested,
                 pickupType,
                 finishType,
               })
@@ -828,7 +898,6 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
           <button
             className="w-full text-sm text-slate-500 hover:text-slate-700"
             onClick={onClose}
-            type="button"
           >
             Cancel
           </button>

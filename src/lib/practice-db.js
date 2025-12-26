@@ -97,15 +97,26 @@ export async function addEntry({
   sessionId,
   zoneId,
   shotType,
-  pressured = false,
+  // Canonical name is `contested`.
+  // We still accept legacy `pressured` so older callers don't break.
+  contested,
+  pressured,
   attempts = 0,
   makes = 0,
   ts = nowISO(),
-  // NEW layup-specific metadata (optional)
+  // layup-specific metadata (optional)
   pickupType = null,
   finishType = null,
 }) {
   const id = uuid()
+
+  const resolvedContested =
+    typeof contested !== "undefined"
+      ? !!contested
+      : typeof pressured !== "undefined"
+        ? !!pressured
+        : false
+
   const row = {
     id,
     user_id: null,
@@ -113,10 +124,11 @@ export async function addEntry({
     session_id: sessionId,
     zone_id: zoneId,
     shot_type: shotType,
-    // NEW: layup metadata (stored but doesn't affect existing logic)
+    // layup metadata
     pickup_type: pickupType,
     finish_type: finishType,
-    pressured: !!pressured,
+    // canonical field
+    contested: resolvedContested,
     attempts: Number(attempts),
     makes: Number(makes),
     ts,
@@ -124,6 +136,7 @@ export async function addEntry({
     _deleted: false,
     _table: "practice_entries",
   }
+
   await set(id, row, st.practice.entries)
   await addToIndex(st.practice.entries, id)
   notifyLocalMutate()

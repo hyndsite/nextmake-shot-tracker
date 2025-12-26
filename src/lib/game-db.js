@@ -15,29 +15,6 @@ export const st = {
   },
 }
 
-// --- helpers ---
-async function computeExistingScoringTotals(gameId) {
-  await ready
-  const evKeys = await keys(st.game.events)
-  let two = 0
-  let three = 0
-  let ft = 0
-
-  for (const k of evKeys) {
-    const ev = await get(k, st.game.events)
-    if (!ev || ev.game_id !== gameId) continue
-    if (ev.type === "shot" && ev.made) {
-      if (ev.is_three) three++
-      else two++
-    } else if (ev.type === "freethrow" && ev.made) {
-      ft++
-    }
-  }
-
-  const totalPoints = two * 2 + three * 3 + ft
-  return { two, three, ft, totalPoints }
-}
-
 function normalizeHomeAway(v) {
   if (v == null) return "Home"
   const s = String(v).trim().toLowerCase()
@@ -46,23 +23,62 @@ function normalizeHomeAway(v) {
   return "Home"
 }
 
-// optional utility to normalize any existing rows
-export async function fixBadHomeAway() {
+/**
+ * Recompute running totals for ALL non-deleted events in a game, in chronological order,
+ * and persist totals on shot + freethrow events.
+ *
+ * This prevents stale totals when editing/deleting prior attempts.
+ */
+async function recomputeAndPersistScoringTotals(gameId) {
   await ready
-  const ks = await keys(st.game.sessions)
-  for (const k of ks) {
-    const row = await get(k, st.game.sessions)
-    if (!row) continue
-    const norm = normalizeHomeAway(row.home_away)
-    if (row.home_away !== norm) {
-      await set(
-        k,
-        { ...row, home_away: norm, _dirty: true, _table: "game_sessions" },
-        st.game.sessions,
-      )
-    }
+  if (!gameId) return
+
+  const evKeys = await keys(st.game.events)
+  const evs = []
+  for (const k of evKeys) {
+    const ev = await get(k, st.game.events)
+    if (!ev) continue
+    if (ev._deleted) continue
+    if (ev.game_id !== gameId) continue
+    evs.push(ev)
   }
-  notifyLocalMutate()
+
+  evs.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime())
+
+  let two = 0
+  let three = 0
+  let ft = 0
+  let totalPoints = 0
+
+  for (const ev of evs) {
+    // Only attach totals to shot / freethrow events (existing behavior)
+    if (ev.type !== "shot" && ev.type !== "freethrow") continue
+
+    if (ev.type === "shot" && ev.made) {
+      if (ev.is_three) {
+        three += 1
+        totalPoints += 3
+      } else {
+        two += 1
+        totalPoints += 2
+      }
+    } else if (ev.type === "freethrow" && ev.made) {
+      ft += 1
+      totalPoints += 1
+    }
+
+    const updated = {
+      ...ev,
+      total_2pt_made: two,
+      total_3pt_made: three,
+      total_ft_made: ft,
+      total_points: totalPoints,
+      _dirty: true, // totals changed => ensure sync
+      _table: "game_events",
+    }
+
+    await set(updated.id, updated, st.game.events)
+  }
 }
 
 /* -----------------------------
@@ -146,8 +162,7 @@ export async function endGameSession(id, patch = {}) {
 
 /**
  * Mark a game session and its events as deleted (tombstones),
- * to be pushed to Supabase by the sync engine. Does NOT
- * immediately delete from IndexedDB so that sync can see them.
+ * to be pushed to Supabase by the sync engine.
  */
 export async function deleteGameSession(id) {
   await ready
@@ -201,9 +216,19 @@ export async function addGameEvent(input) {
   const mode = input.mode ?? "game"
   const user_id = input.user_id ?? null
 
-  // NEW: layup metadata (optional) – supports both snakeCase + camelCase inputs
+  // Layup metadata (optional) – supports both snakeCase + camelCase inputs
   const pickup_type = input.pickup_type ?? input.pickupType ?? null
   const finish_type = input.finish_type ?? input.finishType ?? null
+
+  // Contested (canonical) – accept legacy "pressured" only as backward-compat input
+  const contested =
+    typeof input.contested !== "undefined"
+      ? input.contested
+      : typeof input.isContested !== "undefined"
+        ? input.isContested
+        : typeof input.pressured !== "undefined"
+          ? input.pressured
+          : null
 
   if (!game_id) throw new Error("[game-db] addGameEvent: game_id is required")
   if (!type) throw new Error("[game-db] addGameEvent: type is required")
@@ -215,18 +240,27 @@ export async function addGameEvent(input) {
 
   const id = input.id ?? uuid()
 
-  // Base row
+  // Preserve existing row fields when editing (if present)
+  const existing = await get(id, st.game.events)
+
   const row = {
+    ...(existing || {}),
     id,
     game_id,
-    user_id,
+    user_id: user_id ?? existing?.user_id ?? null,
     mode,
     type,
     zone_id,
     shot_type,
     is_three,
     made,
-    // NEW: layup metadata stored but doesn't affect existing scoring logic
+
+    // Persist contested (canonical field name)
+    contested:
+      typeof contested !== "undefined" && contested !== null
+        ? !!contested
+        : existing?.contested ?? null,
+
     pickup_type,
     finish_type,
     ts: tsISO,
@@ -235,39 +269,44 @@ export async function addGameEvent(input) {
     _table: "game_events",
   }
 
-  // Attach running scoring totals for shot / freethrow events
+  await set(id, row, st.game.events)
+
+  // Keep running totals consistent after any shot/FT insert or edit.
   if (type === "shot" || type === "freethrow") {
-    const { two, three, ft, totalPoints } = await computeExistingScoringTotals(
-      game_id,
-    )
-
-    let t2 = two
-    let t3 = three
-    let tft = ft
-    let tp = totalPoints
-
-    if (type === "shot" && made) {
-      if (is_three) {
-        t3 += 1
-        tp += 3
-      } else {
-        t2 += 1
-        tp += 2
-      }
-    } else if (type === "freethrow" && made) {
-      tft += 1
-      tp += 1
-    }
-
-    row.total_2pt_made = t2
-    row.total_3pt_made = t3
-    row.total_ft_made = tft
-    row.total_points = tp
+    await recomputeAndPersistScoringTotals(game_id)
   }
 
-  await set(id, row, st.game.events)
   notifyLocalMutate()
   return row
+}
+
+/**
+ * Tombstone-delete a single game event (offline-safe).
+ * Sync layer will push delete to Supabase later.
+ */
+export async function deleteGameEvent(id) {
+  await ready
+  if (!id) return false
+
+  const cur = await get(id, st.game.events)
+  if (!cur) return false
+
+  const updated = {
+    ...cur,
+    _deleted: true,
+    _dirty: true,
+    _table: "game_events",
+  }
+
+  await set(id, updated, st.game.events)
+
+  // If we deleted a shot/FT, totals must be recomputed.
+  if (cur.type === "shot" || cur.type === "freethrow") {
+    await recomputeAndPersistScoringTotals(cur.game_id)
+  }
+
+  notifyLocalMutate()
+  return true
 }
 
 export async function listGameEventsBySession(gameId) {
@@ -278,9 +317,7 @@ export async function listGameEventsBySession(gameId) {
     const ev = await get(k, st.game.events)
     if (ev?.game_id === gameId && !ev._deleted) out.push(ev)
   }
-  out.sort(
-    (a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime(),
-  )
+  out.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime())
   return out
 }
 
@@ -346,11 +383,6 @@ export async function _purgeGameRow(row) {
  * Remote → local helpers
  * ---------------------------*/
 
-/**
- * Upsert remote game_sessions into IndexedDB as "clean" rows
- * AND remove any local clean rows that no longer exist remotely.
- * Supabase is the source of truth for all non-dirty rows.
- */
 export async function upsertGameSessionsFromRemote(rows = []) {
   await ready
   const remoteIds = new Set(rows.map((r) => r.id).filter(Boolean))
@@ -382,10 +414,6 @@ export async function upsertGameSessionsFromRemote(rows = []) {
   }
 }
 
-/**
- * Upsert remote game_events into IndexedDB as "clean" rows
- * AND remove any local clean events that no longer exist remotely.
- */
 export async function upsertGameEventsFromRemote(rows = []) {
   await ready
   const remoteIds = new Set(rows.map((r) => r.id).filter(Boolean))
@@ -416,10 +444,6 @@ export async function upsertGameEventsFromRemote(rows = []) {
   }
 }
 
-/**
- * Convenience helper for debugging: fetch all game_sessions
- * and game_events for the current Supabase user and hydrate IDB.
- */
 export async function hydrateGameFromSupabase() {
   await ready
 

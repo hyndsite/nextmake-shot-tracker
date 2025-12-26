@@ -66,7 +66,8 @@ export default function PracticeLog({ id, started_at, navigate }) {
   // form state
   const [zoneId, setZoneId] = useState(ZONE_OPTIONS[0]?.value || "")
   const [shotTypeId, setShotTypeId] = useState(SHOT_OPTIONS[0]?.value || "")
-  const [pressured, setPressured] = useState(false)
+  // Canonical naming: contested (not pressured)
+  const [contested, setContested] = useState(false)
   const [attempts, setAttempts] = useState(10)
   const [makes, setMakes] = useState(4)
   const [runningEFG, setRunningEFG] = useState(0)
@@ -169,9 +170,9 @@ export default function PracticeLog({ id, started_at, navigate }) {
 
     // For Free Throws in practice:
     // - shot_type should be null
-    // - pressured should be false
+    // - contested should be false
     const effectiveShotType = isFreeThrowZone ? null : shotTypeId
-    const effectivePressured = isFreeThrowZone ? false : pressured
+    const effectiveContested = isFreeThrowZone ? false : contested
 
     // For layup shot type, we also send pickupType/finishType
     const isLayup = effectiveShotType === LAYUP_SHOT_TYPE_ID
@@ -180,7 +181,7 @@ export default function PracticeLog({ id, started_at, navigate }) {
       sessionId: activeSession.id,
       zoneId,
       shotType: effectiveShotType,
-      pressured: effectivePressured,
+      contested: effectiveContested,
       attempts: a,
       makes: m,
       ts: new Date().toISOString(),
@@ -385,9 +386,9 @@ export default function PracticeLog({ id, started_at, navigate }) {
                   const newZoneId = e.target.value
                   setZoneId(newZoneId)
                   // If user switches into Free Throw zone, ensure
-                  // pressured is false; shot type will be ignored on save.
+                  // contested is false; shot type will be ignored on save.
                   if (newZoneId === FREE_THROW_ZONE_ID) {
-                    setPressured(false)
+                    setContested(false)
                   }
                 }}
               >
@@ -475,21 +476,21 @@ export default function PracticeLog({ id, started_at, navigate }) {
             )}
 
             <div className="grid grid-cols-3 gap-3 items-center">
-              <label className="label col-span-1">Pressured</label>
+              <label className="label col-span-1">Contested</label>
               <button
                 type="button"
                 onClick={() => {
                   if (isFreeThrowZone) return
-                  setPressured((p) => !p)
+                  setContested((p) => !p)
                 }}
                 disabled={isFreeThrowZone}
                 className={`btn h-10 rounded-lg text-sm font-medium ${
-                  pressured ? "btn-emerald" : "btn-outline-emerald"
+                  contested ? "btn-emerald" : "btn-outline-emerald"
                 } ${isFreeThrowZone ? "opacity-60 cursor-not-allowed" : ""}`}
               >
                 {isFreeThrowZone
                   ? "N/A"
-                  : pressured
+                  : contested
                   ? "Contested"
                   : "Uncontested"}
               </button>

@@ -22,7 +22,6 @@ import BottomNav from "./components/BottomNav"
 import { initAutoSync, bootstrapAllData } from "./lib/sync"
 import { supabase } from "./lib/supabase"
 import { whenIdbReady } from "./lib/idb-init"
-import { fixBadHomeAway } from "./lib/game-db"
 
 const LAST_ROUTE_KEY = "nm_last_route"
 
@@ -63,11 +62,6 @@ export default function App() {
       await whenIdbReady()
       initAutoSync()
     })()
-  }, [])
-
-  // 2) Normalize any old home_away values for game sessions
-  useEffect(() => {
-    fixBadHomeAway().catch(() => {})
   }, [])
 
   // 3) Persist last route (tab + subroutes)
