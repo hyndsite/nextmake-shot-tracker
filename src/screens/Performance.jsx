@@ -106,20 +106,7 @@ function rangeKeyFromDays(days) {
 }
 
 /**
- * Max ticks per mode / range key, based on your description:
- *
- * - Daily
- *   - 30: max 7 (≈ every ~5 days)
- *   - 60: max 8
- *   - 180: max 8
- *   - all:  max 8
- * - Weekly
- *   - all ranges: max 4
- * - Monthly
- *   - 30: 1 (single month)
- *   - 60: 2 (two months)
- *   - 180: 6
- *   - all: 6
+ * Max ticks per mode / range key
  */
 const MAX_TICKS = {
   daily: { "30": 7, "60": 8, "180": 8, all: 8 },
@@ -145,7 +132,6 @@ function selectLabelsEvenly(data, maxTicks) {
     .map((i) => data[i]?.label)
     .filter((l) => typeof l === "string")
 
-  // Remove duplicates if data is sparse
   return [...new Set(labels)]
 }
 
@@ -156,7 +142,55 @@ function buildTicks(data, mode, days) {
   return selectLabelsEvenly(data, maxTicks)
 }
 
-function TrendChart({ title, data, mode = "daily", onModeChange, ticks }) {
+function formatSelectedDate(payload) {
+  if (!payload) return "—"
+
+  const candidate =
+    payload.date ||
+    payload.date_iso ||
+    payload.ts ||
+    payload.label ||
+    payload.start ||
+    payload.end
+
+  if (!candidate) return "—"
+
+  // If it's already an ISO date like "2025-12-26"
+  if (typeof candidate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(candidate)) {
+    const d = new Date(candidate + "T00:00:00Z")
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    }
+  }
+
+  // If it's ISO timestamp
+  const d = new Date(candidate)
+  if (!Number.isNaN(d.getTime())) {
+    return d.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    })
+  }
+
+  // Fallback
+  return String(candidate)
+}
+
+function TrendChart({
+  title,
+  data,
+  mode = "daily",
+  onModeChange,
+  ticks,
+  sourceLabel, // "Game" or "Practice"
+  selectedPoint,
+  onSelectPoint,
+}) {
   if (!Array.isArray(data) || data.length === 0) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs text-slate-500 text-center">
@@ -184,6 +218,18 @@ function TrendChart({ title, data, mode = "daily", onModeChange, ticks }) {
   const modeLabel =
     mode === "daily" ? "Daily" : mode === "weekly" ? "Weekly" : "Monthly"
 
+  const handleChartClick = (state) => {
+    // Recharts click state typically contains activePayload when clicking near a point
+    const payload = state?.activePayload?.[0]?.payload
+    if (!payload) return
+    if (typeof onSelectPoint === "function") onSelectPoint(payload)
+  }
+
+  const selectedText =
+    selectedPoint && (selectedPoint.ts || selectedPoint.date || selectedPoint.label)
+      ? `${sourceLabel || "Selected"} — ${formatSelectedDate(selectedPoint)}`
+      : null
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
       <div className="flex items-center justify-between mb-2">
@@ -205,6 +251,7 @@ function TrendChart({ title, data, mode = "daily", onModeChange, ticks }) {
           <LineChart
             data={data}
             margin={{ top: 4, right: 10, left: -20, bottom: 0 }}
+            onClick={handleChartClick}
           >
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
             <XAxis
@@ -251,6 +298,13 @@ function TrendChart({ title, data, mode = "daily", onModeChange, ticks }) {
           </LineChart>
         </ResponsiveContainer>
       </div>
+
+      {selectedText && (
+        <div className="mt-2 text-[11px] text-slate-600">
+          <span className="font-medium text-slate-800">Selected:</span>{" "}
+          {selectedText}
+        </div>
+      )}
     </div>
   )
 }
@@ -289,6 +343,9 @@ export default function Performance({ navigate }) {
   const [gameLoading, setGameLoading] = useState(false)
   const [practiceLoading, setPracticeLoading] = useState(false)
 
+  const [gameSelectedPoint, setGameSelectedPoint] = useState(null)
+  const [practiceSelectedPoint, setPracticeSelectedPoint] = useState(null)
+
   const [gameData, setGameData] = useState({
     metrics: [],
     trend: [],
@@ -318,10 +375,7 @@ export default function Performance({ navigate }) {
     }
   }, [])
 
-  const gameRange = useMemo(
-    () => getRangeById(gameRangeId),
-    [gameRangeId],
-  )
+  const gameRange = useMemo(() => getRangeById(gameRangeId), [gameRangeId])
   const practiceRange = useMemo(
     () => getRangeById(practiceRangeId),
     [practiceRangeId],
@@ -334,7 +388,10 @@ export default function Performance({ navigate }) {
       setGameLoading(true)
       try {
         const data = await getGamePerformance({ days: gameRange.days })
-        if (!cancelled) setGameData(data)
+        if (!cancelled) {
+          setGameData(data)
+          setGameSelectedPoint(null)
+        }
       } catch (err) {
         console.warn("[Performance] getGamePerformance error:", err)
         if (!cancelled) {
@@ -346,6 +403,7 @@ export default function Performance({ navigate }) {
             totalAttempts: 0,
             trendBuckets: { daily: [], weekly: [], monthly: [] },
           })
+          setGameSelectedPoint(null)
         }
       } finally {
         if (!cancelled) setGameLoading(false)
@@ -364,7 +422,10 @@ export default function Performance({ navigate }) {
       setPracticeLoading(true)
       try {
         const data = await getPracticePerformance({ days: practiceRange.days })
-        if (!cancelled) setPracticeData(data)
+        if (!cancelled) {
+          setPracticeData(data)
+          setPracticeSelectedPoint(null)
+        }
       } catch (err) {
         console.warn("[Performance] getPracticePerformance error:", err)
         if (!cancelled) {
@@ -376,6 +437,7 @@ export default function Performance({ navigate }) {
             totalAttempts: 0,
             trendBuckets: { daily: [], weekly: [], monthly: [] },
           })
+          setPracticeSelectedPoint(null)
         }
       } finally {
         if (!cancelled) setPracticeLoading(false)
@@ -461,10 +523,7 @@ export default function Performance({ navigate }) {
           {gameExpanded && (
             <>
               <div className="flex items-center justify-between mt-1">
-                <TimeRangePills
-                  value={gameRangeId}
-                  onChange={setGameRangeId}
-                />
+                <TimeRangePills value={gameRangeId} onChange={setGameRangeId} />
                 <div className="text-[11px] text-slate-500">
                   {gameData.totalAttempts
                     ? `${gameData.totalAttempts} FG attempts`
@@ -502,6 +561,9 @@ export default function Performance({ navigate }) {
                   mode={gameTrendMode}
                   onModeChange={setGameTrendMode}
                   ticks={gameTrendTicks}
+                  sourceLabel="Game"
+                  selectedPoint={gameSelectedPoint}
+                  onSelectPoint={setGameSelectedPoint}
                 />
               </div>
             </>
@@ -560,6 +622,9 @@ export default function Performance({ navigate }) {
                   mode={practiceTrendMode}
                   onModeChange={setPracticeTrendMode}
                   ticks={practiceTrendTicks}
+                  sourceLabel="Practice"
+                  selectedPoint={practiceSelectedPoint}
+                  onSelectPoint={setPracticeSelectedPoint}
                 />
               </div>
             </>
