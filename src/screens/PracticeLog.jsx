@@ -6,20 +6,20 @@ import {
   addEntry,
   listEntriesBySession,
   addMarker,
+  updateEntry,
+  deleteEntry,
 } from "../lib/practice-db"
 import { ZONES } from "../constants/zones"
 import { SHOT_TYPES, PICKUP_TYPES, FINISH_TYPES } from "../constants/shotTypes"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Edit2, Trash2, X } from "lucide-react"
 
 const ZONE_OPTIONS = ZONES.map((z) => ({ value: z.id, label: z.label }))
 const SHOT_OPTIONS = SHOT_TYPES.map((s) => ({ value: s.id, label: s.label }))
 
-// Map for pretty zone labels in the drill list
 const ZONE_LABEL_BY_ID = Object.fromEntries(
   ZONES.map((z) => [z.id, z.label || z.id]),
 )
 
-// Try to detect the free-throw zone ID from ZONES; fall back to "free_throw"
 const FREE_THROW_ZONE_ID =
   ZONES.find(
     (z) =>
@@ -27,7 +27,6 @@ const FREE_THROW_ZONE_ID =
       (z.label && z.label.toLowerCase().includes("free throw")),
   )?.id || "free_throw"
 
-// Try to detect the layup shot type from SHOT_TYPES; fall back to "layup"
 const LAYUP_SHOT_TYPE_ID =
   SHOT_TYPES.find(
     (s) =>
@@ -59,44 +58,74 @@ function formatSessionHeader(iso) {
   return `${weekday} | ${mon} ${day} | ${yr}.`
 }
 
+function ModalShell({ title, onClose, children }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div
+        className="absolute inset-0 bg-black/40"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div className="relative w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-xl border border-slate-200">
+        <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+          <div className="text-sm font-semibold text-slate-900">{title}</div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white"
+            aria-label="Close"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <div className="px-4 py-4">{children}</div>
+      </div>
+    </div>
+  )
+}
+
 export default function PracticeLog({ id, started_at, navigate }) {
   const [sessions, setSessions] = useState([])
   const [activeId, setActiveId] = useState(null)
 
-  // form state
   const [zoneId, setZoneId] = useState(ZONE_OPTIONS[0]?.value || "")
   const [shotTypeId, setShotTypeId] = useState(SHOT_OPTIONS[0]?.value || "")
-  // Canonical naming: contested (not pressured)
   const [contested, setContested] = useState(false)
   const [attempts, setAttempts] = useState(10)
   const [makes, setMakes] = useState(4)
   const [runningEFG, setRunningEFG] = useState(0)
   const [recentDrills, setRecentDrills] = useState([])
-
   const [runningMakes, setRunningMakes] = useState(0)
   const [runningAttempts, setRunningAttempts] = useState(0)
 
-  // layup metadata for practice entries (canonical values)
   const [pickupType, setPickupType] = useState(null)
   const [finishType, setFinishType] = useState(null)
 
-  // is current zone the Free Throw zone?
-  const isFreeThrowZone = zoneId === FREE_THROW_ZONE_ID
-  const isLayupShotType = shotTypeId === LAYUP_SHOT_TYPE_ID
+  const [editOpen, setEditOpen] = useState(false)
+  const [editRow, setEditRow] = useState(null)
+  const [editZoneId, setEditZoneId] = useState("")
+  const [editShotTypeId, setEditShotTypeId] = useState("")
+  const [editContested, setEditContested] = useState(false)
+  const [editAttempts, setEditAttempts] = useState(0)
+  const [editMakes, setEditMakes] = useState(0)
+  const [editPickupType, setEditPickupType] = useState(null)
+  const [editFinishType, setEditFinishType] = useState(null)
 
-  // +/- handlers
-  const dec = (setter) => setter((v) => Math.max(0, Number(v || 0) - 1))
-  const inc = (setter) => setter((v) => Number(v || 0) + 1)
-  const add5 = (setter) => setter((v) => Number(v || 0) + 5)
-  const invalidCounts = makes > attempts || (attempts === 0 && makes === 0)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteRow, setDeleteRow] = useState(null)
 
-  // helper for 3PT lookup
   const ZONE_IS_THREE = useMemo(
     () => Object.fromEntries(ZONES.map((z) => [z.id, !!z.isThree])),
     [],
   )
 
-  // 🔄 recompute running eFG% for the active session
+  const isFreeThrowZone = zoneId === FREE_THROW_ZONE_ID
+  const isLayupShotType = shotTypeId === LAYUP_SHOT_TYPE_ID
+
+  const invalidCounts = makes > attempts || (attempts === 0 && makes === 0)
+  const editInvalidCounts =
+    editMakes > editAttempts || (editAttempts === 0 && editMakes === 0)
+
   async function refreshEFG(sessionId) {
     if (!sessionId) {
       setRunningEFG(0)
@@ -123,18 +152,13 @@ export default function PracticeLog({ id, started_at, navigate }) {
     setRunningMakes(M)
     setRunningAttempts(A)
 
-    // Also repopulate the recent drills list
     setRecentDrills(
       entries.map((e) => ({
-        id: e.id,
+        ...e,
         when: new Date(e.ts).toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
         }),
-        zoneId: e.zone_id,
-        shotType: e.shot_type,
-        attempts: e.attempts,
-        makes: e.makes,
       })),
     )
   }
@@ -143,8 +167,6 @@ export default function PracticeLog({ id, started_at, navigate }) {
     const all = await listPracticeSessions()
     setSessions(all)
     const actives = all.filter((s) => s?.status === "active" && !s?.ended_at)
-
-    // prefer explicit id from navigation, else pick first active (if any)
     setActiveId(id ?? actives[0]?.id ?? null)
   }
 
@@ -156,67 +178,9 @@ export default function PracticeLog({ id, started_at, navigate }) {
     if (id) setActiveId(id)
   }, [id])
 
-  // call refreshEFG whenever activeId changes or after a save
   useEffect(() => {
     if (activeId) void refreshEFG(activeId)
   }, [activeId])
-
-  // 📝 Save & Mark Set
-  async function onSaveAndMarkSet() {
-    if (!activeSession?.id) return
-    const a = Number(attempts || 0)
-    const m = Number(makes || 0)
-    if (a <= 0 && m <= 0) return // nothing to save
-
-    // For Free Throws in practice:
-    // - shot_type should be null
-    // - contested should be false
-    const effectiveShotType = isFreeThrowZone ? null : shotTypeId
-    const effectiveContested = isFreeThrowZone ? false : contested
-
-    // For layup shot type, we also send pickupType/finishType
-    const isLayup = effectiveShotType === LAYUP_SHOT_TYPE_ID
-
-    const entry = await addEntry({
-      sessionId: activeSession.id,
-      zoneId,
-      shotType: effectiveShotType,
-      contested: effectiveContested,
-      attempts: a,
-      makes: m,
-      ts: new Date().toISOString(),
-      pickupType: isLayup ? pickupType : null,
-      finishType: isLayup ? finishType : null,
-    })
-
-    await addMarker({ sessionId: activeSession.id, label: "Set" })
-
-    // Append locally
-    setRecentDrills((prev) => [
-      ...prev,
-      {
-        id: entry.id,
-        when: new Date(entry.ts).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        zoneId: entry.zone_id,
-        shotType: entry.shot_type,
-        attempts: entry.attempts,
-        makes: entry.makes,
-      },
-    ])
-
-    // reset inputs
-    setAttempts(0)
-    setMakes(0)
-    // reset layup metadata so they don't bleed into the next set
-    setPickupType(null)
-    setFinishType(null)
-
-    // refresh running eFG
-    await refreshEFG(activeSession.id)
-  }
 
   const activeSession = useMemo(
     () => sessions.find((s) => s.id === activeId) || null,
@@ -233,33 +197,119 @@ export default function PracticeLog({ id, started_at, navigate }) {
     [sessions],
   )
 
-  async function onEndActive() {
-    const s = activeSession
-    // Only end if the session is truly active
-    if (!s || s.status !== "active" || s.ended_at) return
-
-    await endPracticeSession(s.id)
-    await refresh()
-    setActiveId(null)
-
-    if (navigate) navigate("gate")
-  }
-
-  async function onSwitchActive(id) {
-    setActiveId(id || null)
-  }
-
   const isTrulyActive =
     !!activeSession &&
     activeSession.status === "active" &&
     !activeSession.ended_at
 
+  async function onSaveAndMarkSet() {
+    if (!activeSession?.id) return
+    const a = Number(attempts || 0)
+    const m = Number(makes || 0)
+    if (a <= 0 && m <= 0) return
+
+    const effectiveShotType = isFreeThrowZone ? null : shotTypeId
+    const effectiveContested = isFreeThrowZone ? false : contested
+    const isLayup = effectiveShotType === LAYUP_SHOT_TYPE_ID
+
+    await addEntry({
+      sessionId: activeSession.id,
+      zoneId,
+      shotType: effectiveShotType,
+      contested: effectiveContested,
+      attempts: a,
+      makes: m,
+      ts: new Date().toISOString(),
+      pickupType: isLayup ? pickupType : null,
+      finishType: isLayup ? finishType : null,
+    })
+
+    await addMarker({ sessionId: activeSession.id, label: "Set" })
+
+    setAttempts(0)
+    setMakes(0)
+    setPickupType(null)
+    setFinishType(null)
+
+    await refreshEFG(activeSession.id)
+  }
+
+  async function onEndActive() {
+    const s = activeSession
+    if (!s || s.status !== "active" || s.ended_at) return
+    await endPracticeSession(s.id)
+    await refresh()
+    setActiveId(null)
+    if (navigate) navigate("gate")
+  }
+
+  function openEditModal(row) {
+    if (!row?.id) return
+    const z = row.zone_id || ZONE_OPTIONS[0]?.value || ""
+    const st = row.shot_type ?? ""
+    const isFT = z === FREE_THROW_ZONE_ID
+    const isLayup = st === LAYUP_SHOT_TYPE_ID
+
+    setEditRow(row)
+    setEditZoneId(z)
+    setEditShotTypeId(st)
+    setEditContested(isFT ? false : !!row.contested)
+    setEditAttempts(Number(row.attempts || 0))
+    setEditMakes(Number(row.makes || 0))
+    setEditPickupType(isLayup ? row.pickup_type ?? null : null)
+    setEditFinishType(isLayup ? row.finish_type ?? null : null)
+    setEditOpen(true)
+  }
+
+  function openDeleteModal(row) {
+    if (!row?.id) return
+    setDeleteRow(row)
+    setDeleteOpen(true)
+  }
+
+  async function onConfirmDelete() {
+    if (!deleteRow?.id || !activeSession?.id) {
+      setDeleteOpen(false)
+      setDeleteRow(null)
+      return
+    }
+    await deleteEntry(deleteRow.id)
+    setDeleteOpen(false)
+    setDeleteRow(null)
+    await refreshEFG(activeSession.id)
+  }
+
+  async function onSaveEdit() {
+    if (!editRow?.id || !activeSession?.id) return
+
+    const z = editZoneId
+    const isFT = z === FREE_THROW_ZONE_ID
+    const effectiveShotType = isFT ? null : editShotTypeId || null
+    const effectiveContested = isFT ? false : !!editContested
+    const isLayup = effectiveShotType === LAYUP_SHOT_TYPE_ID
+
+    await updateEntry({
+      id: editRow.id,
+      sessionId: editRow.session_id,
+      zoneId: z,
+      shotType: effectiveShotType,
+      contested: effectiveContested,
+      attempts: Number(editAttempts || 0),
+      makes: Number(editMakes || 0),
+      ts: editRow.ts,
+      pickupType: isLayup ? editPickupType : null,
+      finishType: isLayup ? editFinishType : null,
+    })
+
+    setEditOpen(false)
+    setEditRow(null)
+    await refreshEFG(activeSession.id)
+  }
+
   return (
     <div className="min-h-dvh bg-white">
-      {/* Header with back + centered title */}
       <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-200">
         <div className="max-w-screen-sm mx-auto px-4 py-3 flex items-center justify-between relative">
-          {/* Back Button - aligned left */}
           <button
             type="button"
             onClick={() => navigate?.("gate")}
@@ -269,10 +319,7 @@ export default function PracticeLog({ id, started_at, navigate }) {
             <span className="text-sm font-medium">Back</span>
           </button>
 
-          {/* Centered Title */}
-          <h2 className="screen-title text-center flex-1">
-            Practice Sessions
-          </h2>
+          <h2 className="screen-title text-center flex-1">Practice Sessions</h2>
         </div>
 
         <p className="text-xs text-slate-500 text-center pb-1">
@@ -281,18 +328,15 @@ export default function PracticeLog({ id, started_at, navigate }) {
       </header>
 
       <main className="max-w-screen-sm mx-auto p-4 space-y-3 pb-28">
-        {/* Session controls */}
         <section className="card">
           <div className="flex flex-col gap-3">
-            {/* Active section */}
             <div className="flex flex-col gap-2">
               {activeList.length > 1 ? (
-                // Multiple truly active sessions – selector
                 <div className="flex items-center gap-2">
                   <select
                     className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm flex-1"
                     value={activeId ?? ""}
-                    onChange={(e) => onSwitchActive(e.target.value || null)}
+                    onChange={(e) => setActiveId(e.target.value || null)}
                     aria-label="Switch active session"
                   >
                     {activeList.map((s) => (
@@ -303,7 +347,6 @@ export default function PracticeLog({ id, started_at, navigate }) {
                   </select>
                 </div>
               ) : (
-                // Single or none
                 <div className="flex items-center gap-2">
                   <div className="flex-1">
                     <div className="text-base font-semibold text-slate-900">
@@ -319,14 +362,11 @@ export default function PracticeLog({ id, started_at, navigate }) {
                           started_at || activeSession.started_at,
                         )
                       ) : (
-                        <span className="text-slate-400">
-                          No active session
-                        </span>
+                        <span className="text-slate-400">No active session</span>
                       )}
                     </div>
                   </div>
 
-                  {/* End Session only if truly active */}
                   {isTrulyActive && (
                     <button
                       type="button"
@@ -343,18 +383,12 @@ export default function PracticeLog({ id, started_at, navigate }) {
           </div>
         </section>
 
-        {/* Current Session eFG% pill */}
         <section className="my-2">
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 flex items-center justify-between">
             <div>
-              <div className="text-sm text-slate-600">
-                Current Session eFG%
-              </div>
+              <div className="text-sm text-slate-600">Current Session eFG%</div>
               <div className="text-2xl font-bold text-slate-900">
-                {isFinite(runningEFG)
-                  ? (runningEFG * 100).toFixed(1)
-                  : "0.0"}
-                %
+                {isFinite(runningEFG) ? (runningEFG * 100).toFixed(1) : "0.0"}%
               </div>
             </div>
             <div className="text-right text-sm text-slate-600">
@@ -374,7 +408,6 @@ export default function PracticeLog({ id, started_at, navigate }) {
           </div>
         </section>
 
-        {/* Entry form */}
         <section className="card">
           <div className="grid gap-3">
             <div className="grid grid-cols-3 gap-3 items-center">
@@ -385,11 +418,7 @@ export default function PracticeLog({ id, started_at, navigate }) {
                 onChange={(e) => {
                   const newZoneId = e.target.value
                   setZoneId(newZoneId)
-                  // If user switches into Free Throw zone, ensure
-                  // contested is false; shot type will be ignored on save.
-                  if (newZoneId === FREE_THROW_ZONE_ID) {
-                    setContested(false)
-                  }
+                  if (newZoneId === FREE_THROW_ZONE_ID) setContested(false)
                 }}
               >
                 {ZONE_OPTIONS.map((o) => (
@@ -408,7 +437,6 @@ export default function PracticeLog({ id, started_at, navigate }) {
                 onChange={(e) => {
                   const v = e.target.value
                   setShotTypeId(v)
-                  // If leaving layup, clear layup metadata so it's not reused accidentally
                   if (v !== LAYUP_SHOT_TYPE_ID) {
                     setPickupType(null)
                     setFinishType(null)
@@ -424,7 +452,6 @@ export default function PracticeLog({ id, started_at, navigate }) {
               </select>
             </div>
 
-            {/* Layup metadata: pickup + finish, only when layup shot type (and not FT zone) */}
             {isLayupShotType && !isFreeThrowZone && (
               <>
                 <div className="grid grid-cols-3 gap-3 items-center">
@@ -496,84 +523,32 @@ export default function PracticeLog({ id, started_at, navigate }) {
               </button>
             </div>
 
-            {/* Attempts */}
             <div className="grid grid-cols-3 gap-3 items-center">
               <label className="label col-span-1">Attempts</label>
-              <div className="qty-row">
-                <div className="qty-group">
-                  <button
-                    type="button"
-                    onClick={() => dec(setAttempts)}
-                    className="btn btn-blue btn-xs"
-                  >
-                    −
-                  </button>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    value={attempts}
-                    onChange={(e) =>
-                      setAttempts(Math.max(0, Number(e.target.value || 0)))
-                    }
-                    className="input-qty"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => inc(setAttempts)}
-                    className="btn btn-blue btn-xs"
-                  >
-                    +
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => add5(setAttempts)}
-                    className="btn btn-blue btn-xs"
-                  >
-                    +5
-                  </button>
-                </div>
-              </div>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                value={attempts}
+                onChange={(e) =>
+                  setAttempts(Math.max(0, Number(e.target.value || 0)))
+                }
+                className="input col-span-2"
+              />
             </div>
 
-            {/* Makes */}
             <div className="grid grid-cols-3 gap-3 items-center">
               <label className="label col-span-1">Makes</label>
-              <div className="qty-row">
-                <div className="qty-group">
-                  <button
-                    type="button"
-                    onClick={() => dec(setMakes)}
-                    className="btn btn-blue btn-xs"
-                  >
-                    −
-                  </button>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    value={makes}
-                    onChange={(e) =>
-                      setMakes(Math.max(0, Number(e.target.value || 0)))
-                    }
-                    className="input-qty"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => inc(setMakes)}
-                    className="btn btn-blue btn-xs"
-                  >
-                    +
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => add5(setMakes)}
-                    className="btn btn-blue btn-xs"
-                  >
-                    +5
-                  </button>
-                </div>
-              </div>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                value={makes}
+                onChange={(e) =>
+                  setMakes(Math.max(0, Number(e.target.value || 0)))
+                }
+                className="input col-span-2"
+              />
             </div>
 
             <div className="flex justify-end pt-2">
@@ -589,31 +564,59 @@ export default function PracticeLog({ id, started_at, navigate }) {
           </div>
         </section>
 
-        {/* Logged drills for this session */}
+        {/* Logged drills */}
         {recentDrills.length > 0 && (
           <section className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
             <div className="text-sm font-semibold text-slate-900 mb-2">
               This Session – Logged Drills
             </div>
+
             <ul className="space-y-2">
               {recentDrills.map((d) => {
                 const zoneLabel =
-                  ZONE_LABEL_BY_ID[d.zoneId] || d.zoneId || "Unknown"
-                const isFT = d.zoneId === FREE_THROW_ZONE_ID
-                const shotLabel = d.shotType || (isFT ? "Free Throw" : "—")
+                  ZONE_LABEL_BY_ID[d.zone_id] || d.zone_id || "Unknown"
+                const isFT = d.zone_id === FREE_THROW_ZONE_ID
+                const shotLabel = d.shot_type || (isFT ? "Free Throw" : "—")
+
                 return (
                   <li
                     key={d.id}
-                    className="flex items-center justify-between text-sm"
+                    className="flex items-center justify-between text-sm gap-3"
                   >
-                    <div className="flex flex-col">
-                      <span className="text-slate-900">
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-slate-900 truncate">
                         {shotLabel} • {zoneLabel}
                       </span>
                       <span className="text-slate-500">{d.when}</span>
                     </div>
-                    <div className="font-medium text-slate-900">
-                      {d.makes}/{d.attempts}
+
+                    {/* RIGHT SIDE: makes/attempts + icons */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="font-medium text-slate-900 tabular-nums">
+                        {d.makes}/{d.attempts}
+                      </div>
+
+                      {/* EXACT GoalsManager-style edit button */}
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(d)}
+                        className="edit-btn p-1 rounded-full hover:bg-slate-100"
+                        aria-label="Edit practice entry"
+                        title="Edit"
+                      >
+                        <Edit2 size={14} className="text-slate-500" />
+                      </button>
+
+                      {/* EXACT GoalsManager-style trash button */}
+                      <button
+                        type="button"
+                        onClick={() => openDeleteModal(d)}
+                        className="trash-btn p-1 rounded-full hover:bg-slate-100"
+                        aria-label="Delete practice entry"
+                        title="Delete"
+                      >
+                        <Trash2 size={14} className="text-red-500" />
+                      </button>
                     </div>
                   </li>
                 )
@@ -622,6 +625,227 @@ export default function PracticeLog({ id, started_at, navigate }) {
           </section>
         )}
       </main>
+
+      {/* EDIT MODAL */}
+      {editOpen && (
+        <ModalShell
+          title="Edit Practice Entry"
+          onClose={() => {
+            setEditOpen(false)
+            setEditRow(null)
+          }}
+        >
+          <div className="grid gap-3">
+            <div className="grid grid-cols-3 gap-3 items-center">
+              <label className="label col-span-1">Zone</label>
+              <select
+                className="input col-span-2"
+                value={editZoneId}
+                onChange={(e) => {
+                  const newZoneId = e.target.value
+                  setEditZoneId(newZoneId)
+                  if (newZoneId === FREE_THROW_ZONE_ID) {
+                    setEditContested(false)
+                    setEditShotTypeId("")
+                    setEditPickupType(null)
+                    setEditFinishType(null)
+                  }
+                }}
+              >
+                {ZONE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 items-center">
+              <label className="label col-span-1">Shot Type</label>
+              <select
+                className="input col-span-2"
+                value={editShotTypeId}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setEditShotTypeId(v)
+                  if (v !== LAYUP_SHOT_TYPE_ID) {
+                    setEditPickupType(null)
+                    setEditFinishType(null)
+                  }
+                }}
+                disabled={editZoneId === FREE_THROW_ZONE_ID}
+              >
+                {SHOT_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {editZoneId !== FREE_THROW_ZONE_ID &&
+              editShotTypeId === LAYUP_SHOT_TYPE_ID && (
+                <>
+                  <div className="grid grid-cols-3 gap-3 items-center">
+                    <label className="label col-span-1">Pickup Type</label>
+                    <div className="col-span-2 flex flex-wrap gap-2">
+                      {PICKUP_TYPES.map((opt) => {
+                        const selected = editPickupType === opt.value
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() =>
+                              setEditPickupType(selected ? null : opt.value)
+                            }
+                            className={`btn btn-xs ${
+                              selected ? "btn-emerald" : "btn-outline-emerald"
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3 items-center">
+                    <label className="label col-span-1">Finish Type</label>
+                    <div className="col-span-2 flex flex-wrap gap-2">
+                      {FINISH_TYPES.map((opt) => {
+                        const selected = editFinishType === opt.value
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() =>
+                              setEditFinishType(selected ? null : opt.value)
+                            }
+                            className={`btn btn-xs ${
+                              selected ? "btn-emerald" : "btn-outline-emerald"
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+
+            <div className="grid grid-cols-3 gap-3 items-center">
+              <label className="label col-span-1">Contested</label>
+              <button
+                type="button"
+                onClick={() => {
+                  if (editZoneId === FREE_THROW_ZONE_ID) return
+                  setEditContested((p) => !p)
+                }}
+                disabled={editZoneId === FREE_THROW_ZONE_ID}
+                className={`btn h-10 rounded-lg text-sm font-medium ${
+                  editContested ? "btn-emerald" : "btn-outline-emerald"
+                } ${
+                  editZoneId === FREE_THROW_ZONE_ID
+                    ? "opacity-60 cursor-not-allowed"
+                    : ""
+                }`}
+              >
+                {editZoneId === FREE_THROW_ZONE_ID
+                  ? "N/A"
+                  : editContested
+                  ? "Contested"
+                  : "Uncontested"}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 items-center">
+              <label className="label col-span-1">Attempts</label>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                value={editAttempts}
+                onChange={(e) =>
+                  setEditAttempts(Math.max(0, Number(e.target.value || 0)))
+                }
+                className="input col-span-2"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 items-center">
+              <label className="label col-span-1">Makes</label>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                value={editMakes}
+                onChange={(e) =>
+                  setEditMakes(Math.max(0, Number(e.target.value || 0)))
+                }
+                className="input col-span-2"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                className="btn h-10 rounded-lg text-sm font-medium border border-slate-200 bg-white"
+                onClick={() => {
+                  setEditOpen(false)
+                  setEditRow(null)
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-emerald h-10 rounded-lg text-sm font-medium"
+                disabled={editInvalidCounts}
+                onClick={onSaveEdit}
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
+
+      {/* DELETE CONFIRM MODAL */}
+      {deleteOpen && (
+        <ModalShell
+          title="Delete Practice Entry"
+          onClose={() => {
+            setDeleteOpen(false)
+            setDeleteRow(null)
+          }}
+        >
+          <div className="text-sm text-slate-700">
+            You are about to delete this practice entry from the session. This
+            action will sync to Supabase when online.
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-4">
+            <button
+              type="button"
+              className="btn h-10 rounded-lg text-sm font-medium border border-slate-200 bg-white"
+              onClick={() => {
+                setDeleteOpen(false)
+                setDeleteRow(null)
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger h-10 rounded-lg text-sm font-medium"
+              onClick={onConfirmDelete}
+            >
+              OK
+            </button>
+          </div>
+        </ModalShell>
+      )}
     </div>
   )
 }

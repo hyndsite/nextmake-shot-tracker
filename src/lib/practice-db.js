@@ -143,6 +143,69 @@ export async function addEntry({
   return row
 }
 
+/**
+ * Update an existing practice entry (offline-first).
+ * This keeps the same id and marks the row dirty so sync can upsert it.
+ */
+export async function updateEntry({
+  id,
+  sessionId,
+  zoneId,
+  shotType,
+  contested,
+  attempts = 0,
+  makes = 0,
+  ts,
+  pickupType = null,
+  finishType = null,
+}) {
+  if (!id) throw new Error("updateEntry requires id")
+
+  const cur = await get(id, st.practice.entries)
+  if (!cur) throw new Error(`practice entry not found: ${id}`)
+
+  const updated = {
+    ...cur,
+    session_id: sessionId ?? cur.session_id,
+    zone_id: zoneId ?? cur.zone_id,
+    shot_type: typeof shotType === "undefined" ? cur.shot_type : shotType,
+    contested: typeof contested === "undefined" ? cur.contested : !!contested,
+    attempts: Number(attempts),
+    makes: Number(makes),
+    ts: ts ?? cur.ts,
+    pickup_type: pickupType,
+    finish_type: finishType,
+    _dirty: true,
+    _deleted: false,
+    _table: "practice_entries",
+  }
+
+  await set(id, updated, st.practice.entries)
+  await addToIndex(st.practice.entries, id)
+  notifyLocalMutate()
+  return updated
+}
+
+/**
+ * Soft-delete an entry: mark _deleted=true so sync deletes it in Supabase.
+ */
+export async function deleteEntry(id) {
+  if (!id) return null
+  const cur = await get(id, st.practice.entries)
+  if (!cur) return null
+
+  const updated = {
+    ...cur,
+    _deleted: true,
+    _dirty: true,
+    _table: "practice_entries",
+  }
+
+  await set(id, updated, st.practice.entries)
+  notifyLocalMutate()
+  return updated
+}
+
 export async function addMarker({ sessionId, label = "", ts = nowISO() }) {
   const id = uuid()
   const row = {
@@ -308,26 +371,20 @@ export async function listEntriesBySession(sessionId) {
  * Remote → local helpers
  * ---------------------------*/
 
-/**
- * Upsert remote practice_sessions into IndexedDB as "clean" rows,
- * and remove any local clean rows that no longer exist remotely.
- */
 export async function upsertPracticeSessionsFromRemote(rows = []) {
   const remoteIds = new Set(rows.map((r) => r.id).filter(Boolean))
 
-  // Purge local clean, non-remote sessions (Supabase is master for clean rows)
   const localIds = await readIndex(st.practice.sessions)
   for (const id of localIds) {
     const local = await get(id, st.practice.sessions)
     if (!local) continue
-    if (local._dirty) continue // keep unsynced local changes
+    if (local._dirty) continue
     if (!remoteIds.has(id)) {
       await del(id, st.practice.sessions)
       await removeFromIndex(st.practice.sessions, id)
     }
   }
 
-  // Upsert / merge remote sessions
   for (const remote of rows) {
     if (!remote?.id) continue
     const existing = await get(remote.id, st.practice.sessions)
@@ -343,10 +400,6 @@ export async function upsertPracticeSessionsFromRemote(rows = []) {
   }
 }
 
-/**
- * Upsert remote practice_entries into IndexedDB as "clean" rows,
- * and remove any local clean rows that no longer exist remotely.
- */
 export async function upsertPracticeEntriesFromRemote(rows = []) {
   const remoteIds = new Set(rows.map((r) => r.id).filter(Boolean))
 
@@ -376,10 +429,6 @@ export async function upsertPracticeEntriesFromRemote(rows = []) {
   }
 }
 
-/**
- * Upsert remote practice_markers into IndexedDB as "clean" rows,
- * and remove any local clean rows that no longer exist remotely.
- */
 export async function upsertPracticeMarkersFromRemote(rows = []) {
   const remoteIds = new Set(rows.map((r) => r.id).filter(Boolean))
 
