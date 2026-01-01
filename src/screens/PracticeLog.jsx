@@ -91,8 +91,11 @@ export default function PracticeLog({ id, started_at, navigate }) {
   const [zoneId, setZoneId] = useState(ZONE_OPTIONS[0]?.value || "")
   const [shotTypeId, setShotTypeId] = useState(SHOT_OPTIONS[0]?.value || "")
   const [contested, setContested] = useState(false)
-  const [attempts, setAttempts] = useState(10)
-  const [makes, setMakes] = useState(4)
+
+  // IMPORTANT: keep as strings to allow blank input (prevents forced "0")
+  const [attempts, setAttempts] = useState("")
+  const [makes, setMakes] = useState("")
+
   const [runningEFG, setRunningEFG] = useState(0)
   const [recentDrills, setRecentDrills] = useState([])
   const [runningMakes, setRunningMakes] = useState(0)
@@ -106,8 +109,8 @@ export default function PracticeLog({ id, started_at, navigate }) {
   const [editZoneId, setEditZoneId] = useState("")
   const [editShotTypeId, setEditShotTypeId] = useState("")
   const [editContested, setEditContested] = useState(false)
-  const [editAttempts, setEditAttempts] = useState(0)
-  const [editMakes, setEditMakes] = useState(0)
+  const [editAttempts, setEditAttempts] = useState("")
+  const [editMakes, setEditMakes] = useState("")
   const [editPickupType, setEditPickupType] = useState(null)
   const [editFinishType, setEditFinishType] = useState(null)
 
@@ -122,9 +125,34 @@ export default function PracticeLog({ id, started_at, navigate }) {
   const isFreeThrowZone = zoneId === FREE_THROW_ZONE_ID
   const isLayupShotType = shotTypeId === LAYUP_SHOT_TYPE_ID
 
-  const invalidCounts = makes > attempts || (attempts === 0 && makes === 0)
+  const attemptsNum = Number(attempts || 0)
+  const makesNum = Number(makes || 0)
+  const invalidCounts =
+    makesNum > attemptsNum || (attemptsNum === 0 && makesNum === 0)
+
+  const editAttemptsNum = Number(editAttempts || 0)
+  const editMakesNum = Number(editMakes || 0)
+  
   const editInvalidCounts =
-    editMakes > editAttempts || (editAttempts === 0 && editMakes === 0)
+    editMakesNum > editAttemptsNum ||
+    (editAttemptsNum === 0 && editMakesNum === 0)
+
+  // Restore OLD +/- controls, but keep string state
+  const dec = (setter) =>
+    setter((v) => {
+      const n = Number(v || 0)
+      return String(Math.max(0, n - 1))
+    })
+  const inc = (setter) =>
+    setter((v) => {
+      const n = Number(v || 0)
+      return String(n + 1)
+    })
+  const add5 = (setter) =>
+    setter((v) => {
+      const n = Number(v || 0)
+      return String(n + 5)
+    })
 
   async function refreshEFG(sessionId) {
     if (!sessionId) {
@@ -204,8 +232,8 @@ export default function PracticeLog({ id, started_at, navigate }) {
 
   async function onSaveAndMarkSet() {
     if (!activeSession?.id) return
-    const a = Number(attempts || 0)
-    const m = Number(makes || 0)
+    const a = attemptsNum
+    const m = makesNum
     if (a <= 0 && m <= 0) return
 
     const effectiveShotType = isFreeThrowZone ? null : shotTypeId
@@ -226,8 +254,9 @@ export default function PracticeLog({ id, started_at, navigate }) {
 
     await addMarker({ sessionId: activeSession.id, label: "Set" })
 
-    setAttempts(0)
-    setMakes(0)
+    // Clear (blank), not forced 0
+    setAttempts("")
+    setMakes("")
     setPickupType(null)
     setFinishType(null)
 
@@ -254,8 +283,8 @@ export default function PracticeLog({ id, started_at, navigate }) {
     setEditZoneId(z)
     setEditShotTypeId(st)
     setEditContested(isFT ? false : !!row.contested)
-    setEditAttempts(Number(row.attempts || 0))
-    setEditMakes(Number(row.makes || 0))
+    setEditAttempts(Number(row.attempts ?? ""))
+    setEditMakes(Number(row.makes ?? ""))
     setEditPickupType(isLayup ? row.pickup_type ?? null : null)
     setEditFinishType(isLayup ? row.finish_type ?? null : null)
     setEditOpen(true)
@@ -523,32 +552,96 @@ export default function PracticeLog({ id, started_at, navigate }) {
               </button>
             </div>
 
+            {/* Attempts (restored OLD +/- UI) */}
             <div className="grid grid-cols-3 gap-3 items-center">
               <label className="label col-span-1">Attempts</label>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                value={attempts}
-                onChange={(e) =>
-                  setAttempts(Math.max(0, Number(e.target.value || 0)))
-                }
-                className="input col-span-2"
-              />
+              <div className="qty-row col-span-2">
+                <div className="qty-group flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => dec(setAttempts)}
+                    className="btn btn-blue btn-xs"
+                    aria-label="Decrease attempts"
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    value={attempts}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      if (v === "") return setAttempts("")
+                      const n = Math.max(0, Number(v))
+                      setAttempts(String(isFinite(n) ? n : 0))
+                    }}
+                    className="input-qty"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => inc(setAttempts)}
+                    className="btn btn-blue btn-xs"
+                    aria-label="Increase attempts"
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => add5(setAttempts)}
+                    className="btn btn-blue btn-xs"
+                    aria-label="Add 5 attempts"
+                  >
+                    +5
+                  </button>
+                </div>
+              </div>
             </div>
 
+            {/* Makes (restored OLD +/- UI) */}
             <div className="grid grid-cols-3 gap-3 items-center">
               <label className="label col-span-1">Makes</label>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                value={makes}
-                onChange={(e) =>
-                  setMakes(Math.max(0, Number(e.target.value || 0)))
-                }
-                className="input col-span-2"
-              />
+              <div className="qty-row col-span-2">
+                <div className="qty-group flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => dec(setMakes)}
+                    className="btn btn-blue btn-xs"
+                    aria-label="Decrease makes"
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    value={makes}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      if (v === "") return setMakes("")
+                      const n = Math.max(0, Number(v))
+                      setMakes(String(isFinite(n) ? n : 0))
+                    }}
+                    className="input-qty"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => inc(setMakes)}
+                    className="btn btn-blue btn-xs"
+                    aria-label="Increase makes"
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => add5(setMakes)}
+                    className="btn btn-blue btn-xs"
+                    aria-label="Add 5 makes"
+                  >
+                    +5
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="flex justify-end pt-2">
@@ -564,7 +657,6 @@ export default function PracticeLog({ id, started_at, navigate }) {
           </div>
         </section>
 
-        {/* Logged drills */}
         {recentDrills.length > 0 && (
           <section className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
             <div className="text-sm font-semibold text-slate-900 mb-2">
@@ -590,13 +682,11 @@ export default function PracticeLog({ id, started_at, navigate }) {
                       <span className="text-slate-500">{d.when}</span>
                     </div>
 
-                    {/* RIGHT SIDE: makes/attempts + icons */}
                     <div className="flex items-center gap-2 shrink-0">
                       <div className="font-medium text-slate-900 tabular-nums">
                         {d.makes}/{d.attempts}
                       </div>
 
-                      {/* EXACT GoalsManager-style edit button */}
                       <button
                         type="button"
                         onClick={() => openEditModal(d)}
@@ -607,7 +697,6 @@ export default function PracticeLog({ id, started_at, navigate }) {
                         <Edit2 size={14} className="text-slate-500" />
                       </button>
 
-                      {/* EXACT GoalsManager-style trash button */}
                       <button
                         type="button"
                         onClick={() => openDeleteModal(d)}
@@ -626,7 +715,6 @@ export default function PracticeLog({ id, started_at, navigate }) {
         )}
       </main>
 
-      {/* EDIT MODAL */}
       {editOpen && (
         <ModalShell
           title="Edit Practice Entry"
@@ -762,15 +850,19 @@ export default function PracticeLog({ id, started_at, navigate }) {
             <div className="grid grid-cols-3 gap-3 items-center">
               <label className="label col-span-1">Attempts</label>
               <input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                value={editAttempts}
-                onChange={(e) =>
-                  setEditAttempts(Math.max(0, Number(e.target.value || 0)))
-                }
-                className="input col-span-2"
-              />
+              type="number"
+              inputMode="numeric"
+              min={0}
+              value={editAttempts}
+              onChange={(e) => {
+                const v = e.target.value
+                if (v === "") return setEditAttempts("")
+                const n = Math.max(0, Number(v))
+                setEditAttempts(String(isFinite(n) ? n : 0))
+              }}
+              className="input col-span-2"
+            />
+
             </div>
 
             <div className="grid grid-cols-3 gap-3 items-center">
@@ -780,11 +872,15 @@ export default function PracticeLog({ id, started_at, navigate }) {
                 inputMode="numeric"
                 min={0}
                 value={editMakes}
-                onChange={(e) =>
-                  setEditMakes(Math.max(0, Number(e.target.value || 0)))
-                }
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (v === "") return setEditMakes("")
+                  const n = Math.max(0, Number(v))
+                  setEditMakes(String(isFinite(n) ? n : 0))
+                }}
                 className="input col-span-2"
               />
+
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2">
@@ -811,7 +907,6 @@ export default function PracticeLog({ id, started_at, navigate }) {
         </ModalShell>
       )}
 
-      {/* DELETE CONFIRM MODAL */}
       {deleteOpen && (
         <ModalShell
           title="Delete Practice Entry"
