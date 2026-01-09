@@ -132,3 +132,19 @@
   .gamelogger .zone-hit-inner:active {
     background-color: rgba(15, 23, 42, 0.12);
   }
+
+  /* Fix mobile dark/black pressed background on clickable shot rows */
+  .gamelogger .shot-row-btn {
+    -webkit-appearance: none;
+    appearance: none;
+    background-color: #ffffff !important;
+    border: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .gamelogger .shot-row-btn:active,
+  .gamelogger .shot-row-btn:focus,
+  .gamelogger .shot-row-btn:focus-visible {
+    background-color: #ffffff !important;
+    outline: none;
+  }
