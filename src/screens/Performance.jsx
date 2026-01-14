@@ -26,6 +26,41 @@ import {
 
 const DEFAULT_RANGE_ID = TIME_RANGES[0]?.id || "30d"
 
+// Shot Type filter pills
+// NOTE: IDs here must match the values expected by performance-db.js filtering.
+const SHOT_TYPE_FILTERS = [
+  { id: "all", label: "All" },
+  { id: "catch_shoot", label: "Catch & Shoot" },
+  { id: "off_dribble", label: "Off-dribble" },
+]
+
+// Contested filter pills (no title section per requirement)
+const CONTEST_FILTERS = [
+  { id: "contested", label: "Contested" },
+  { id: "uncontested", label: "Uncontested" },
+]
+
+function ContestedPills({ value, onChange }) {
+  return (
+    <div className="time-pill-group">
+      {CONTEST_FILTERS.map((c) => {
+        const active = c.id === value
+        return (
+          <button
+            key={c.id}
+            type="button"
+            onClick={() => onChange(c.id)}
+            className={"time-pill" + (active ? " time-pill--active" : "")}
+          >
+            {c.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+
 // ---- Pill component ----
 
 function TimeRangePills({ value, onChange }) {
@@ -41,6 +76,26 @@ function TimeRangePills({ value, onChange }) {
             className={"time-pill" + (active ? " time-pill--active" : "")}
           >
             {r.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function ShotTypePills({ value, onChange }) {
+  return (
+    <div className="time-pill-group">
+      {SHOT_TYPE_FILTERS.map((s) => {
+        const active = s.id === value
+        return (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => onChange(s.id)}
+            className={"time-pill" + (active ? " time-pill--active" : "")}
+          >
+            {s.label}
           </button>
         )
       })}
@@ -337,6 +392,12 @@ export default function Performance({ navigate }) {
   const [gameRangeId, setGameRangeId] = useState(DEFAULT_RANGE_ID)
   const [practiceRangeId, setPracticeRangeId] = useState(DEFAULT_RANGE_ID)
 
+  const [gameShotType, setGameShotType] = useState("all")
+  const [practiceShotType, setPracticeShotType] = useState("all")
+
+  const [gameContested, setGameContested] = useState("uncontested")
+  const [practiceContested, setPracticeContested] = useState("uncontested")
+
   const [gameTrendMode, setGameTrendMode] = useState("daily")
   const [practiceTrendMode, setPracticeTrendMode] = useState("daily")
 
@@ -387,7 +448,7 @@ export default function Performance({ navigate }) {
     async function load() {
       setGameLoading(true)
       try {
-        const data = await getGamePerformance({ days: gameRange.days })
+        const data = await getGamePerformance({ days: gameRange.days, shotType: gameShotType, contested: gameContested })
         if (!cancelled) {
           setGameData(data)
           setGameSelectedPoint(null)
@@ -413,7 +474,7 @@ export default function Performance({ navigate }) {
     return () => {
       cancelled = true
     }
-  }, [gameRange.days])
+  }, [gameRange.days, gameShotType, gameContested])
 
   // Load Practice performance
   useEffect(() => {
@@ -421,7 +482,7 @@ export default function Performance({ navigate }) {
     async function load() {
       setPracticeLoading(true)
       try {
-        const data = await getPracticePerformance({ days: practiceRange.days })
+        const data = await getPracticePerformance({ days: practiceRange.days, shotType: practiceShotType, contested: practiceContested })
         if (!cancelled) {
           setPracticeData(data)
           setPracticeSelectedPoint(null)
@@ -447,7 +508,7 @@ export default function Performance({ navigate }) {
     return () => {
       cancelled = true
     }
-  }, [practiceRange.days])
+  }, [practiceRange.days, practiceShotType, practiceContested])
 
   // Derived trend series and ticks (Game)
   const gameTrendData = useMemo(() => {
@@ -531,6 +592,14 @@ export default function Performance({ navigate }) {
                 </div>
               </div>
 
+              <div className="mt-2 flex items-center justify-between">
+                <ShotTypePills value={gameShotType} onChange={setGameShotType} />
+              </div>
+
+              <div className="mt-2 flex items-center justify-between">
+                <ContestedPills value={gameContested} onChange={setGameContested} />
+              </div>
+
               <div className="mt-3 space-y-2">
                 {gameLoading && (
                   <div className="text-xs text-slate-500">
@@ -590,6 +659,17 @@ export default function Performance({ navigate }) {
                     ? `${practiceData.totalAttempts} attempts`
                     : "No attempts yet"}
                 </div>
+              </div>
+
+              <div className="mt-2 flex items-center justify-between">
+                <ShotTypePills
+                  value={practiceShotType}
+                  onChange={setPracticeShotType}
+                />
+              </div>
+
+              <div className="mt-2 flex items-center justify-between">
+                <ContestedPills value={practiceContested} onChange={setPracticeContested} />
               </div>
 
               <div className="mt-3 space-y-2">

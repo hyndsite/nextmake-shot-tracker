@@ -50,7 +50,64 @@ if (Array.isArray(ZONES)) {
   })
 }
 
+// ---------- Shot type filtering (Performance) ----------
+// UI sends: "all" | "catch_shoot" | "off_dribble"
+function normalizeShotTypeValue(v) {
+  const s = String(v || "").trim().toLowerCase()
+  if (!s) return ""
+  // normalize common variants
+  if (
+    s === "catch_shoot" ||
+    s === "catch&shoot" ||
+    s === "catch & shoot" ||
+    s === "catch and shoot" ||
+    s === "catch-and-shoot"
+  ) {
+    return "catch_shoot"
+  }
+  if (
+    s === "off_dribble" ||
+    s === "off-dribble" ||
+    s === "off dribble" ||
+    s === "off the dribble" ||
+    s === "off_the_dribble"
+  ) {
+    return "off_dribble"
+  }
+  return s
+}
+
+function normalizePerfShotTypeFilter(shotType) {
+  const s = String(shotType || "all").trim().toLowerCase()
+  if (s === "catch_shoot") return "catch_shoot"
+  if (s === "off_dribble") return "off_dribble"
+  return "all"
+}
+
+// NEW semantics: "all" means no filtering (include all shot types).
+function includeShotType(eventShotType, filter) {
+  if (filter === "all") return true
+  const normalized = normalizeShotTypeValue(eventShotType)
+  return normalized === filter
+}
+
 // ---------- Shared helpers ----------
+
+// ---------- Contested filtering (Performance) ----------
+// UI sends: "contested" | "uncontested"
+function normalizePerfContestedFilter(v) {
+  const s = String(v || "uncontested").trim().toLowerCase()
+  if (s === "contested") return "contested"
+  return "uncontested"
+}
+
+function includeContested(contestedValue, filter) {
+  const isContested = contestedValue === true // treat null/undefined as false
+  if (filter === "contested") return isContested === true
+  // "uncontested"
+  return isContested === false
+}
+
 
 function pct(makes, attempts) {
   if (!attempts) return 0
@@ -109,11 +166,15 @@ function weekLabelFromKey(key) {
 
 /**
  * Compute game performance from local IndexedDB.
- * @param {{ days: number | null }} opts
+ * @param {{ days: number | null, shotType?: "all" | "catch_shoot" | "off_dribble" }} opts
  *  - days: number → filter to last N days, null → all time
+ *  - shotType: optional shot type filter
  */
-export async function getGamePerformance({ days }) {
+export async function getGamePerformance({ days, shotType, contested }) {
   await ready
+
+  const stFilter = normalizePerfShotTypeFilter(shotType)
+  const cFilter = normalizePerfContestedFilter(contested)
 
   const fromDate =
     typeof days === "number"
@@ -170,6 +231,12 @@ export async function getGamePerformance({ days }) {
 
     // Per-zone cards (include both shots + free throws)
     if (ev.type === "shot") {
+      // Contested filter (required: all shots fall into one of the two buckets)
+      if (!includeContested(ev.contested, cFilter)) continue
+
+      // Shot type filter (missing shot_type will be excluded for specific filters)
+      if (!includeShotType(ev.shot_type, stFilter)) continue
+
       const zoneKey = ev.zone_id || "unknown_zone"
       const label = labelForZone(ev.zone_id)
 
@@ -210,7 +277,13 @@ export async function getGamePerformance({ days }) {
       if (dayKey) {
         let d = trendDailyAgg.get(ev.game_id)
         if (!d) {
-          d = { gameId: ev.game_id, dateKey: dayKey, fgm: 0, fga: 0, threesMade: 0 }
+          d = {
+            gameId: ev.game_id,
+            dateKey: dayKey,
+            fgm: 0,
+            fga: 0,
+            threesMade: 0,
+          }
           trendDailyAgg.set(ev.game_id, d)
         }
         d.fga += 1
@@ -239,6 +312,12 @@ export async function getGamePerformance({ days }) {
         }
       }
     } else if (ev.type === "freethrow") {
+      // Preserve existing behavior: FT card only when ALL shot types
+      if (stFilter !== "all") continue
+
+      // Apply contested filter as well (typically FTs are uncontested)
+      if (!includeContested(ev.contested, cFilter)) continue
+
       // Group all FTs into a single card "Free Throw"
       const zoneKey = "free_throw"
       const label = "Free Throw"
@@ -262,7 +341,6 @@ export async function getGamePerformance({ days }) {
       // Placeholder: hook in goals later if/when we map them per zone
       goalPct: null,
     }))
-    // sort by attempts desc
     .sort((a, b) => b.attempts - a.attempts)
 
   // 4a) Monthly trend (FG% vs eFG%) – matches existing shape
@@ -298,22 +376,23 @@ export async function getGamePerformance({ days }) {
       }
     })
 
-  // 4c) Weekly trend: aggregate all games in each week
+  // 4c) Weekly trend: one point per week
   const trendWeekly = Array.from(trendWeeklyAgg.entries())
     .sort(([a], [b]) => (a < b ? -1 : 1))
-    .map(([weekKey, v]) => {
+    .map(([key, v]) => {
       const fgPctVal = pct(v.fgm, v.fga)
       const efgPctVal = v.fga
         ? ((v.fgm + 0.5 * v.threesMade) / v.fga) * 100
         : 0
       return {
-        bucketKey: weekKey,
-        label: weekLabelFromKey(weekKey),
+        weekKey: key,
+        label: weekLabelFromKey(key),
         fgPct: fgPctVal,
         efgPct: efgPctVal,
       }
     })
 
+  // 5) Overall FG% / eFG%
   const overallFgPct = pct(overallFgm, overallFga)
   const overallEfgPct = overallFga
     ? ((overallFgm + 0.5 * overallThreesMade) / overallFga) * 100
@@ -321,7 +400,6 @@ export async function getGamePerformance({ days }) {
 
   return {
     metrics,
-    // For backwards compatibility, `trend` is the monthly series
     trend: trendMonthly,
     overallFgPct,
     overallEfgPct,
@@ -334,23 +412,18 @@ export async function getGamePerformance({ days }) {
   }
 }
 
+
 // ---------- PRACTICE PERFORMANCE ----------
 
 /**
- * Compute practice performance from local IndexedDB (practice_sessions + practice_entries).
- *
- * We mirror the same pattern as game:
- *  - Filter sessions by date range (days back from today)
- *  - Consider only entries that belong to in-range sessions
- *  - Aggregate attempts/makes per zone
- *  - Build FG% / eFG% trend over time
- *
- * And we now treat FREE THROWS the same way as game:
- *  - They appear as their own "Free Throw" zone card
- *  - They do NOT affect FG% / eFG% / trend
+ * Compute practice performance from local IndexedDB.
+ * @param {{ days: number | null, shotType?: "all" | "catch_shoot" | "off_dribble" }} opts
  */
-export async function getPracticePerformance({ days }) {
+export async function getPracticePerformance({ days, shotType, contested }) {
   await ready
+
+  const stFilter = normalizePerfShotTypeFilter(shotType)
+  const cFilter = normalizePerfContestedFilter(contested)
 
   const fromDate =
     typeof days === "number"
@@ -412,7 +485,7 @@ export async function getPracticePerformance({ days }) {
         ? Number(row.attempts)
         : 1
 
-    let makes =
+    const makes =
       typeof row.makes === "number"
         ? row.makes
         : row.made
@@ -422,14 +495,9 @@ export async function getPracticePerformance({ days }) {
     if (!attempts) continue
 
     const zoneId = row.zone_id || "practice_unknown"
-    const label =
-      labelForZone(zoneId) || row.drill_label || "Practice"
+    const label = labelForZone(zoneId) || row.drill_label || "Practice"
 
     // --- Free throw detection (practice) ---
-    // Free throws:
-    //  - zone is one of the FT zones ("free_throw" or label includes "free throw"), OR
-    //  - type === "freethrow" (if we ever add type), OR
-    //  - shot_type normalized mentions "free throw"
     const typeLower = String(row.type || "").toLowerCase()
     const shotTypeLower = String(row.shot_type || "").toLowerCase()
     const isFt =
@@ -437,26 +505,55 @@ export async function getPracticePerformance({ days }) {
       (shotTypeLower && shotTypeLower.includes("free throw")) ||
       typeLower === "freethrow"
 
-    // Per-zone aggregation: always count, including FTs,
-    // so they show as their own "Free Throw" card if FT zone exists.
-    const zoneKey = isFt ? "free_throw" : zoneId
-    const zoneLabel = isFt ? "Free Throw" : label
+    // ------------------------------------------------------------------
+    // IMPORTANT: Apply filtering BEFORE per-zone aggregation (zoneAgg),
+    // so the zone cards/drilldown match the filters.
+    // ------------------------------------------------------------------
 
-    let rec = zoneAgg.get(zoneKey)
-    if (!rec) {
-      rec = { id: zoneKey, label: zoneLabel, makes: 0, attempts: 0 }
-      zoneAgg.set(zoneKey, rec)
-    }
-    rec.attempts += attempts
-    rec.makes += makes
-
-    // For FG% / eFG% / trend we treat practice like games:
-    //  - free throws do NOT count as field goal attempts.
+    // Free throws:
+    // - never count toward FG/eFG/trends
+    // - only show them (as their own card) when shotType filter is ALL
+    // - contested filter also applies (typically FTs are uncontested)
     if (isFt) {
+      if (stFilter !== "all") continue
+      if (!includeContested(row.contested, cFilter)) continue
+
+      const zoneKey = "free_throw"
+      const zoneLabel = "Free Throw"
+
+      let rec = zoneAgg.get(zoneKey)
+      if (!rec) {
+        rec = { id: zoneKey, label: zoneLabel, makes: 0, attempts: 0 }
+        zoneAgg.set(zoneKey, rec)
+      }
+      rec.attempts += attempts
+      rec.makes += makes
+
+      // Do not include FTs in overall/trend FG calculations
       continue
     }
 
-    // Global FG / eFG and trend (field goals only)
+    // Non-FT: contested filter first
+    if (!includeContested(row.contested, cFilter)) continue
+
+    // Then shot type filter
+    if (!includeShotType(row.shot_type, stFilter)) continue
+
+    // Per-zone aggregation (field goals only, filtered)
+    {
+      const zoneKey = zoneId
+      const zoneLabel = label
+
+      let rec = zoneAgg.get(zoneKey)
+      if (!rec) {
+        rec = { id: zoneKey, label: zoneLabel, makes: 0, attempts: 0 }
+        zoneAgg.set(zoneKey, rec)
+      }
+      rec.attempts += attempts
+      rec.makes += makes
+    }
+
+    // Global FG / eFG and trend (field goals only, filtered)
     overallFga += attempts
     overallFgm += makes
 
@@ -515,32 +612,18 @@ export async function getPracticePerformance({ days }) {
     }
   }
 
-  if (!overallFga) {
-    return {
-      metrics: [],
-      trend: [],
-      overallFgPct: 0,
-      overallEfgPct: 0,
-      totalAttempts: 0,
-      trendBuckets: {
-        daily: [],
-        weekly: [],
-        monthly: [],
-      },
-    }
-  }
-
+  // 3) Build metric cards
   const metrics = Array.from(zoneAgg.values())
     .filter((m) => m.attempts > 0)
     .map((m) => ({
       ...m,
       fgPct: pct(m.makes, m.attempts),
       attemptsLabel: `${m.makes}/${m.attempts} Attempts`,
-      goalPct: null, // hook to goals later if needed
+      goalPct: null,
     }))
     .sort((a, b) => b.attempts - a.attempts)
 
-  // Monthly trend
+  // 4a) Monthly trend
   const trendMonthly = Array.from(trendAgg.entries())
     .sort(([a], [b]) => (a < b ? -1 : 1))
     .map(([key, v]) => {
@@ -557,7 +640,7 @@ export async function getPracticePerformance({ days }) {
       }
     })
 
-  // Daily trend (per practice session)
+  // 4b) Daily trend
   const trendDaily = Array.from(trendDailyAgg.values())
     .sort((a, b) => (a.dateKey < b.dateKey ? -1 : 1))
     .map((s) => {
@@ -573,22 +656,23 @@ export async function getPracticePerformance({ days }) {
       }
     })
 
-  // Weekly trend
+  // 4c) Weekly trend
   const trendWeekly = Array.from(trendWeeklyAgg.entries())
     .sort(([a], [b]) => (a < b ? -1 : 1))
-    .map(([weekKey, v]) => {
+    .map(([key, v]) => {
       const fgPctVal = pct(v.fgm, v.fga)
       const efgPctVal = v.fga
         ? ((v.fgm + 0.5 * v.threesMade) / v.fga) * 100
         : 0
       return {
-        bucketKey: weekKey,
-        label: weekLabelFromKey(weekKey),
+        weekKey: key,
+        label: weekLabelFromKey(key),
         fgPct: fgPctVal,
         efgPct: efgPctVal,
       }
     })
 
+  // 5) Overall FG% / eFG%
   const overallFgPct = pct(overallFgm, overallFga)
   const overallEfgPct = overallFga
     ? ((overallFgm + 0.5 * overallThreesMade) / overallFga) * 100
@@ -596,7 +680,6 @@ export async function getPracticePerformance({ days }) {
 
   return {
     metrics,
-    // Backwards compatible: monthly series
     trend: trendMonthly,
     overallFgPct,
     overallEfgPct,
@@ -608,3 +691,5 @@ export async function getPracticePerformance({ days }) {
     },
   }
 }
+
+
