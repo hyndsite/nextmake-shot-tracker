@@ -13,7 +13,7 @@ export const ZONE_ANCHORS =     {
           "y": 651.6
         },
         "center_3": {
-          "x": 585.1,
+          "x": 570.1,
           "y": 500.2
         },
         "right_wing_3": {
@@ -27,6 +27,18 @@ export const ZONE_ANCHORS =     {
         "right_slot_3": {
           "x": 540.1,
           "y": 344.2
+        },
+        "left_deep_wing_3": {
+          "x": 580,
+          "y": 800
+        },
+        "right_deep_wing_3": {
+          "x": 580,
+          "y": 200
+        },
+        "center_deep_3": {
+          "x": 670,
+          "y": 500.2
         },
         "left_high_post": {
           "x": 403.8,
