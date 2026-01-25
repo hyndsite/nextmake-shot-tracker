@@ -610,7 +610,7 @@ export default function GameLogger({ id: gameId, navigate }) {
                   key={e.id}
                   type="button"
                   onClick={() => openEditShotEvent(e)}
-                  className="w-full flex items-center justify-between px-3 py-1.5 text-sm hover:bg-slate-50 active:bg-slate-100"
+                  className="shot-row-btn w-full flex items-center justify-between px-3 py-1.5 text-sm hover:bg-slate-50 active:bg-slate-100"
                   aria-label="Edit shot"
                 >
                   {RowInner}
