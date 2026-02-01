@@ -12,3 +12,6 @@ dist/
 .vscode/
 dev-dist/
 
+# Claude Code
+.claude/settings.local.json
+
