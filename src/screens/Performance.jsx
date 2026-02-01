@@ -40,7 +40,18 @@ const CONTEST_FILTERS = [
   { id: "uncontested", label: "Uncontested" },
 ]
 
+// Mode toggle (Attempts vs FG%) – mirrors Heatmap MODE_OPTIONS
+const MODE_OPTIONS = [
+  { id: "attempts", label: "Attempts" },
+  { id: "fgpct", label: "FG%" },
+]
+
 function ContestedPills({ value, onChange }) {
+  const handleClick = (id) => {
+    // Toggle off if already active (returns to "all"), otherwise select
+    onChange(value === id ? "all" : id)
+  }
+
   return (
     <div className="time-pill-group">
       {CONTEST_FILTERS.map((c) => {
@@ -49,10 +60,30 @@ function ContestedPills({ value, onChange }) {
           <button
             key={c.id}
             type="button"
-            onClick={() => onChange(c.id)}
+            onClick={() => handleClick(c.id)}
             className={"time-pill" + (active ? " time-pill--active" : "")}
           >
             {c.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function ModePills({ value, onChange }) {
+  return (
+    <div className="time-pill-group">
+      {MODE_OPTIONS.map((m) => {
+        const active = m.id === value
+        return (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => onChange(m.id)}
+            className={"time-pill" + (active ? " time-pill--active" : "")}
+          >
+            {m.label}
           </button>
         )
       })}
@@ -105,15 +136,29 @@ function ShotTypePills({ value, onChange }) {
 
 // ---- Metric card ----
 
-function MetricCard({ label, fgPct, attemptsLabel, goalPct }) {
+function MetricCard({ label, fgPct, attempts, makes, attemptsLabel, goalPct, mode, totalAttempts }) {
+  const isAttempts = mode === "attempts"
+
+  // Attempts mode: show raw count + volume%
+  const volumePct =
+    totalAttempts > 0 ? Math.round((attempts / totalAttempts) * 100) : 0
+
+  // FG% mode (default): show FG%
   const pctVal = isFinite(fgPct) ? Math.round(fgPct) : 0
   const goalVal =
     typeof goalPct === "number" && isFinite(goalPct)
       ? Math.round(goalPct)
       : null
 
-  const progressPct =
-    goalVal && goalVal > 0
+  const displayValue = isAttempts ? attempts : pctVal
+  const displaySuffix = isAttempts ? "" : "%"
+  const subtitle = isAttempts
+    ? `${volumePct}% of total volume`
+    : attemptsLabel
+
+  const progressPct = isAttempts
+    ? volumePct
+    : goalVal && goalVal > 0
       ? Math.max(0, Math.min(100, (pctVal / goalVal) * 100))
       : pctVal
 
@@ -123,17 +168,19 @@ function MetricCard({ label, fgPct, attemptsLabel, goalPct }) {
         <div className="flex-1">
           <div className="text-xs font-medium text-slate-700">{label}</div>
           <div className="mt-0.5 text-[11px] text-slate-500">
-            {attemptsLabel}
+            {subtitle}
           </div>
         </div>
         <div className="text-right">
           <div className="text-sm font-semibold text-sky-700">
-            {pctVal}
-            <span className="text-[11px] font-normal text-slate-500 ml-0.5">
-              %
-            </span>
+            {displayValue}
+            {displaySuffix && (
+              <span className="text-[11px] font-normal text-slate-500 ml-0.5">
+                {displaySuffix}
+              </span>
+            )}
           </div>
-          {goalVal != null && (
+          {!isAttempts && goalVal != null && (
             <div className="text-[11px] text-slate-500">Goal: {goalVal}%</div>
           )}
         </div>
@@ -245,6 +292,7 @@ function TrendChart({
   sourceLabel, // "Game" or "Practice"
   selectedPoint,
   onSelectPoint,
+  vizMode = "fgpct", // "fgpct" | "attempts"
 }) {
   if (!Array.isArray(data) || data.length === 0) {
     return (
@@ -253,6 +301,8 @@ function TrendChart({
       </div>
     )
   }
+
+  const isAttempts = vizMode === "attempts"
 
   const handleCycle = (e) => {
     e?.stopPropagation?.()
@@ -316,15 +366,26 @@ function TrendChart({
               axisLine={false}
               tickLine={false}
             />
-            <YAxis
-              tick={{ fontSize: 10 }}
-              axisLine={false}
-              tickLine={false}
-              domain={[0, 100]}
-              tickFormatter={(v) => `${v}%`}
-            />
+            {isAttempts ? (
+              <YAxis
+                tick={{ fontSize: 10 }}
+                axisLine={false}
+                tickLine={false}
+                allowDecimals={false}
+              />
+            ) : (
+              <YAxis
+                tick={{ fontSize: 10 }}
+                axisLine={false}
+                tickLine={false}
+                domain={[0, 100]}
+                tickFormatter={(v) => `${v}%`}
+              />
+            )}
             <Tooltip
-              formatter={(v) => `${Math.round(v)}%`}
+              formatter={(v, name) =>
+                isAttempts ? `${v}` : `${Math.round(v)}%`
+              }
               labelFormatter={(l) => l}
             />
             <Legend
@@ -332,24 +393,38 @@ function TrendChart({
               height={24}
               wrapperStyle={{ fontSize: 10 }}
             />
-            <Line
-              type="monotone"
-              dataKey="efgPct"
-              name="eFG%"
-              stroke="#0ea5e9"
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 3 }}
-            />
-            <Line
-              type="monotone"
-              dataKey="fgPct"
-              name="FG%"
-              stroke="#f97316"
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 3 }}
-            />
+            {isAttempts ? (
+              <Line
+                type="monotone"
+                dataKey="fga"
+                name="Attempts"
+                stroke="#2563eb"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 3 }}
+              />
+            ) : (
+              <>
+                <Line
+                  type="monotone"
+                  dataKey="efgPct"
+                  name="eFG%"
+                  stroke="#0ea5e9"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 3 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="fgPct"
+                  name="FG%"
+                  stroke="#f97316"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 3 }}
+                />
+              </>
+            )}
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -395,8 +470,11 @@ export default function Performance({ navigate }) {
   const [gameShotType, setGameShotType] = useState("all")
   const [practiceShotType, setPracticeShotType] = useState("all")
 
-  const [gameContested, setGameContested] = useState("uncontested")
-  const [practiceContested, setPracticeContested] = useState("uncontested")
+  const [gameContested, setGameContested] = useState("all")
+  const [practiceContested, setPracticeContested] = useState("all")
+
+  const [gameMode, setGameMode] = useState("fgpct")
+  const [practiceMode, setPracticeMode] = useState("fgpct")
 
   const [gameTrendMode, setGameTrendMode] = useState("daily")
   const [practiceTrendMode, setPracticeTrendMode] = useState("daily")
@@ -584,12 +662,16 @@ export default function Performance({ navigate }) {
           {gameExpanded && (
             <>
               <div className="flex items-center justify-between mt-1">
-                <TimeRangePills value={gameRangeId} onChange={setGameRangeId} />
+                <ModePills value={gameMode} onChange={setGameMode} />
                 <div className="text-[11px] text-slate-500">
                   {gameData.totalAttempts
                     ? `${gameData.totalAttempts} FG attempts`
                     : "No shots yet"}
                 </div>
+              </div>
+
+              <div className="flex items-center justify-between mt-1">
+                <TimeRangePills value={gameRangeId} onChange={setGameRangeId} />
               </div>
 
               <div className="mt-2 flex items-center justify-between">
@@ -617,15 +699,19 @@ export default function Performance({ navigate }) {
                       key={m.id}
                       label={m.label}
                       fgPct={m.fgPct}
+                      attempts={m.attempts}
+                      makes={m.makes}
                       attemptsLabel={m.attemptsLabel}
                       goalPct={m.goalPct}
+                      mode={gameMode}
+                      totalAttempts={gameData.totalAttempts}
                     />
                   ))}
               </div>
 
               <div className="mt-4">
                 <TrendChart
-                  title="Game eFG% vs FG% Trend"
+                  title={gameMode === "attempts" ? "Game Attempts Trend" : "Game eFG% vs FG% Trend"}
                   data={gameTrendData}
                   mode={gameTrendMode}
                   onModeChange={setGameTrendMode}
@@ -633,6 +719,7 @@ export default function Performance({ navigate }) {
                   sourceLabel="Game"
                   selectedPoint={gameSelectedPoint}
                   onSelectPoint={setGameSelectedPoint}
+                  vizMode={gameMode}
                 />
               </div>
             </>
@@ -650,15 +737,19 @@ export default function Performance({ navigate }) {
           {practiceExpanded && (
             <>
               <div className="flex items-center justify-between mt-1">
-                <TimeRangePills
-                  value={practiceRangeId}
-                  onChange={setPracticeRangeId}
-                />
+                <ModePills value={practiceMode} onChange={setPracticeMode} />
                 <div className="text-[11px] text-slate-500">
                   {practiceData.totalAttempts
                     ? `${practiceData.totalAttempts} attempts`
                     : "No attempts yet"}
                 </div>
+              </div>
+
+              <div className="flex items-center justify-between mt-1">
+                <TimeRangePills
+                  value={practiceRangeId}
+                  onChange={setPracticeRangeId}
+                />
               </div>
 
               <div className="mt-2 flex items-center justify-between">
@@ -689,15 +780,19 @@ export default function Performance({ navigate }) {
                       key={m.id}
                       label={m.label}
                       fgPct={m.fgPct}
+                      attempts={m.attempts}
+                      makes={m.makes}
                       attemptsLabel={m.attemptsLabel}
                       goalPct={m.goalPct}
+                      mode={practiceMode}
+                      totalAttempts={practiceData.totalAttempts}
                     />
                   ))}
               </div>
 
               <div className="mt-4">
                 <TrendChart
-                  title="Practice eFG% vs FG% Trend"
+                  title={practiceMode === "attempts" ? "Practice Attempts Trend" : "Practice eFG% vs FG% Trend"}
                   data={practiceTrendData}
                   mode={practiceTrendMode}
                   onModeChange={setPracticeTrendMode}
@@ -705,6 +800,7 @@ export default function Performance({ navigate }) {
                   sourceLabel="Practice"
                   selectedPoint={practiceSelectedPoint}
                   onSelectPoint={setPracticeSelectedPoint}
+                  vizMode={practiceMode}
                 />
               </div>
             </>

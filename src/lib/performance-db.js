@@ -94,14 +94,16 @@ function includeShotType(eventShotType, filter) {
 // ---------- Shared helpers ----------
 
 // ---------- Contested filtering (Performance) ----------
-// UI sends: "contested" | "uncontested"
+// UI sends: "all" | "contested" | "uncontested"
 function normalizePerfContestedFilter(v) {
-  const s = String(v || "uncontested").trim().toLowerCase()
+  const s = String(v || "all").trim().toLowerCase()
   if (s === "contested") return "contested"
-  return "uncontested"
+  if (s === "uncontested") return "uncontested"
+  return "all"
 }
 
 function includeContested(contestedValue, filter) {
+  if (filter === "all") return true
   const isContested = contestedValue === true // treat null/undefined as false
   if (filter === "contested") return isContested === true
   // "uncontested"
@@ -357,6 +359,7 @@ export async function getGamePerformance({ days, shotType, contested }) {
         label: monthLabel(key),
         fgPct: fgPctVal,
         efgPct: efgPctVal,
+        fga: v.fga,
       }
     })
 
@@ -373,6 +376,7 @@ export async function getGamePerformance({ days, shotType, contested }) {
         label: dayjs(g.dateKey).format("MMM D"),
         fgPct: fgPctVal,
         efgPct: efgPctVal,
+        fga: g.fga,
       }
     })
 
@@ -389,6 +393,7 @@ export async function getGamePerformance({ days, shotType, contested }) {
         label: weekLabelFromKey(key),
         fgPct: fgPctVal,
         efgPct: efgPctVal,
+        fga: v.fga,
       }
     })
 
@@ -637,6 +642,7 @@ export async function getPracticePerformance({ days, shotType, contested }) {
         label: monthLabel(key),
         fgPct: fgPctVal,
         efgPct: efgPctVal,
+        fga: v.fga,
       }
     })
 
@@ -653,6 +659,7 @@ export async function getPracticePerformance({ days, shotType, contested }) {
         label: dayjs(s.dateKey).format("MMM D"),
         fgPct: fgPctVal,
         efgPct: efgPctVal,
+        fga: s.fga,
       }
     })
 
@@ -669,6 +676,7 @@ export async function getPracticePerformance({ days, shotType, contested }) {
         label: weekLabelFromKey(key),
         fgPct: fgPctVal,
         efgPct: efgPctVal,
+        fga: v.fga,
       }
     })
 
