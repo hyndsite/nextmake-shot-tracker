@@ -82,15 +82,23 @@ describe('Heatmap Component', () => {
       })
     })
 
-    it('should render all filter sections', async () => {
+    it('should render all filter pills without section labels', async () => {
       mockSupabaseQuery.gte.mockResolvedValue({ data: [], error: null })
 
       render(<Heatmap navigate={mockNavigate} />)
 
-      expect(screen.getByText('Days')).toBeInTheDocument()
-      expect(screen.getByText('Mode')).toBeInTheDocument()
-      expect(screen.getByText('Shot Type')).toBeInTheDocument()
-      expect(screen.getByText('Pressure')).toBeInTheDocument()
+      // Verify pills are present without section labels
+      expect(screen.getByText('30D')).toBeInTheDocument()
+      expect(screen.getByText('Attempt Density')).toBeInTheDocument()
+      expect(screen.getByText('Catch & Shoot')).toBeInTheDocument()
+      expect(screen.getByText('Contested')).toBeInTheDocument()
+      expect(screen.getByText('Uncontested')).toBeInTheDocument()
+
+      // Section labels should not exist
+      expect(screen.queryByText('Days')).not.toBeInTheDocument()
+      expect(screen.queryByText('Mode')).not.toBeInTheDocument()
+      expect(screen.queryByText('Shot Type')).not.toBeInTheDocument()
+      expect(screen.queryByText('Pressure')).not.toBeInTheDocument()
 
       // Wait for async load to complete
       await waitFor(() => {
@@ -143,15 +151,20 @@ describe('Heatmap Component', () => {
       })
     })
 
-    it('should render pressured button', async () => {
+    it('should render Contested and Uncontested pills', async () => {
       mockSupabaseQuery.gte.mockResolvedValue({ data: [], error: null })
 
       render(<Heatmap navigate={mockNavigate} />)
 
-      const pressureSection = screen.getByText('Pressure').closest('div')
-      const pressuredBtn = within(pressureSection).getByText('Pressured')
-      expect(pressuredBtn).toBeInTheDocument()
-      expect(pressuredBtn).not.toHaveClass('time-pill--active')
+      const contestedPill = screen.getByText('Contested')
+      const uncontestedPill = screen.getByText('Uncontested')
+
+      expect(contestedPill).toBeInTheDocument()
+      expect(uncontestedPill).toBeInTheDocument()
+
+      // Both should be inactive by default (contested state is "all")
+      expect(contestedPill).not.toHaveClass('time-pill--active')
+      expect(uncontestedPill).not.toHaveClass('time-pill--active')
 
       // Wait for async load to complete
       await waitFor(() => {
@@ -289,25 +302,80 @@ describe('Heatmap Component', () => {
       })
     })
 
-    it('should toggle Pressured button', async () => {
+    it('should activate Contested pill on click', async () => {
       mockSupabaseQuery.gte.mockResolvedValue({ data: [], error: null })
       const user = userEvent.setup()
 
       render(<Heatmap navigate={mockNavigate} />)
 
-      const pressuredBtn = screen.getByText('Pressured')
-      expect(pressuredBtn).not.toHaveClass('time-pill--active')
+      const contestedPill = screen.getByText('Contested')
+      expect(contestedPill).not.toHaveClass('time-pill--active')
 
-      await user.click(pressuredBtn)
+      await user.click(contestedPill)
 
       await waitFor(() => {
-        expect(pressuredBtn).toHaveClass('time-pill--active')
+        expect(contestedPill).toHaveClass('time-pill--active')
+      })
+    })
+
+    it('should toggle Contested pill off on second click', async () => {
+      mockSupabaseQuery.gte.mockResolvedValue({ data: [], error: null })
+      const user = userEvent.setup()
+
+      render(<Heatmap navigate={mockNavigate} />)
+
+      const contestedPill = screen.getByText('Contested')
+
+      // Click once to activate
+      await user.click(contestedPill)
+      await waitFor(() => {
+        expect(contestedPill).toHaveClass('time-pill--active')
       })
 
-      await user.click(pressuredBtn)
+      // Click again to deactivate
+      await user.click(contestedPill)
+      await waitFor(() => {
+        expect(contestedPill).not.toHaveClass('time-pill--active')
+      })
+    })
+
+    it('should activate Uncontested pill on click', async () => {
+      mockSupabaseQuery.gte.mockResolvedValue({ data: [], error: null })
+      const user = userEvent.setup()
+
+      render(<Heatmap navigate={mockNavigate} />)
+
+      const uncontestedPill = screen.getByText('Uncontested')
+      expect(uncontestedPill).not.toHaveClass('time-pill--active')
+
+      await user.click(uncontestedPill)
 
       await waitFor(() => {
-        expect(pressuredBtn).not.toHaveClass('time-pill--active')
+        expect(uncontestedPill).toHaveClass('time-pill--active')
+      })
+    })
+
+    it('should switch between Contested and Uncontested pills', async () => {
+      mockSupabaseQuery.gte.mockResolvedValue({ data: [], error: null })
+      const user = userEvent.setup()
+
+      render(<Heatmap navigate={mockNavigate} />)
+
+      const contestedPill = screen.getByText('Contested')
+      const uncontestedPill = screen.getByText('Uncontested')
+
+      // Click Contested
+      await user.click(contestedPill)
+      await waitFor(() => {
+        expect(contestedPill).toHaveClass('time-pill--active')
+        expect(uncontestedPill).not.toHaveClass('time-pill--active')
+      })
+
+      // Click Uncontested
+      await user.click(uncontestedPill)
+      await waitFor(() => {
+        expect(contestedPill).not.toHaveClass('time-pill--active')
+        expect(uncontestedPill).toHaveClass('time-pill--active')
       })
     })
 
@@ -540,7 +608,7 @@ describe('Heatmap Component', () => {
       })
     })
 
-    it('should filter by pressured shots only', async () => {
+    it('should filter by contested shots only', async () => {
       const mockData = [
         {
           zone_id: 'left_corner_3',
@@ -573,13 +641,90 @@ describe('Heatmap Component', () => {
         expect(screen.getByText('Center 3')).toBeInTheDocument()
       })
 
-      // Toggle pressured filter
-      const pressuredBtn = screen.getByText('Pressured')
-      await user.click(pressuredBtn)
+      // Click Contested filter
+      const contestedPill = screen.getByText('Contested')
+      await user.click(contestedPill)
 
       await waitFor(() => {
         expect(screen.getByText('L Corner 3')).toBeInTheDocument()
         expect(screen.queryByText('Center 3')).not.toBeInTheDocument()
+      })
+    })
+
+    it('should filter by uncontested shots only', async () => {
+      const mockData = [
+        {
+          zone_id: 'left_corner_3',
+          shot_type: 'Catch & Shoot',
+          made: true,
+          pressured: true,
+          ts: new Date().toISOString(),
+        },
+        {
+          zone_id: 'center_3',
+          shot_type: 'Catch & Shoot',
+          made: true,
+          pressured: false,
+          ts: new Date().toISOString(),
+        },
+      ]
+      mockSupabaseQuery.gte.mockResolvedValue({ data: mockData, error: null })
+      const user = userEvent.setup()
+
+      render(<Heatmap navigate={mockNavigate} />)
+
+      // Trigger image load to enable zone chips
+      const courtImage = screen.getByAltText('Half court')
+      Object.defineProperty(courtImage, 'naturalWidth', { value: 800, writable: true })
+      Object.defineProperty(courtImage, 'naturalHeight', { value: 1000, writable: true })
+      courtImage.dispatchEvent(new Event('load'))
+
+      await waitFor(() => {
+        expect(screen.getByText('L Corner 3')).toBeInTheDocument()
+        expect(screen.getByText('Center 3')).toBeInTheDocument()
+      })
+
+      // Click Uncontested filter
+      const uncontestedPill = screen.getByText('Uncontested')
+      await user.click(uncontestedPill)
+
+      await waitFor(() => {
+        expect(screen.getByText('Center 3')).toBeInTheDocument()
+        expect(screen.queryByText('L Corner 3')).not.toBeInTheDocument()
+      })
+    })
+
+    it('should show all shots when no contest filter active', async () => {
+      const mockData = [
+        {
+          zone_id: 'left_corner_3',
+          shot_type: 'Catch & Shoot',
+          made: true,
+          pressured: true,
+          ts: new Date().toISOString(),
+        },
+        {
+          zone_id: 'center_3',
+          shot_type: 'Catch & Shoot',
+          made: true,
+          pressured: false,
+          ts: new Date().toISOString(),
+        },
+      ]
+      mockSupabaseQuery.gte.mockResolvedValue({ data: mockData, error: null })
+
+      render(<Heatmap navigate={mockNavigate} />)
+
+      // Trigger image load to enable zone chips
+      const courtImage = screen.getByAltText('Half court')
+      Object.defineProperty(courtImage, 'naturalWidth', { value: 800, writable: true })
+      Object.defineProperty(courtImage, 'naturalHeight', { value: 1000, writable: true })
+      courtImage.dispatchEvent(new Event('load'))
+
+      // Default state (contested = "all") should show both pressured and non-pressured
+      await waitFor(() => {
+        expect(screen.getByText('L Corner 3')).toBeInTheDocument()
+        expect(screen.getByText('Center 3')).toBeInTheDocument()
       })
     })
 

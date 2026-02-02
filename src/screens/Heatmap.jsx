@@ -27,6 +27,12 @@ const SHOT_TYPE_OPTIONS = [
   { id: "Free Throw", label: "Free Throws" },
 ]
 
+// Contested filter (matches Performance screen)
+const CONTEST_FILTERS = [
+  { id: "contested", label: "Contested" },
+  { id: "uncontested", label: "Uncontested" },
+]
+
 // ---------- anchor helpers (same idea as GameLogger) ----------
 
 function anchorsToArray(anchors) {
@@ -117,6 +123,30 @@ function TimeRangePills({ value, onChange }) {
   )
 }
 
+function ContestedPills({ value, onChange }) {
+  const handleClick = (id) => {
+    onChange(value === id ? "all" : id)
+  }
+
+  return (
+    <div className="time-pill-group">
+      {CONTEST_FILTERS.map((c) => {
+        const active = c.id === value
+        return (
+          <button
+            key={c.id}
+            type="button"
+            onClick={() => handleClick(c.id)}
+            className={"time-pill" + (active ? " time-pill--active" : "")}
+          >
+            {c.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 // ---------- data aggregation ----------
 
 function normalizeShotTypeLabel(raw) {
@@ -144,17 +174,18 @@ function isFreeThrowEvent(e) {
   )
 }
 
-function computeZonesFromEvents(events, { mode, shotType, pressuredOnly }) {
+function computeZonesFromEvents(events, { mode, shotType, contested }) {
   if (!Array.isArray(events) || !events.length) return []
 
-  // 1) Filter by shot type and pressuredOnly
+  // 1) Filter by shot type and contested
   const filtered = events.filter((e) => {
     const isFt = isFreeThrowEvent(e)
     const shotLabel = normalizeShotTypeLabel(e?.shot_type)
     const pressed = !!e?.pressured
 
-    // pressured-only filter
-    if (pressuredOnly && !pressed) return false
+    // contested filter
+    if (contested === "contested" && !pressed) return false
+    if (contested === "uncontested" && pressed) return false
 
     // Shot type filter
     if (shotType === "Free Throw") {
@@ -319,7 +350,7 @@ export default function Heatmap({ navigate }) {
   const [mode, setMode] = useState("attempts")
   const [source, setSource] = useState("game")
   const [shotType, setShotType] = useState("Catch & Shoot")
-  const [pressuredOnly, setPressuredOnly] = useState(false)
+  const [contested, setContested] = useState("all")
   const [rangeId, setRangeId] = useState(DEFAULT_RANGE_ID)
 
   const [zones, setZones] = useState([])
@@ -401,7 +432,7 @@ export default function Heatmap({ navigate }) {
         const z = computeZonesFromEvents(data || [], {
           mode,
           shotType,
-          pressuredOnly,
+          contested,
         })
 
         if (!cancelled) setZones(z)
@@ -417,7 +448,7 @@ export default function Heatmap({ navigate }) {
     return () => {
       cancelled = true
     }
-  }, [source, range.days, mode, shotType, pressuredOnly])
+  }, [source, range.days, mode, shotType, contested])
 
   const totalAttempts = useMemo(
     () => zones.reduce((sum, z) => sum + z.attempts, 0),
@@ -460,62 +491,22 @@ export default function Heatmap({ navigate }) {
           />
         </section>
 
-        {/* Filters (Days, Mode, Shot Type, Pressure) */}
+        {/* Filters */}
         <section className="rounded-2xl border border-slate-200 bg-white p-3 space-y-3">
-          {/* Days */}
-          <div className="space-y-1">
-            <span className="block text-xs font-semibold text-slate-700">
-              Days
-            </span>
+          <div className="flex items-center justify-between">
             <TimeRangePills value={rangeId} onChange={setRangeId} />
           </div>
 
-          {/* Mode (Attempt Density / FG%) */}
-          <div className="space-y-1">
-            <span className="block text-xs font-semibold text-slate-700">
-              Mode
-            </span>
+          <div className="flex items-center justify-between mt-2">
             <PillGroup options={MODE_OPTIONS} value={mode} onChange={setMode} />
           </div>
 
-          {/* Shot type */}
-          <div className="space-y-1">
-            <span className="block text-xs font-semibold text-slate-700">
-              Shot Type
-            </span>
-            <div className="time-pill-group flex-wrap">
-              {SHOT_TYPE_OPTIONS.map((opt) => {
-                const active = opt.id === shotType
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setShotType(opt.id)}
-                    className={
-                      "time-pill" + (active ? " time-pill--active" : "")
-                    }
-                  >
-                    {opt.label}
-                  </button>
-                )
-              })}
-            </div>
+          <div className="flex items-center justify-between mt-2">
+            <PillGroup options={SHOT_TYPE_OPTIONS} value={shotType} onChange={setShotType} />
           </div>
 
-          {/* Pressured */}
-          <div className="space-y-1">
-            <span className="block text-xs font-semibold text-slate-700">
-              Pressure
-            </span>
-            <button
-              type="button"
-              onClick={() => setPressuredOnly((v) => !v)}
-              className={
-                "time-pill" + (pressuredOnly ? " time-pill--active" : "")
-              }
-            >
-              Pressured
-            </button>
+          <div className="flex items-center justify-between mt-2">
+            <ContestedPills value={contested} onChange={setContested} />
           </div>
         </section>
 
