@@ -768,6 +768,19 @@ describe('goal-metrics', () => {
         })
         expect(value).toBe(1)
       })
+
+      it('should filter points_total by date range', () => {
+        const events = [
+          { ...createShot(true, true), ts: '2026-02-01T10:00:00' }, // 3 pts
+          { ...createShot(true, false), ts: '2026-02-10T10:00:00' }, // 2 pts
+        ]
+
+        const value = computeGameMetricValue('points_total', events, {
+          startDate: '2026-02-05',
+          endDate: '2026-02-12',
+        })
+        expect(value).toBe(2)
+      })
     })
 
     describe('unknown metric', () => {
@@ -1044,6 +1057,19 @@ describe('goal-metrics', () => {
         })
         expect(value).toBe(6)
       })
+
+      it('should filter makes by date range with string dates', () => {
+        const entries = [
+          { ...createPracticeEntry(2, 3), ts: '2026-02-01T10:00:00' },
+          { ...createPracticeEntry(1, 2), ts: '2026-02-10T10:00:00' },
+        ]
+
+        const value = computePracticeMetricValue('makes', entries, {
+          startDate: '2026-02-05',
+          endDate: '2026-02-12',
+        })
+        expect(value).toBe(1)
+      })
     })
 
     describe('unknown metric', () => {
@@ -1051,6 +1077,124 @@ describe('goal-metrics', () => {
         const entries = [createPracticeEntry(4, 5)]
         const value = computePracticeMetricValue('unknown_metric', entries)
         expect(value).toBe(0)
+      })
+    })
+
+    describe('explicit metric coverage (practice)', () => {
+      const entries = [
+        {
+          makes: 2,
+          attempts: 4,
+          zone_id: 'left_corner_3',
+          is_three: true,
+          shot_type: 'pull-up jumper',
+          pressured: true,
+          ts: '2026-02-05T10:00:00Z',
+        },
+        {
+          makes: 1,
+          attempts: 2,
+          zone_id: 'center_mid',
+          is_three: false,
+          shot_type: 'catch',
+          pressured: false,
+          ts: '2026-02-05T10:05:00Z',
+        },
+        {
+          makes: 3,
+          attempts: 4,
+          zone_id: 'free_throw',
+          shot_type: 'Free Throw',
+          ts: '2026-02-05T10:06:00Z',
+        },
+      ]
+
+      const practiceCases = [
+        ['efg_overall', 66.6667],
+        ['three_pct_overall', 50],
+        ['ft_pct', 75],
+        ['fg_pct_zone', 50, { zoneId: 'left_corner_3' }],
+        ['attempts_zone', 4, { zoneId: 'left_corner_3' }],
+        ['off_dribble_fg', 50],
+        ['pressured_fg', 50],
+        ['makes', 3],
+        ['attempts', 6],
+        ['points_total', 0],
+        ['steals_total', 0],
+        ['assists_total', 0],
+        ['rebounds_total', 0],
+      ]
+
+      practiceCases.forEach(([metric, expected, range]) => {
+        it(`should compute ${metric}`, () => {
+          const value = computePracticeMetricValue(metric, entries, range)
+          if (metric.endsWith('_overall') || metric.endsWith('_pct') || metric.endsWith('_fg')) {
+            expect(value).toBeCloseTo(expected, 2)
+          } else {
+            expect(value).toBe(expected)
+          }
+        })
+      })
+    })
+  })
+
+  describe('explicit metric coverage (game)', () => {
+    const events = [
+      {
+        type: 'shot',
+        zone_id: 'left_corner_3',
+        is_three: true,
+        made: true,
+        shot_type: 'pull-up jumper',
+        pressured: true,
+        ts: '2026-02-05T10:00:00Z',
+      },
+      {
+        type: 'shot',
+        zone_id: 'left_corner_3',
+        is_three: true,
+        made: false,
+        shot_type: 'catch',
+        ts: '2026-02-05T10:01:00Z',
+      },
+      {
+        type: 'shot',
+        zone_id: 'center_mid',
+        is_three: false,
+        made: true,
+        shot_type: 'dribble pull-up',
+        ts: '2026-02-05T10:02:00Z',
+      },
+      { type: 'freethrow', made: true, ts: '2026-02-05T10:03:00Z' },
+      { type: 'assist', ts: '2026-02-05T10:04:00Z' },
+      { type: 'rebound', ts: '2026-02-05T10:05:00Z' },
+      { type: 'steal', ts: '2026-02-05T10:06:00Z' },
+    ]
+
+    const gameCases = [
+      ['efg_overall', 83.3333],
+      ['three_pct_overall', 50],
+      ['ft_pct', 100],
+      ['fg_pct_zone', 50, { zoneId: 'left_corner_3' }],
+      ['attempts_zone', 2, { zoneId: 'left_corner_3' }],
+      ['off_dribble_fg', 100],
+      ['pressured_fg', 100],
+      ['makes', 2],
+      ['attempts', 3],
+      ['points_total', 6],
+      ['steals_total', 1],
+      ['assists_total', 1],
+      ['rebounds_total', 1],
+    ]
+
+    gameCases.forEach(([metric, expected, range]) => {
+      it(`should compute ${metric}`, () => {
+        const value = computeGameMetricValue(metric, events, range)
+        if (metric.endsWith('_overall') || metric.endsWith('_pct') || metric.endsWith('_fg')) {
+          expect(value).toBeCloseTo(expected, 2)
+        } else {
+          expect(value).toBe(expected)
+        }
       })
     })
   })

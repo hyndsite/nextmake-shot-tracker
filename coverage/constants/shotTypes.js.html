@@ -3,7 +3,7 @@
 <html lang="en">
 
 <head>
-    <title>Code coverage report for constants/zones.js</title>
+    <title>Code coverage report for constants/shotTypes.js</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="../prettify.css" />
     <link rel="stylesheet" href="../base.css" />
@@ -19,13 +19,13 @@
 <body>
 <div class='wrapper'>
     <div class='pad1'>
-        <h1><a href="../index.html">All files</a> / <a href="index.html">constants</a> zones.js</h1>
+        <h1><a href="../index.html">All files</a> / <a href="index.html">constants</a> shotTypes.js</h1>
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>1/1</span>
+                <span class='fraction'>3/3</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>1/1</span>
+                <span class='fraction'>3/3</span>
             </div>
         
             
@@ -86,13 +86,7 @@
 <a name='L21'></a><a href='#L21'>21</a>
 <a name='L22'></a><a href='#L22'>22</a>
 <a name='L23'></a><a href='#L23'>23</a>
-<a name='L24'></a><a href='#L24'>24</a>
-<a name='L25'></a><a href='#L25'>25</a>
-<a name='L26'></a><a href='#L26'>26</a>
-<a name='L27'></a><a href='#L27'>27</a>
-<a name='L28'></a><a href='#L28'>28</a>
-<a name='L29'></a><a href='#L29'>29</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">10x</span>
+<a name='L24'></a><a href='#L24'>24</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -101,6 +95,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -109,45 +104,35 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">&nbsp;
-export const ZONES = [
-    { id: 'left_corner_3',  label: 'L Corner 3',  isThree: true },
-    { id: 'left_wing_3',    label: 'L Wing 3',    isThree: true },
-    { id: 'left_slot_3',    label: 'L Slot 3',    isThree: true },
-    { id: 'center_3',       label: 'Center 3',    isThree: true },
-    { id: 'right_wing_3',   label: 'R Wing 3',   isThree: true },
-    { id: 'right_corner_3', label: 'R Corner 3', isThree: true },
-    { id: 'right_slot_3',       label: 'R Slot 3',       isThree: true },
-    { id: 'left_deep_wing_3',   label: 'L Deep Wing 3',  isThree: true },
-    { id: 'right_deep_wing_3',  label: 'R Deep Wing 3',  isThree: true },
-    { id: 'center_deep_3',      label: 'Center Deep 3',  isThree: true },
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">export const SHOT_TYPES = [
+    { id: 'catch_shoot', label: 'Catch &amp; Shoot' },
+    { id: 'off_dribble', label: 'Off-Dribble' },
+    { id: 'layup', label: 'Layup'},
+    { id: 'floater',  label: 'Floater' },
+  ]
+  
+  // (NEW) Layup-specific subtypes used only when shot_type === 'Layup'
+  
+export const PICKUP_TYPES = [
+  { value: "high_pickup", label: "High" },
+  { value: "low_pickup", label: "Low" },
+  { value: "two_hand_pickup", label: "2-Hand" },
+  { value: "football_pickup", label: "Football" },
+  { value: "inside_hand_pickup", label: "InHand" },
+  { value: "outside_hand_pickup", label: "OutHand" },
+]
 &nbsp;
-    { id: 'left_high_post',     label: 'L High Post',   isThree: false },
-    { id: 'left_low_post',     label: 'L Low Post',   isThree: false },
-    { id: 'left_deep_mid',      label: 'L Deep Mid',   isThree: false },
-    { id: 'left_short_corner',  label: 'L Short Corner',   isThree: false },
-    { id: 'left_wing_mid',      label: 'L Wing Mid',   isThree: false },
-    { id: 'center_mid',         label: 'Center Mid',   isThree: false },
-    { id: 'right_wing_mid',     label: 'R Wing Mid',    isThree: false },
-    { id: 'right_short_corner', label: 'R Short Corner',   isThree: false },
-    { id: 'right_deep_mid',     label: 'R Deep Mid',    isThree: false },
-    { id: 'nail',               label: 'Nail',          isThree: false },
-    { id: 'right_low_post',     label: 'R Low Post',    isThree: false },
-    { id: 'right_high_post',    label: 'R High Post',   isThree: false },
-    { id: 'runner_floater',     label: 'Runner|Floater',    isThree: false },
-&nbsp;
-    { id: 'free_throw',   label: 'Free Throw',isThree: false }
-  ]</pre></td></tr></table></pre>
+export const FINISH_TYPES = [
+  { value: "overhand", label: "Overhand" },
+  { value: "underhand", label: "Underhand" },
+  { value: "floater", label: "Floater" },
+]
+  </pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
             </div><!-- /wrapper -->
