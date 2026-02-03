@@ -63,14 +63,18 @@ export default function Login({ onSuccess }){
             autoComplete="email"
             inputMode="email"
           />
-          <button className="btn btn-primary w-full" disabled={status==="sending"}>
+          <button className="btn btn-blue w-full" disabled={status==="sending"}>
             {status==="sending" ? "Sending magic link…" : "Send magic link"}
           </button>
-          {msg && <p className={`help ${status==="err" ? "text-red-600" : "text-slate-600"}`}>{msg}</p>}
+          {msg && (
+            <p className={status==="err" ? "text-sm text-red-600" : "text-sm text-slate-600"}>
+              {msg}
+            </p>
+          )}
         </form>
 
         <div className="mt-3 text-center">
-          <button className="btn btn-primary btn-ghost text-sm" onClick={checkSession}>I clicked the link</button>
+          <button className="btn btn-blue text-sm" onClick={checkSession}>I clicked the link</button>
         </div>
       </div>
     </div>
