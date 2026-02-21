@@ -20,6 +20,12 @@ vi.mock('../../lib/supabase', () => ({
   getUser: vi.fn(),
 }))
 
+vi.mock('../../lib/athlete-db', () => ({
+  listAthletes: vi.fn(),
+  getActiveAthleteId: vi.fn(),
+  setActiveAthlete: vi.fn(),
+}))
+
 vi.mock('../../lib/goal-metrics', () => ({
   BASE_METRIC_OPTIONS: [
     { value: 'fg_pct_zone', label: 'FG% (by zone)' },
@@ -39,6 +45,7 @@ vi.mock('lucide-react', () => ({
   Trash2: () => <div data-testid="trash-icon">Trash2</div>,
   ChevronDown: () => <div data-testid="chevron-icon">ChevronDown</div>,
   Archive: () => <div data-testid="archive-icon">Archive</div>,
+  ArrowLeftRight: () => <div data-testid="switch-athlete-icon">Switch</div>,
 }))
 
 vi.mock('react-icons/md', () => ({
@@ -56,6 +63,7 @@ import {
   archiveGoalSet,
 } from '../../lib/goals-db'
 import { getUser } from '../../lib/supabase'
+import { listAthletes, getActiveAthleteId, setActiveAthlete } from '../../lib/athlete-db'
 
 const getSectionByTitle = (title) => screen.getByText(title).closest('section')
 const getInputByPlaceholder = (placeholder, root = screen) =>
@@ -97,6 +105,12 @@ describe('GoalsManager Component', () => {
     deleteGoal.mockResolvedValue({})
     archiveGoalSet.mockResolvedValue({ ...baseSet, archived: true, archived_at: '2026-02-01' })
     getUser.mockResolvedValue(null)
+    listAthletes.mockReturnValue([
+      { id: 'ath-1', first_name: 'Ava', last_name: '', initials: 'A', avatar_color: '#BFDBFE' },
+      { id: 'ath-2', first_name: 'Max', last_name: '', initials: 'M', avatar_color: '#FBCFE8' },
+    ])
+    getActiveAthleteId.mockReturnValue('ath-1')
+    setActiveAthlete.mockImplementation(() => {})
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     vi.spyOn(window, 'alert').mockImplementation(() => {})
   })
@@ -126,6 +140,23 @@ describe('GoalsManager Component', () => {
     await user.click(screen.getByText('Back'))
 
     expect(mockNavigate).toHaveBeenCalledWith('home')
+  })
+
+  it('should load and switch goals by active athlete', async () => {
+    const user = userEvent.setup()
+    render(<GoalsManager />)
+
+    await waitFor(() => {
+      expect(listGoalSetsWithGoals).toHaveBeenCalledWith({ athleteId: 'ath-1' })
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Switch athlete' }))
+    await user.click(screen.getByRole('button', { name: 'Max' }))
+
+    await waitFor(() => {
+      expect(setActiveAthlete).toHaveBeenCalledWith('ath-2')
+      expect(listGoalSetsWithGoals).toHaveBeenCalledWith({ athleteId: 'ath-2' })
+    })
   })
 
   it('should sort archived goal sets by most recent archive date', async () => {
@@ -246,6 +277,7 @@ describe('GoalsManager Component', () => {
     await waitFor(() => {
       expect(createGoal).toHaveBeenCalledWith({
         setId: baseSet.id,
+        athleteId: 'ath-1',
         name: 'FG% (by zone)',
         details: 'L Corner 3',
         metric: 'fg_pct_zone',

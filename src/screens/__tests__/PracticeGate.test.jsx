@@ -6,25 +6,36 @@ import PracticeGate from '../PracticeGate.jsx'
 
 vi.mock('../../lib/practice-db', () => ({
   addPracticeSession: vi.fn(),
-  endPracticeSession: vi.fn(),
   deletePracticeSession: vi.fn(),
   listPracticeSessions: vi.fn(),
   listActivePracticeSessions: vi.fn(),
 }))
 
+vi.mock('../../lib/athlete-db', () => ({
+  listAthletes: vi.fn(),
+  getActiveAthleteId: vi.fn(),
+  setActiveAthlete: vi.fn(),
+}))
+
 vi.mock('lucide-react', () => ({
+  Play: () => <div data-testid="play-icon">Play</div>,
   PlayCircle: () => <div data-testid="play-circle-icon">Play</div>,
   Trash2: () => <div data-testid="trash-icon">Trash</div>,
   ChevronDown: () => <div data-testid="chevron-icon">Chevron</div>,
+  ArrowLeftRight: () => <div data-testid="switch-athlete-icon">Switch</div>,
 }))
 
 import {
   addPracticeSession,
-  endPracticeSession,
   deletePracticeSession,
   listPracticeSessions,
   listActivePracticeSessions,
 } from '../../lib/practice-db'
+import {
+  listAthletes,
+  getActiveAthleteId,
+  setActiveAthlete,
+} from '../../lib/athlete-db'
 
 const buildSession = (overrides = {}) => ({
   id: `session-${Math.random().toString(16).slice(2)}`,
@@ -39,8 +50,12 @@ describe('PracticeGate Component', () => {
     mockNavigate = vi.fn()
     listPracticeSessions.mockResolvedValue([])
     listActivePracticeSessions.mockResolvedValue([])
+    listAthletes.mockReturnValue([
+      { id: 'ath-1', first_name: 'Max', last_name: 'McCarty' },
+      { id: 'ath-2', first_name: 'Jane', last_name: 'Doe' },
+    ])
+    getActiveAthleteId.mockReturnValue('ath-1')
     addPracticeSession.mockResolvedValue(buildSession())
-    endPracticeSession.mockResolvedValue({})
     deletePracticeSession.mockResolvedValue({})
   })
 
@@ -82,14 +97,53 @@ describe('PracticeGate Component', () => {
     })
 
     await user.click(screen.getByText('Start New Session'))
+    await user.click(screen.getByRole('button', { name: 'Start session for active athlete' }))
 
     await waitFor(() => {
-      expect(addPracticeSession).toHaveBeenCalledWith({})
+      expect(addPracticeSession).toHaveBeenCalledWith({ athlete_id: 'ath-1' })
       expect(mockNavigate).toHaveBeenCalledWith('practice-log', {
         id: 'new-session',
         started_at: '2026-01-20T09:00:00Z',
       })
     })
+  })
+
+  it('should allow switching athlete before starting session', async () => {
+    const row = buildSession({ id: 'new-ath-2', started_at: '2026-01-20T09:30:00Z' })
+    addPracticeSession.mockResolvedValue(row)
+    const user = userEvent.setup()
+    render(<PracticeGate navigate={mockNavigate} />)
+
+    await user.click(screen.getByText('Start New Session'))
+    await user.click(screen.getByRole('button', { name: 'Switch athlete for session' }))
+    await user.click(screen.getByRole('button', { name: 'Jane Doe' }))
+    await user.click(screen.getByRole('button', { name: 'Start session for active athlete' }))
+
+    await waitFor(() => {
+      expect(setActiveAthlete).toHaveBeenCalledWith('ath-2')
+      expect(addPracticeSession).toHaveBeenCalledWith({ athlete_id: 'ath-2' })
+      expect(mockNavigate).toHaveBeenCalledWith('practice-log', {
+        id: 'new-ath-2',
+        started_at: '2026-01-20T09:30:00Z',
+      })
+    })
+  })
+
+  it('should replace start button with chooser and restore on outside click', async () => {
+    const user = userEvent.setup()
+    render(<PracticeGate navigate={mockNavigate} />)
+
+    await user.click(screen.getByText('Start New Session'))
+
+    expect(screen.queryByText('Start New Session')).not.toBeInTheDocument()
+    expect(screen.getByText('Active athlete')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Start session for active athlete' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Switch athlete for session' })).toBeInTheDocument()
+
+    await user.click(screen.getByText('Previous Sessions'))
+
+    expect(screen.getByText('Start New Session')).toBeInTheDocument()
+    expect(screen.queryByText('Active athlete')).not.toBeInTheDocument()
   })
 
   it('should resume the active session when resume is clicked', async () => {
@@ -115,10 +169,14 @@ describe('PracticeGate Component', () => {
     })
   })
 
-  it('should show confirmation modal when starting a new session with an active session', async () => {
-    const activeSession = buildSession({ id: 'active-2' })
+  it('should prompt to resume when selected athlete already has an active session', async () => {
+    const activeSession = buildSession({
+      id: 'active-2',
+      started_at: '2026-01-21T11:00:00Z',
+      athlete_id: 'ath-1',
+    })
     listPracticeSessions.mockResolvedValue([activeSession])
-    listActivePracticeSessions.mockResolvedValue([activeSession])
+    listActivePracticeSessions.mockResolvedValue(activeSession ? [activeSession] : [])
 
     const user = userEvent.setup()
     render(<PracticeGate navigate={mockNavigate} />)
@@ -128,28 +186,40 @@ describe('PracticeGate Component', () => {
     })
 
     await user.click(screen.getByText('Start New Session'))
+    await user.click(screen.getByRole('button', { name: 'Start session for active athlete' }))
 
-    expect(screen.getByText('Start New Session?')).toBeInTheDocument()
+    expect(addPracticeSession).not.toHaveBeenCalled()
+    expect(screen.getByText('Active Session Found')).toBeInTheDocument()
     expect(
       screen.getByText(
-        'You already have an active session. Starting a new one will end the current session and begin a new session now.'
+        'This athlete already has an active session. Please resume that session instead of starting a new one.'
       )
     ).toBeInTheDocument()
+
+    await user.click(screen.getByText('Resume Existing Session'))
+    expect(mockNavigate).toHaveBeenCalledWith('practice-log', {
+      id: 'active-2',
+      started_at: '2026-01-21T11:00:00Z',
+    })
   })
 
-  it('should end active session and start a new one when confirmed', async () => {
-    const activeSession = buildSession({
+  it('should allow starting a new session for a different athlete', async () => {
+    const activeSessionForAth1 = buildSession({
       id: 'active-3',
       started_at: '2026-01-22T10:00:00Z',
+      athlete_id: 'ath-1',
     })
-    const newSession = buildSession({
+    const newSessionForAth2 = buildSession({
       id: 'new-2',
       started_at: '2026-01-22T10:30:00Z',
+      athlete_id: 'ath-2',
     })
 
-    listPracticeSessions.mockResolvedValue([activeSession, newSession])
-    listActivePracticeSessions.mockResolvedValue([activeSession])
-    addPracticeSession.mockResolvedValue(newSession)
+    listPracticeSessions.mockResolvedValue([activeSessionForAth1, newSessionForAth2])
+    listActivePracticeSessions.mockResolvedValue([])
+    listActivePracticeSessions.mockResolvedValueOnce([activeSessionForAth1])
+    listActivePracticeSessions.mockResolvedValueOnce([])
+    addPracticeSession.mockResolvedValue(newSessionForAth2)
 
     const user = userEvent.setup()
     render(<PracticeGate navigate={mockNavigate} />)
@@ -159,16 +229,29 @@ describe('PracticeGate Component', () => {
     })
 
     await user.click(screen.getByText('Start New Session'))
-    await user.click(screen.getByText('End & Start New'))
+    await user.click(screen.getByRole('button', { name: 'Switch athlete for session' }))
+    await user.click(screen.getByRole('button', { name: 'Jane Doe' }))
+    await user.click(screen.getByRole('button', { name: 'Start session for active athlete' }))
 
     await waitFor(() => {
-      expect(endPracticeSession).toHaveBeenCalledWith('active-3')
-      expect(addPracticeSession).toHaveBeenCalledWith({})
+      expect(addPracticeSession).toHaveBeenCalledWith({ athlete_id: 'ath-2' })
       expect(mockNavigate).toHaveBeenCalledWith('practice-log', {
         id: 'new-2',
         started_at: '2026-01-22T10:30:00Z',
       })
     })
+    expect(screen.queryByText('Active Session Found')).not.toBeInTheDocument()
+  })
+
+  it('should show no-athlete message and disable start in chooser', async () => {
+    listAthletes.mockReturnValue([])
+    getActiveAthleteId.mockReturnValue(null)
+    const user = userEvent.setup()
+    render(<PracticeGate navigate={mockNavigate} />)
+
+    await user.click(screen.getByText('Start New Session'))
+    expect(screen.getByText('No active athlete')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Start session for active athlete' })).toBeDisabled()
   })
 
   it('should toggle month accordion and open a previous session', async () => {
@@ -186,9 +269,18 @@ describe('PracticeGate Component', () => {
     })
 
     const monthButton = screen.getByRole('button', { name: /january/i })
+    const monthContainer = monthButton.closest('div')
+    expect(monthContainer.className).toContain('rounded-2xl')
+    expect(monthContainer.className).toContain('border-slate-200')
+    expect(monthButton.className).toContain('accordion-header')
     await user.click(monthButton)
 
     const sessionRow = screen.getByRole('button', { name: 'Open session' })
+    const expectedDay = new Date(janSession.started_at).toLocaleDateString(undefined, {
+      weekday: 'long',
+    })
+    const expectedDate = new Date(janSession.started_at).toLocaleDateString()
+    expect(sessionRow).toHaveTextContent(`${expectedDay} | ${expectedDate}`)
     await user.click(sessionRow)
 
     expect(mockNavigate).toHaveBeenCalledWith('practice-log', {

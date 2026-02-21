@@ -168,11 +168,11 @@ function weekLabelFromKey(key) {
 
 /**
  * Compute game performance from local IndexedDB.
- * @param {{ days: number | null, shotType?: "all" | "catch_shoot" | "off_dribble" }} opts
+ * @param {{ days: number | null, shotType?: "all" | "catch_shoot" | "off_dribble", athleteId?: string }} opts
  *  - days: number → filter to last N days, null → all time
  *  - shotType: optional shot type filter
  */
-export async function getGamePerformance({ days, shotType, contested }) {
+export async function getGamePerformance({ days, shotType, contested, athleteId }) {
   await ready
 
   const stFilter = normalizePerfShotTypeFilter(shotType)
@@ -191,6 +191,7 @@ export async function getGamePerformance({ days, shotType, contested }) {
     for (const k of sessKeys) {
       const row = await get(k, gameSt.game.sessions)
       if (!row || row._deleted) continue
+      if (athleteId && row.athlete_id !== athleteId) continue
       const okDate = fromDate
         ? withinRange(row.date_iso || row.started_at || row.ts, fromDate)
         : true
@@ -229,6 +230,7 @@ export async function getGamePerformance({ days, shotType, contested }) {
     const ev = await get(k, gameSt.game.events)
     if (!ev || ev._deleted) continue
     if (!sessionIds.has(ev.game_id)) continue
+    if (athleteId && ev.athlete_id && ev.athlete_id !== athleteId) continue
     if (fromDate && !withinRange(ev.ts, fromDate)) continue
 
     // Per-zone cards (include both shots + free throws)
@@ -422,9 +424,9 @@ export async function getGamePerformance({ days, shotType, contested }) {
 
 /**
  * Compute practice performance from local IndexedDB.
- * @param {{ days: number | null, shotType?: "all" | "catch_shoot" | "off_dribble" }} opts
+ * @param {{ days: number | null, shotType?: "all" | "catch_shoot" | "off_dribble", athleteId?: string }} opts
  */
-export async function getPracticePerformance({ days, shotType, contested }) {
+export async function getPracticePerformance({ days, shotType, contested, athleteId }) {
   await ready
 
   const stFilter = normalizePerfShotTypeFilter(shotType)
@@ -443,6 +445,7 @@ export async function getPracticePerformance({ days, shotType, contested }) {
     for (const k of sessKeys) {
       const row = await get(k, practiceSt.practice.sessions)
       if (!row || row._deleted) continue
+      if (athleteId && row.athlete_id !== athleteId) continue
       const okDate = fromDate
         ? withinRange(row.date_iso || row.started_at || row.ts, fromDate)
         : true
@@ -481,6 +484,7 @@ export async function getPracticePerformance({ days, shotType, contested }) {
     const row = await get(k, practiceSt.practice.entries)
     if (!row || row._deleted) continue
     if (!sessionIds.has(row.session_id)) continue
+    if (athleteId && row.athlete_id && row.athlete_id !== athleteId) continue
     if (fromDate && !withinRange(row.ts, fromDate)) continue
 
     const attempts =
@@ -699,5 +703,3 @@ export async function getPracticePerformance({ days, shotType, contested }) {
     },
   }
 }
-
-

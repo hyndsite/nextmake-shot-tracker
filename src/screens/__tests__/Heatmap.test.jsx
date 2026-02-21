@@ -17,12 +17,33 @@ vi.mock('../../lib/supabase', () => ({
   getUser: vi.fn(),
 }))
 
+vi.mock('../../lib/athlete-db', () => ({
+  listAthletes: vi.fn(),
+  getActiveAthleteId: vi.fn(),
+  setActiveAthlete: vi.fn(),
+}))
+
+vi.mock('../../components/ActiveAthleteSwitcher', () => ({
+  default: ({ athletes, activeAthleteId, onSelectAthlete }) => (
+    <div data-testid="active-athlete-switcher">
+      <span data-testid="active-athlete-id">{activeAthleteId}</span>
+      <button
+        type="button"
+        onClick={() => onSelectAthlete?.(athletes?.[1]?.id)}
+      >
+        Switch athlete
+      </button>
+    </div>
+  ),
+}))
+
 vi.mock('lucide-react', () => ({
   ArrowLeft: () => <div data-testid="arrow-left-icon">ArrowLeft</div>,
 }))
 
 // Import mocked modules for assertions
 import { supabase, getUser } from '../../lib/supabase'
+import { listAthletes, getActiveAthleteId, setActiveAthlete } from '../../lib/athlete-db'
 
 describe('Heatmap Component', () => {
   let mockNavigate
@@ -40,6 +61,12 @@ describe('Heatmap Component', () => {
 
     supabase.from.mockReturnValue(mockSupabaseQuery)
     getUser.mockResolvedValue({ id: 'test-user-123' })
+    listAthletes.mockReturnValue([
+      { id: 'ath-1', first_name: 'Ava', last_name: 'One', initials: 'AO', avatar_color: '#BFDBFE' },
+      { id: 'ath-2', first_name: 'Max', last_name: 'Two', initials: 'MT', avatar_color: '#FBCFE8' },
+    ])
+    getActiveAthleteId.mockReturnValue('ath-1')
+    setActiveAthlete.mockImplementation(() => {})
   })
 
   afterEach(() => {
@@ -397,6 +424,30 @@ describe('Heatmap Component', () => {
   })
 
   describe('Data Loading Tests', () => {
+    it('should filter by active athlete id when loading data', async () => {
+      mockSupabaseQuery.gte.mockResolvedValue({ data: [], error: null })
+
+      render(<Heatmap navigate={mockNavigate} />)
+
+      await waitFor(() => {
+        expect(mockSupabaseQuery.eq).toHaveBeenCalledWith('athlete_id', 'ath-1')
+      })
+    })
+
+    it('should switch active athlete and refetch data', async () => {
+      mockSupabaseQuery.gte.mockResolvedValue({ data: [], error: null })
+      const user = userEvent.setup()
+
+      render(<Heatmap navigate={mockNavigate} />)
+
+      await user.click(screen.getByRole('button', { name: 'Switch athlete' }))
+
+      await waitFor(() => {
+        expect(setActiveAthlete).toHaveBeenCalledWith('ath-2')
+        expect(mockSupabaseQuery.eq).toHaveBeenCalledWith('athlete_id', 'ath-2')
+      })
+    })
+
     it('should fetch from game_events table when source is game', async () => {
       mockSupabaseQuery.gte.mockResolvedValue({ data: [], error: null })
 
@@ -802,6 +853,17 @@ describe('Heatmap Component', () => {
   })
 
   describe('Edge Cases', () => {
+    it('should skip loading when no active athlete exists', async () => {
+      getActiveAthleteId.mockReturnValue('')
+
+      render(<Heatmap navigate={mockNavigate} />)
+
+      expect(
+        await screen.findByText('Select an active athlete from Dashboard to view heatmap.'),
+      ).toBeInTheDocument()
+      expect(supabase.from).not.toHaveBeenCalled()
+    })
+
     it('should handle no user (getUser returns null)', async () => {
       getUser.mockResolvedValue(null)
 

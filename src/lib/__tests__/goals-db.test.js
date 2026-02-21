@@ -20,6 +20,10 @@ vi.mock('../supabase.js', () => ({
   getUser: vi.fn(),
 }))
 
+vi.mock('../athlete-db.js', () => ({
+  getActiveAthleteId: vi.fn(() => 'ath-1'),
+}))
+
 describe('goals-db', () => {
   let mockSupabase
   let mockGetUser
@@ -96,8 +100,8 @@ describe('goals-db', () => {
 
     it('should return goal sets with empty goals arrays when no goals exist', async () => {
       const mockGoalSets = [
-        { id: 'set-1', name: 'Weekly Goals', type: 'practice', due_date: '2024-01-20' },
-        { id: 'set-2', name: 'Game Goals', type: 'game', due_date: '2024-01-25' },
+        { id: 'set-1', name: 'Weekly Goals', type: 'practice', due_date: '2024-01-20', athlete_id: 'ath-1' },
+        { id: 'set-2', name: 'Game Goals', type: 'game', due_date: '2024-01-25', athlete_id: 'ath-1' },
       ]
 
       let callCount = 0
@@ -141,14 +145,14 @@ describe('goals-db', () => {
 
     it('should return goal sets with nested goals', async () => {
       const mockGoalSets = [
-        { id: 'set-1', name: 'Weekly Goals', type: 'practice', due_date: '2024-01-20' },
-        { id: 'set-2', name: 'Game Goals', type: 'game', due_date: '2024-01-25' },
+        { id: 'set-1', name: 'Weekly Goals', type: 'practice', due_date: '2024-01-20', athlete_id: 'ath-1' },
+        { id: 'set-2', name: 'Game Goals', type: 'game', due_date: '2024-01-25', athlete_id: 'ath-1' },
       ]
 
       const mockGoals = [
-        { id: 'goal-1', set_id: 'set-1', metric: 'fg_pct', target_value: 50, created_at: '2024-01-10T10:00:00Z' },
-        { id: 'goal-2', set_id: 'set-1', metric: 'attempts', target_value: 100, created_at: '2024-01-10T10:05:00Z' },
-        { id: 'goal-3', set_id: 'set-2', metric: 'fg_pct', target_value: 45, created_at: '2024-01-10T10:10:00Z' },
+        { id: 'goal-1', set_id: 'set-1', athlete_id: 'ath-1', metric: 'fg_pct', target_value: 50, created_at: '2024-01-10T10:00:00Z' },
+        { id: 'goal-2', set_id: 'set-1', athlete_id: 'ath-1', metric: 'attempts', target_value: 100, created_at: '2024-01-10T10:05:00Z' },
+        { id: 'goal-3', set_id: 'set-2', athlete_id: 'ath-1', metric: 'fg_pct', target_value: 45, created_at: '2024-01-10T10:10:00Z' },
       ]
 
       let callCount = 0
@@ -219,7 +223,7 @@ describe('goals-db', () => {
 
     it('should throw error on goals query failure', async () => {
       const mockGoalSets = [
-        { id: 'set-1', name: 'Weekly Goals', type: 'practice', due_date: '2024-01-20' },
+        { id: 'set-1', name: 'Weekly Goals', type: 'practice', due_date: '2024-01-20', athlete_id: 'ath-1' },
       ]
       const mockError = { message: 'Goals query failed' }
 
@@ -258,7 +262,7 @@ describe('goals-db', () => {
 
     it('should handle null goals array gracefully', async () => {
       const mockGoalSets = [
-        { id: 'set-1', name: 'Weekly Goals', type: 'practice', due_date: '2024-01-20' },
+        { id: 'set-1', name: 'Weekly Goals', type: 'practice', due_date: '2024-01-20', athlete_id: 'ath-1' },
       ]
 
       let callCount = 0
@@ -758,6 +762,7 @@ describe('goals-db', () => {
     it('should create a new goal with required fields', async () => {
       const input = {
         setId: 'set-123',
+        athleteId: 'ath-1',
         metric: 'fg_pct',
         targetValue: 50,
         targetEndDate: '2024-01-31',
@@ -797,6 +802,7 @@ describe('goals-db', () => {
     it('should create goal with optional fields', async () => {
       const input = {
         setId: 'set-123',
+        athleteId: 'ath-1',
         name: 'Three Point Percentage',
         details: 'Improve corner three consistency',
         metric: '3pt_pct',
@@ -844,6 +850,7 @@ describe('goals-db', () => {
 
       const input = {
         setId: 'set-123',
+        athleteId: 'ath-1',
         metric: 'fg_pct',
         targetValue: 50,
         targetEndDate: '2024-01-31',
@@ -855,6 +862,7 @@ describe('goals-db', () => {
     it('should throw error on insert failure', async () => {
       const input = {
         setId: 'set-123',
+        athleteId: 'ath-1',
         metric: 'fg_pct',
         targetValue: 50,
         targetEndDate: '2024-01-31',
@@ -879,6 +887,7 @@ describe('goals-db', () => {
     it('should default targetType to percent', async () => {
       const input = {
         setId: 'set-123',
+        athleteId: 'ath-1',
         metric: 'fg_pct',
         targetValue: 50,
         targetEndDate: '2024-01-31',
@@ -914,6 +923,7 @@ describe('goals-db', () => {
     it('should accept custom targetType', async () => {
       const input = {
         setId: 'set-123',
+        athleteId: 'ath-1',
         metric: 'attempts',
         targetValue: 100,
         targetEndDate: '2024-01-31',
@@ -950,6 +960,7 @@ describe('goals-db', () => {
     it('should set name and details to null when not provided', async () => {
       const input = {
         setId: 'set-123',
+        athleteId: 'ath-1',
         metric: 'fg_pct',
         targetValue: 50,
         targetEndDate: '2024-01-31',
@@ -1235,6 +1246,7 @@ describe('goals-db', () => {
       await createGoalSet(input)
 
       expect(insertedData.user_id).toBe('user-123')
+      expect(insertedData.athlete_id).toBe('ath-1')
     })
 
     it('should create goal with authenticated user id', async () => {
@@ -1256,6 +1268,7 @@ describe('goals-db', () => {
 
       const input = {
         setId: 'set-123',
+        athleteId: 'ath-1',
         metric: 'fg_pct',
         targetValue: 50,
         targetEndDate: '2024-01-31',
@@ -1305,6 +1318,7 @@ describe('goals-db', () => {
 
       const input = {
         setId: 'set-123',
+        athleteId: 'ath-1',
         name: longName,
         details: longDetails,
         metric: 'fg_pct',
@@ -1353,6 +1367,7 @@ describe('goals-db', () => {
       for (const { value, expected } of testCases) {
         const input = {
           setId: 'set-123',
+        athleteId: 'ath-1',
           metric: 'fg_pct',
           targetValue: value,
           targetEndDate: '2024-01-31',
@@ -1388,12 +1403,13 @@ describe('goals-db', () => {
 
     it('should handle goal sets with many goals efficiently', async () => {
       const mockGoalSets = [
-        { id: 'set-1', name: 'Many Goals Set', type: 'practice', due_date: '2024-01-31' },
+        { id: 'set-1', name: 'Many Goals Set', type: 'practice', due_date: '2024-01-31', athlete_id: 'ath-1' },
       ]
 
       const mockGoals = Array.from({ length: 50 }, (_, i) => ({
         id: `goal-${i}`,
         set_id: 'set-1',
+        athlete_id: 'ath-1',
         metric: 'fg_pct',
         target_value: 50 + i,
         created_at: `2024-01-10T10:${String(i).padStart(2, '0')}:00Z`,

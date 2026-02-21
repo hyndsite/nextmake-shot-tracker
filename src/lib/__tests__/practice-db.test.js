@@ -34,31 +34,40 @@ vi.mock('../util-id.js', () => ({
   uuid: vi.fn(() => 'test-uuid-123'),
 }))
 
+vi.mock('../athlete-db.js', () => ({
+  getActiveAthleteId: vi.fn(),
+}))
+
 describe('practice-db', () => {
   let mockGet, mockSet, mockDel
   let notifyLocalMutate
+  let getActiveAthleteId
   let uuidCounter = 0
 
   beforeEach(async () => {
     const idbKeyval = await import('idb-keyval')
     const syncNotify = await import('../sync-notify.js')
     const utilId = await import('../util-id.js')
+    const athleteDb = await import('../athlete-db.js')
 
     mockGet = idbKeyval.get
     mockSet = idbKeyval.set
     mockDel = idbKeyval.del
     notifyLocalMutate = syncNotify.notifyLocalMutate
+    getActiveAthleteId = athleteDb.getActiveAthleteId
 
     // Reset mocks
     mockGet.mockClear()
     mockSet.mockClear()
     mockDel.mockClear()
     notifyLocalMutate.mockClear()
+    getActiveAthleteId.mockClear()
 
     // Default implementations
     mockGet.mockResolvedValue(null)
     mockSet.mockResolvedValue(undefined)
     mockDel.mockResolvedValue(undefined)
+    getActiveAthleteId.mockReturnValue(null)
 
     // Reset uuid counter
     uuidCounter = 0
@@ -114,6 +123,14 @@ describe('practice-db', () => {
       const result = await addPracticeSession({ dateISO: '2024-02-20' })
 
       expect(result.date_iso).toBe('2024-02-20')
+    })
+
+    it('should attach athlete_id from active athlete', async () => {
+      getActiveAthleteId.mockReturnValue('ath-1')
+
+      const result = await addPracticeSession()
+
+      expect(result.athlete_id).toBe('ath-1')
     })
 
     it('should add session id to index', async () => {
@@ -193,6 +210,20 @@ describe('practice-db', () => {
       expect(result).toHaveLength(1)
       expect(result[0].id).toBe('id1')
     })
+
+    it('should filter to active athlete while keeping legacy unassigned rows', async () => {
+      getActiveAthleteId.mockReturnValue('ath-1')
+      mockGet
+        .mockResolvedValueOnce(['id1', 'id2', 'id3'])
+        .mockResolvedValueOnce({ id: 'id1', athlete_id: 'ath-1', started_at: '2024-01-03T00:00:00Z', _deleted: false })
+        .mockResolvedValueOnce({ id: 'id2', athlete_id: 'ath-2', started_at: '2024-01-02T00:00:00Z', _deleted: false })
+        .mockResolvedValueOnce({ id: 'id3', athlete_id: null, started_at: '2024-01-01T00:00:00Z', _deleted: false })
+
+      const result = await listPracticeSessions()
+
+      expect(result).toHaveLength(2)
+      expect(result.map((r) => r.id)).toEqual(['id1', 'id3'])
+    })
   })
 
   describe('listActivePracticeSessions', () => {
@@ -220,6 +251,7 @@ describe('practice-db', () => {
     })
 
     it('should add a practice entry with required fields', async () => {
+      getActiveAthleteId.mockReturnValue('ath-1')
       const input = {
         sessionId: 'session-1',
         zoneId: 'zone-1',
@@ -232,6 +264,7 @@ describe('practice-db', () => {
 
       expect(result.id).toBe('test-uuid-1')
       expect(result.user_id).toBeNull()
+      expect(result.athlete_id).toBe('ath-1')
       expect(result.mode).toBe('practice')
       expect(result.session_id).toBe('session-1')
       expect(result.zone_id).toBe('zone-1')
@@ -338,6 +371,24 @@ describe('practice-db', () => {
       await addEntry(input)
 
       expect(mockSet).toHaveBeenCalledWith('__index__', ['test-uuid-1'], st.practice.entries)
+    })
+
+    it('should attach athlete_id from parent session when available', async () => {
+      mockGet.mockImplementation((key) => {
+        if (key === '__index__') return Promise.resolve([])
+        if (key === 'session-1') return Promise.resolve({ id: 'session-1', athlete_id: 'ath-session' })
+        return Promise.resolve(null)
+      })
+
+      const result = await addEntry({
+        sessionId: 'session-1',
+        zoneId: 'zone-1',
+        shotType: 'catch_shoot',
+        attempts: 3,
+        makes: 2,
+      })
+
+      expect(result.athlete_id).toBe('ath-session')
     })
   })
 
@@ -487,6 +538,7 @@ describe('practice-db', () => {
     })
 
     it('should add a practice marker', async () => {
+      getActiveAthleteId.mockReturnValue('ath-1')
       const input = {
         sessionId: 'session-1',
         label: 'Water break',
@@ -496,6 +548,7 @@ describe('practice-db', () => {
 
       expect(result.id).toBe('test-uuid-1')
       expect(result.user_id).toBeNull()
+      expect(result.athlete_id).toBe('ath-1')
       expect(result.mode).toBe('practice')
       expect(result.session_id).toBe('session-1')
       expect(result.label).toBe('Water break')
@@ -512,6 +565,18 @@ describe('practice-db', () => {
       const result = await addMarker({ sessionId: 'session-1' })
 
       expect(result.label).toBe('')
+    })
+
+    it('should attach athlete_id from parent session when available', async () => {
+      mockGet.mockImplementation((key) => {
+        if (key === '__index__') return Promise.resolve([])
+        if (key === 'session-1') return Promise.resolve({ id: 'session-1', athlete_id: 'ath-parent' })
+        return Promise.resolve(null)
+      })
+
+      const result = await addMarker({ sessionId: 'session-1', label: 'Set' })
+
+      expect(result.athlete_id).toBe('ath-parent')
     })
   })
 
@@ -772,6 +837,28 @@ describe('practice-db', () => {
 
       expect(result).toHaveLength(1)
       expect(result[0].id).toBe('e1')
+    })
+
+    it('should filter to active athlete while keeping legacy unassigned rows', async () => {
+      getActiveAthleteId.mockReturnValue('ath-1')
+      const entries = [
+        { id: 'e1', session_id: 'session-1', athlete_id: 'ath-1', ts: '2024-01-15T12:00:00Z', _deleted: false },
+        { id: 'e2', session_id: 'session-1', athlete_id: 'ath-2', ts: '2024-01-15T12:01:00Z', _deleted: false },
+        { id: 'e3', session_id: 'session-1', athlete_id: null, ts: '2024-01-15T12:02:00Z', _deleted: false },
+      ]
+
+      mockGet.mockImplementation((key) => {
+        if (key === '__index__') return Promise.resolve(['e1', 'e2', 'e3'])
+        if (key === 'e1') return Promise.resolve(entries[0])
+        if (key === 'e2') return Promise.resolve(entries[1])
+        if (key === 'e3') return Promise.resolve(entries[2])
+        return Promise.resolve(null)
+      })
+
+      const result = await listEntriesBySession('session-1')
+
+      expect(result).toHaveLength(2)
+      expect(result.map((r) => r.id)).toEqual(['e1', 'e3'])
     })
   })
 

@@ -5,6 +5,7 @@ import { createStore, get, set, del } from "idb-keyval"
 import { uuid } from "./util-id"
 import { notifyLocalMutate } from "./sync-notify"
 import { ZONES } from "../constants/zones"
+import { getActiveAthleteId } from "./athlete-db"
 
 // ---- Stores ----
 export const st = {
@@ -19,6 +20,14 @@ export const st = {
 const IDX_KEY = "__index__"
 const todayISO = () => new Date().toISOString().slice(0, 10)
 const nowISO = () => new Date().toISOString()
+
+function belongsToActiveAthlete(rowAthleteId) {
+  const activeAthleteId = getActiveAthleteId()
+  if (!activeAthleteId) return true
+  // Legacy rows may not have athlete_id yet; keep visible until full backfill.
+  if (!rowAthleteId) return true
+  return rowAthleteId === activeAthleteId
+}
 
 async function readIndex(store) {
   return (await get(IDX_KEY, store)) ?? []
@@ -45,11 +54,17 @@ async function removeFromIndex(store, id) {
 const ZONE_IS_THREE = Object.fromEntries(ZONES.map((z) => [z.id, !!z.isThree]))
 
 // ---- Sessions ----
-export async function addPracticeSession({ dateISO = todayISO() } = {}) {
+export async function addPracticeSession({
+  dateISO = todayISO(),
+  athleteId,
+  athlete_id,
+} = {}) {
   const id = uuid()
+  const resolvedAthleteId = athlete_id ?? athleteId ?? getActiveAthleteId() ?? null
   const row = {
     id,
     user_id: null,
+    athlete_id: resolvedAthleteId,
     // `mode` is local-only; never sent to Supabase
     mode: "practice",
     date_iso: dateISO,
@@ -86,7 +101,7 @@ export async function listPracticeSessions() {
   const rows = []
   for (const id of ids) {
     const row = await get(id, st.practice.sessions)
-    if (row && !row._deleted) rows.push(row)
+    if (row && !row._deleted && belongsToActiveAthlete(row.athlete_id)) rows.push(row)
   }
   rows.sort((a, b) => (b.started_at || "").localeCompare(a.started_at || ""))
   return rows
@@ -95,6 +110,8 @@ export async function listPracticeSessions() {
 // ---- Entries & Markers ----
 export async function addEntry({
   sessionId,
+  athleteId,
+  athlete_id,
   zoneId,
   shotType,
   // Canonical name is `contested`.
@@ -109,6 +126,13 @@ export async function addEntry({
   finishType = null,
 }) {
   const id = uuid()
+  const parentSession = sessionId ? await get(sessionId, st.practice.sessions) : null
+  const resolvedAthleteId =
+    athlete_id ??
+    athleteId ??
+    parentSession?.athlete_id ??
+    getActiveAthleteId() ??
+    null
 
   const resolvedContested =
     typeof contested !== "undefined"
@@ -120,6 +144,7 @@ export async function addEntry({
   const row = {
     id,
     user_id: null,
+    athlete_id: resolvedAthleteId,
     mode: "practice", // local-only
     session_id: sessionId,
     zone_id: zoneId,
@@ -206,11 +231,25 @@ export async function deleteEntry(id) {
   return updated
 }
 
-export async function addMarker({ sessionId, label = "", ts = nowISO() }) {
+export async function addMarker({
+  sessionId,
+  athleteId,
+  athlete_id,
+  label = "",
+  ts = nowISO(),
+}) {
   const id = uuid()
+  const parentSession = sessionId ? await get(sessionId, st.practice.sessions) : null
+  const resolvedAthleteId =
+    athlete_id ??
+    athleteId ??
+    parentSession?.athlete_id ??
+    getActiveAthleteId() ??
+    null
   const row = {
     id,
     user_id: null,
+    athlete_id: resolvedAthleteId,
     mode: "practice", // local-only
     session_id: sessionId,
     label,
@@ -361,7 +400,11 @@ export async function listEntriesBySession(sessionId) {
   const rows = []
   for (const id of ids) {
     const e = await get(id, st.practice.entries)
-    if (e?.session_id === sessionId && !e._deleted) rows.push(e)
+    if (
+      e?.session_id === sessionId &&
+      !e._deleted &&
+      belongsToActiveAthlete(e.athlete_id)
+    ) rows.push(e)
   }
   rows.sort((a, b) => (a.ts || "").localeCompare(b.ts || ""))
   return rows

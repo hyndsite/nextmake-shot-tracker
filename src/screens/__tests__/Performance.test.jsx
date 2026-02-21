@@ -10,9 +10,16 @@ vi.mock('../../lib/performance-db', () => ({
   getPracticePerformance: vi.fn(),
 }))
 
+vi.mock('../../lib/athlete-db', () => ({
+  listAthletes: vi.fn(),
+  getActiveAthleteId: vi.fn(),
+  setActiveAthlete: vi.fn(),
+}))
+
 // Mock lucide-react icons
 vi.mock('lucide-react', () => ({
   ArrowLeft: () => <div data-testid="arrow-left-icon">ArrowLeft</div>,
+  ArrowLeftRight: () => <div data-testid="arrow-left-right-icon">ArrowLeftRight</div>,
   ChevronDown: () => <div data-testid="chevron-down-icon">ChevronDown</div>,
   ChevronUp: () => <div data-testid="chevron-up-icon">ChevronUp</div>,
   Filter: () => <div data-testid="filter-icon">Filter</div>,
@@ -35,9 +42,14 @@ vi.mock('recharts', () => ({
 }))
 
 import { getGamePerformance, getPracticePerformance } from '../../lib/performance-db'
+import { listAthletes, getActiveAthleteId } from '../../lib/athlete-db'
 
 describe('Performance Component', () => {
   let mockNavigate
+  const athletes = [
+    { id: 'ath-1', first_name: 'Maya', last_name: 'One', initials: 'MO', avatar_color: '#DBEAFE' },
+    { id: 'ath-2', first_name: 'Jai', last_name: 'Two', initials: 'JT', avatar_color: '#FCE7F3' },
+  ]
   const mockPerformanceData = {
     metrics: [
       { id: 'left_corner_3', label: 'L Corner 3', makes: 5, attempts: 10, fgPct: 50, attemptsLabel: '5/10', goalPct: 40, isThree: true },
@@ -68,6 +80,8 @@ describe('Performance Component', () => {
     mockNavigate = vi.fn()
     getGamePerformance.mockResolvedValue(mockPerformanceData)
     getPracticePerformance.mockResolvedValue(mockPerformanceData)
+    listAthletes.mockReturnValue(athletes)
+    getActiveAthleteId.mockReturnValue('ath-1')
 
     // Mock localStorage
     vi.spyOn(Storage.prototype, 'getItem').mockReturnValue(null)
@@ -79,6 +93,30 @@ describe('Performance Component', () => {
   })
 
   describe('Rendering Tests', () => {
+    it('passes active athlete id into both performance loaders', async () => {
+      render(<Performance navigate={mockNavigate} />)
+
+      await waitFor(() => {
+        expect(getGamePerformance).toHaveBeenCalledWith(
+          expect.objectContaining({ athleteId: 'ath-1' }),
+        )
+        expect(getPracticePerformance).toHaveBeenCalledWith(
+          expect.objectContaining({ athleteId: 'ath-1' }),
+        )
+      })
+    })
+
+    it('shows prompt and skips loading when no active athlete is selected', async () => {
+      getActiveAthleteId.mockReturnValue('')
+      render(<Performance navigate={mockNavigate} />)
+
+      expect(
+        await screen.findByText('Select an active athlete from Dashboard to view performance.'),
+      ).toBeInTheDocument()
+      expect(getGamePerformance).not.toHaveBeenCalled()
+      expect(getPracticePerformance).not.toHaveBeenCalled()
+    })
+
     it('should render header with Player Performance title', async () => {
       render(<Performance navigate={mockNavigate} />)
 
@@ -380,7 +418,8 @@ describe('Performance Component', () => {
         expect(getGamePerformance).toHaveBeenCalledWith({
           days: 60,
           shotType: 'all',
-          contested: 'all'
+          contested: 'all',
+          athleteId: 'ath-1'
         })
       })
     })
@@ -403,7 +442,8 @@ describe('Performance Component', () => {
         expect(getGamePerformance).toHaveBeenCalledWith({
           days: null,
           shotType: 'all',
-          contested: 'all'
+          contested: 'all',
+          athleteId: 'ath-1'
         })
       })
     })
@@ -426,7 +466,8 @@ describe('Performance Component', () => {
         expect(getPracticePerformance).toHaveBeenCalledWith({
           days: 60,
           shotType: 'all',
-          contested: 'all'
+          contested: 'all',
+          athleteId: 'ath-1'
         })
       })
 
@@ -514,7 +555,8 @@ describe('Performance Component', () => {
         expect(getGamePerformance).toHaveBeenCalledWith({
           days: 30,
           shotType: 'catch_shoot',
-          contested: 'all'
+          contested: 'all',
+          athleteId: 'ath-1'
         })
       })
     })
@@ -537,7 +579,8 @@ describe('Performance Component', () => {
         expect(getGamePerformance).toHaveBeenCalledWith({
           days: 30,
           shotType: 'off_dribble',
-          contested: 'all'
+          contested: 'all',
+          athleteId: 'ath-1'
         })
       })
     })
@@ -560,7 +603,8 @@ describe('Performance Component', () => {
         expect(getPracticePerformance).toHaveBeenCalledWith({
           days: 30,
           shotType: 'catch_shoot',
-          contested: 'all'
+          contested: 'all',
+          athleteId: 'ath-1'
         })
       })
 
@@ -591,7 +635,8 @@ describe('Performance Component', () => {
         expect(getGamePerformance).toHaveBeenCalledWith({
           days: 30,
           shotType: 'all',
-          contested: 'contested'
+          contested: 'contested',
+          athleteId: 'ath-1'
         })
       })
     })
@@ -623,7 +668,8 @@ describe('Performance Component', () => {
         expect(getGamePerformance).toHaveBeenCalledWith({
           days: 30,
           shotType: 'all',
-          contested: 'all'
+          contested: 'all',
+          athleteId: 'ath-1'
         })
       })
     })
@@ -648,7 +694,8 @@ describe('Performance Component', () => {
         expect(getGamePerformance).toHaveBeenCalledWith({
           days: 30,
           shotType: 'all',
-          contested: 'uncontested'
+          contested: 'uncontested',
+          athleteId: 'ath-1'
         })
       })
     })
@@ -699,7 +746,8 @@ describe('Performance Component', () => {
         expect(getPracticePerformance).toHaveBeenCalledWith({
           days: 30,
           shotType: 'all',
-          contested: 'contested'
+          contested: 'contested',
+          athleteId: 'ath-1'
         })
       })
 
@@ -854,7 +902,8 @@ describe('Performance Component', () => {
         expect(getGamePerformance).toHaveBeenCalledWith({
           days: 30,
           shotType: 'all',
-          contested: 'all'
+          contested: 'all',
+          athleteId: 'ath-1'
         })
       })
     })
@@ -866,7 +915,8 @@ describe('Performance Component', () => {
         expect(getPracticePerformance).toHaveBeenCalledWith({
           days: 30,
           shotType: 'all',
-          contested: 'all'
+          contested: 'all',
+          athleteId: 'ath-1'
         })
       })
     })
@@ -890,7 +940,8 @@ describe('Performance Component', () => {
         expect(getGamePerformance).toHaveBeenCalledWith({
           days: 60,
           shotType: 'all',
-          contested: 'all'
+          contested: 'all',
+          athleteId: 'ath-1'
         })
       })
     })
@@ -999,7 +1050,8 @@ describe('Performance Component', () => {
         expect(getGamePerformance).toHaveBeenCalledWith({
           days: 60,
           shotType: 'catch_shoot',
-          contested: 'contested'
+          contested: 'contested',
+          athleteId: 'ath-1'
         })
       })
     })
@@ -1021,7 +1073,8 @@ describe('Performance Component', () => {
         expect(getGamePerformance).toHaveBeenCalledWith({
           days: 60,
           shotType: 'all',
-          contested: 'all'
+          contested: 'all',
+          athleteId: 'ath-1'
         })
       })
     })

@@ -146,6 +146,10 @@ describe('GameDetail Component', () => {
     const inputs = screen.getAllByRole('spinbutton')
     expect(inputs[0]).toHaveValue(85)
     expect(inputs[1]).toHaveValue(78)
+    expect(inputs[0]).toHaveClass('bg-white')
+    expect(inputs[0]).toHaveClass('text-slate-900')
+    expect(inputs[1]).toHaveClass('bg-white')
+    expect(inputs[1]).toHaveClass('text-slate-900')
 
     const saveButton = screen.getByText('Save').closest('button')
     expect(saveButton).toBeDisabled()

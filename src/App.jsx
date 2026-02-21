@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react"
 
 import Login from "./screens/Login"
-import ModeGate from "./screens/ModeGate"
+import Dashboard from "./screens/Dashboard"
 
 import PracticeLog from "./screens/PracticeLog"
 import PracticeGate from "./screens/PracticeGate"
@@ -26,14 +26,14 @@ import { whenIdbReady } from "./lib/idb-init"
 const LAST_ROUTE_KEY = "nm_last_route"
 
 export default function App() {
-  // high-level screen: "login" | "mode" | "app"
+  // high-level screen: "login" | "app"
   const [screen, setScreen] = useState("login")
 
   // bootPhase: controls loading while we hydrate from Supabase
   const [bootPhase, setBootPhase] = useState("checking") // "checking" | "bootstrapping" | "ready"
 
   // active bottom tab
-  const [activeTab, setActiveTab] = useState("practice")
+  const [activeTab, setActiveTab] = useState("dashboard")
 
   // lightweight routers for practice and game tabs
   const [gameRoute, setGameRoute] = useState({ screen: "gate", params: {} })       // "gate" | "game-new" | "game-logger" | "gameDetail"
@@ -89,7 +89,7 @@ export default function App() {
           setBootPhase("ready")
           return
         }
-        // active user → load data, then go to ModeGate instead of auto-entering app
+        // active user → load data, then enter app shell
         setBootPhase("bootstrapping")
 
         try {
@@ -102,8 +102,9 @@ export default function App() {
         restoreLastRoute()
         setBootPhase("ready")
 
-      // Show ModeGate as the first screen after refresh
-      setScreen("mode")
+        // Show Dashboard as the first screen after refresh
+        setActiveTab("dashboard")
+        setScreen("app")
       } catch (err) {
         console.error("[App] auth check failed", err)
         if (!cancelled) {
@@ -119,19 +120,10 @@ export default function App() {
 
   // ---------- navigation helpers ----------
 
-  // ModeGate → choose starting tab on first login
-  const handleModeSelect = (m) => {
-    const tab = m === "game" ? "game" : "practice"
-    setActiveTab(tab)
-    if (tab === "game") {
-      setGameRoute({ screen: "gate", params: {} })
-    } else {
-      setPracticeRoute({ screen: "gate", params: {} })
-    }
+  const toApp = () => {
+    setActiveTab("dashboard")
     setScreen("app")
   }
-
-  const toModeGate = () => setScreen("mode")
 
   // Practice-tab navigator (used by PracticeGate / PracticeLog)
   const navPractice = (nextScreen, params = {}) => {
@@ -159,7 +151,7 @@ export default function App() {
     await supabase.auth.signOut()
     localStorage.removeItem(LAST_ROUTE_KEY)
     setScreen("login")
-    setActiveTab("practice")
+    setActiveTab("dashboard")
     setGameRoute({ screen: "gate", params: {} })
     setPracticeRoute({ screen: "gate", params: {} })
   }
@@ -168,12 +160,7 @@ export default function App() {
 
   // 1) No active user → login
   if (screen === "login") {
-    return <Login onSuccess={toModeGate} />
-  }
-
-  // 2) First-time after login → mode selection
-  if (screen === "mode") {
-    return <ModeGate onSelect={handleModeSelect} />
+    return <Login onSuccess={toApp} />
   }
 
   // 3) Authenticated app, but still bootstrapping from Supabase
@@ -189,6 +176,8 @@ export default function App() {
   return (
     <div className="w-full min-h-dvh pb-bottomnav">
       {/* tab content */}
+      {activeTab === "dashboard" && <Dashboard />}
+
       {activeTab === "practice" && (
         <>
           {practiceRoute.screen === "gate" && <PracticeGate navigate={navPractice} />}

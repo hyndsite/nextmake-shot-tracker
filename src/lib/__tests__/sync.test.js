@@ -495,6 +495,7 @@ describe('sync', () => {
         _dirty: true,
         _deleted: false,
         user_id: null,
+        athlete_id: 'ath-1',
         date_iso: '2024-01-15',
         started_at: '2024-01-15T10:00:00Z',
         ended_at: null,
@@ -1027,6 +1028,7 @@ describe('sync', () => {
       expect(Object.keys(upsertedRow).sort()).toEqual([
         'id',
         'user_id',
+        'athlete_id',
         'date_iso',
         'started_at',
         'ended_at',
@@ -1041,6 +1043,7 @@ describe('sync', () => {
         _dirty: true,
         _deleted: false,
         user_id: null,
+        athlete_id: 'ath-1',
         session_id: 'ps1',
         zone_id: 'zone1',
         shot_type: 'catch_shoot',
@@ -1065,6 +1068,7 @@ describe('sync', () => {
       expect(Object.keys(upsertedRow).sort()).toEqual([
         'id',
         'user_id',
+        'athlete_id',
         'session_id',
         'zone_id',
         'shot_type',
@@ -1082,6 +1086,7 @@ describe('sync', () => {
         _dirty: true,
         _deleted: false,
         user_id: null,
+        athlete_id: 'ath-1',
         session_id: 'ps1',
         label: 'Break',
         ts: '2024-01-15T10:10:00Z',
@@ -1102,6 +1107,7 @@ describe('sync', () => {
       expect(Object.keys(upsertedRow).sort()).toEqual([
         'id',
         'user_id',
+        'athlete_id',
         'session_id',
         'label',
         'ts',

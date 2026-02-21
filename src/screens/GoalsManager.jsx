@@ -12,6 +12,11 @@ import {
 } from "../lib/goals-db"
 import { supabase, getUser } from "../lib/supabase"
 import {
+  listAthletes,
+  getActiveAthleteId,
+  setActiveAthlete,
+} from "../lib/athlete-db"
+import {
   BASE_METRIC_OPTIONS,
   GAME_ONLY_METRIC_OPTIONS,
   computeGameMetricValue,
@@ -29,6 +34,7 @@ import {
   Archive,
 } from "lucide-react"
 import { MdEmojiObjects } from "react-icons/md"
+import ActiveAthleteSwitcher from "../components/ActiveAthleteSwitcher"
 
 // ------------------- helpers -------------------
 
@@ -134,6 +140,8 @@ function computeGoalProgress({ goal, set, gameEvents, practiceEntries }) {
 export default function GoalsManager({ navigate }) {
   const [loading, setLoading] = useState(true)
   const [goalSets, setGoalSets] = useState([])
+  const [athletes, setAthletes] = useState(() => listAthletes())
+  const [activeAthleteId, setActiveAthleteId] = useState(() => getActiveAthleteId() || "")
 
   // Game / practice data for metric calculations
   const [gameEvents, setGameEvents] = useState([])
@@ -168,6 +176,11 @@ export default function GoalsManager({ navigate }) {
   const [openAddGoal, setOpenAddGoal] = useState(false)
   const [openArchived, setOpenArchived] = useState(false)
 
+  const refreshAthletes = () => {
+    setAthletes(listAthletes())
+    setActiveAthleteId(getActiveAthleteId() || "")
+  }
+
   // Initial load of goal sets + game/practice data
   useEffect(() => {
     let cancelled = false
@@ -175,8 +188,9 @@ export default function GoalsManager({ navigate }) {
     async function load() {
       setLoading(true)
       try {
+        refreshAthletes()
         const [sets, user] = await Promise.all([
-          listGoalSetsWithGoals(),
+          listGoalSetsWithGoals({ athleteId: activeAthleteId }),
           getUser(),
         ])
 
@@ -189,16 +203,26 @@ export default function GoalsManager({ navigate }) {
             { data: gameData, error: gameErr },
             { data: pracData, error: pracErr },
           ] = await Promise.all([
-            supabase
-              .from("game_events")
-              .select("*")
-              .eq("user_id", userId)
-              .order("ts", { ascending: true }),
-            supabase
-              .from("practice_entries")
-              .select("*")
-              .eq("user_id", userId)
-              .order("ts", { ascending: true }),
+            (() => {
+              let query = supabase
+                .from("game_events")
+                .select("*")
+                .eq("user_id", userId)
+              if (activeAthleteId) {
+                query = query.eq("athlete_id", activeAthleteId)
+              }
+              return query.order("ts", { ascending: true })
+            })(),
+            (() => {
+              let query = supabase
+                .from("practice_entries")
+                .select("*")
+                .eq("user_id", userId)
+              if (activeAthleteId) {
+                query = query.eq("athlete_id", activeAthleteId)
+              }
+              return query.order("ts", { ascending: true })
+            })(),
           ])
 
           if (gameErr) {
@@ -226,6 +250,9 @@ export default function GoalsManager({ navigate }) {
           const firstActive =
             sets.find((s) => !s.archived) || sets[0]
           setSelectedSetIdForGoal(firstActive.id)
+        } else if (selectedSetIdForGoal && sets && !sets.some((s) => s.id === selectedSetIdForGoal)) {
+          const firstActive = sets.find((s) => !s.archived) || sets[0]
+          setSelectedSetIdForGoal(firstActive?.id || "")
         }
       } catch (err) {
         console.warn("[GoalsManager] load error:", err)
@@ -244,7 +271,7 @@ export default function GoalsManager({ navigate }) {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [activeAthleteId])
 
   // Split into active and archived sets
   const activeSorted = useMemo(
@@ -408,6 +435,7 @@ export default function GoalsManager({ navigate }) {
   async function handleAddGoal(e) {
     e.preventDefault()
     if (
+      !activeAthleteId ||
       !selectedSetIdForGoal ||
       !goalMetric ||
       !goalTarget ||
@@ -434,6 +462,7 @@ export default function GoalsManager({ navigate }) {
     try {
       const created = await createGoal({
         setId: selectedSetIdForGoal,
+        athleteId: activeAthleteId,
         name: goalName || metricLabel(goalMetric),
         details:
           goalDetails ||
@@ -495,6 +524,7 @@ export default function GoalsManager({ navigate }) {
   }
 
   const addGoalDisabled =
+    !activeAthleteId ||
     !selectedSetIdForGoal ||
     !goalMetric ||
     !goalTarget ||
@@ -524,6 +554,15 @@ export default function GoalsManager({ navigate }) {
       </header>
 
       <main className="max-w-screen-sm mx-auto p-4 pb-24 space-y-4">
+        <ActiveAthleteSwitcher
+          athletes={athletes}
+          activeAthleteId={activeAthleteId}
+          onSelectAthlete={(athleteId) => {
+            setActiveAthlete(athleteId)
+            setActiveAthleteId(athleteId)
+          }}
+        />
+
         {/* Create New Goal Set (Accordion) */}
         <section className="rounded-2xl border border-slate-200 bg-white">
           <button

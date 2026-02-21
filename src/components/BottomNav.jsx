@@ -1,5 +1,6 @@
 import React from "react"
 import {
+  House,
   ClipboardList,        // Practice
   Gamepad2,             // Game
   LineChart,            // Performance
@@ -9,6 +10,7 @@ import {
 } from "lucide-react"
 
 const TABS = [
+  { key: "dashboard",  label: "Home",        Icon: House },
   { key: "practice",   label: "Practice",    Icon: ClipboardList },
   { key: "game",       label: "Game",        Icon: Gamepad2 },
   { key: "progress",   label: "Perf",        Icon: LineChart },
@@ -34,7 +36,7 @@ export default function BottomNav({ activeTab, onChange }) {
         aria-label="Primary"
       >
       <div className="mx-auto max-w-screen-sm px-3">
-        <ul className="grid grid-cols-6">
+        <ul className="grid grid-cols-7">
           {TABS.map(({ key, label, Icon }) => {
             const active = activeTab === key
             return (

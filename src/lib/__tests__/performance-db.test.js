@@ -418,6 +418,35 @@ describe('performance-db', () => {
       // Should have 2 weeks worth of data
       expect(result.trendBuckets.weekly.length).toBeGreaterThan(0)
     })
+
+    it('filters game sessions and events by athleteId when provided', async () => {
+      const sessions = [
+        { id: 'game-1', athlete_id: 'ath-1', date_iso: '2024-01-10', _deleted: false },
+        { id: 'game-2', athlete_id: 'ath-2', date_iso: '2024-01-10', _deleted: false },
+      ]
+
+      const events = [
+        { id: 'e1', game_id: 'game-1', athlete_id: 'ath-1', type: 'shot', zone_id: 'left_corner_3', made: true, is_three: true, ts: '2024-01-10T10:00:00Z', _deleted: false },
+        { id: 'e2', game_id: 'game-2', athlete_id: 'ath-2', type: 'shot', zone_id: 'left_corner_3', made: true, is_three: true, ts: '2024-01-10T10:01:00Z', _deleted: false },
+      ]
+
+      mockKeys
+        .mockResolvedValueOnce(['game-1', 'game-2'])
+        .mockResolvedValueOnce(['e1', 'e2'])
+
+      mockGet.mockImplementation((key) => {
+        const session = sessions.find((s) => s.id === key)
+        if (session) return Promise.resolve(session)
+        const event = events.find((e) => e.id === key)
+        return Promise.resolve(event || null)
+      })
+
+      const result = await getGamePerformance({ days: 30, athleteId: 'ath-1' })
+
+      expect(result.totalAttempts).toBe(1)
+      expect(result.metrics).toHaveLength(1)
+      expect(result.metrics[0].id).toBe('left_corner_3')
+    })
   })
 
   describe('getPracticePerformance', () => {
@@ -744,6 +773,35 @@ describe('performance-db', () => {
       // Entry with 0 attempts should be skipped
       expect(result.totalAttempts).toBe(10)
       expect(result.metrics).toHaveLength(1)
+    })
+
+    it('filters practice sessions and entries by athleteId when provided', async () => {
+      const sessions = [
+        { id: 'practice-1', athlete_id: 'ath-1', date_iso: '2024-01-10', _deleted: false },
+        { id: 'practice-2', athlete_id: 'ath-2', date_iso: '2024-01-10', _deleted: false },
+      ]
+
+      const entries = [
+        { id: 'e1', session_id: 'practice-1', athlete_id: 'ath-1', zone_id: 'left_corner_3', attempts: 10, makes: 7, ts: '2024-01-10T10:00:00Z', _deleted: false },
+        { id: 'e2', session_id: 'practice-2', athlete_id: 'ath-2', zone_id: 'center_mid', attempts: 10, makes: 1, ts: '2024-01-10T10:00:00Z', _deleted: false },
+      ]
+
+      mockKeys
+        .mockResolvedValueOnce(['practice-1', 'practice-2'])
+        .mockResolvedValueOnce(['e1', 'e2'])
+
+      mockGet.mockImplementation((key) => {
+        const session = sessions.find((s) => s.id === key)
+        if (session) return Promise.resolve(session)
+        const entry = entries.find((e) => e.id === key)
+        return Promise.resolve(entry || null)
+      })
+
+      const result = await getPracticePerformance({ days: 30, athleteId: 'ath-1' })
+
+      expect(result.totalAttempts).toBe(10)
+      expect(result.metrics).toHaveLength(1)
+      expect(result.metrics[0].id).toBe('left_corner_3')
     })
   })
 })

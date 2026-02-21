@@ -3,10 +3,24 @@ import { addGameSession } from "../lib/game-db"
 import {LEVELS } from "../constants/programLevel"     // <- ensure this file exists per our constants step
 import { HOME_AWAY } from "../constants/homeAway" // <- Home/Away dropdown options
 import { ArrowLeft } from "lucide-react"
+import {
+  getActiveAthleteId,
+  listAthletes,
+  setActiveAthlete,
+} from "../lib/athlete-db"
+
+function athleteName(athlete) {
+  if (!athlete) return "Unknown athlete"
+  return `${athlete.first_name}${athlete.last_name ? ` ${athlete.last_name}` : ""}`
+}
 
 export default function GameNew({ navigate }) {
   // Defaults
   const todayISO = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const athletes = useMemo(() => listAthletes(), [])
+  const [athleteId, setAthleteId] = useState(() =>
+    getActiveAthleteId() || athletes[0]?.id || ""
+  )
   const [dateISO, setDateISO]   = useState(todayISO)
   const [teamName, setTeamName] = useState("")
   const [opponent, setOpponent] = useState("")
@@ -14,9 +28,19 @@ export default function GameNew({ navigate }) {
   const [level, setLevel]       = useState("High School")
   const [homeAway, setHomeAway] = useState("Home")
   const [saving, setSaving]     = useState(false)
+  const [pendingAthleteId, setPendingAthleteId] = useState("")
+  const selectedAthlete = useMemo(
+    () => athletes.find((row) => row.id === athleteId) ?? null,
+    [athletes, athleteId]
+  )
+  const pendingAthlete = useMemo(
+    () => athletes.find((row) => row.id === pendingAthleteId) ?? null,
+    [athletes, pendingAthleteId]
+  )
   
 
   function invalidReason() {
+    if (!athleteId)        return "Select an athlete profile first."
     if (!teamName.trim()) return "Enter your team."
     if (!opponent.trim()) return "Enter the opponent."
     if (!dateISO)         return "Pick a date."
@@ -29,7 +53,9 @@ export default function GameNew({ navigate }) {
 
     setSaving(true)
     try {
+      setActiveAthlete(athleteId)
       const row = await addGameSession({
+        athlete_id: athleteId,
         date_iso: dateISO,
         team_name: teamName.trim(),
         opponent_name: opponent.trim(),
@@ -41,6 +67,22 @@ export default function GameNew({ navigate }) {
     } finally {
       setSaving(false)
     }
+  }
+
+  function onAthleteSelectChange(nextId) {
+    if (!nextId || nextId === athleteId) return
+    setPendingAthleteId(nextId)
+  }
+
+  function confirmAthleteChange() {
+    if (!pendingAthleteId) return
+    setAthleteId(pendingAthleteId)
+    setActiveAthlete(pendingAthleteId)
+    setPendingAthleteId("")
+  }
+
+  function cancelAthleteChange() {
+    setPendingAthleteId("")
   }
 
   return (
@@ -58,6 +100,45 @@ export default function GameNew({ navigate }) {
       <h1 className="screen-title">New Game</h1>
 
       <section className="section space-y-4">
+        <div
+          data-testid="athlete-start-row"
+          className="flex items-end gap-3"
+        >
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-slate-700 mb-1">Athlete</label>
+            <select
+              value={athleteId}
+              onChange={e => onAthleteSelectChange(e.target.value)}
+              className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-900"
+            >
+              {athletes.map((athlete) => (
+                <option key={athlete.id} value={athlete.id}>
+                  {athleteName(athlete)}
+                </option>
+              ))}
+            </select>
+            {selectedAthlete && (
+              <p className="mt-1 text-xs text-slate-500">
+                This game will be saved to {athleteName(selectedAthlete)}.
+              </p>
+            )}
+            {!athletes.length && (
+              <p className="mt-1 text-xs text-red-600">
+                No athlete profiles found. Add one from Dashboard first.
+              </p>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={startGame}
+            disabled={saving}
+            className="btn btn-emerald h-11 rounded-xl text-base font-semibold px-5 shrink-0"
+          >
+            {saving ? "Starting…" : "Start Game"}
+          </button>
+        </div>
+
         {/* Date */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
@@ -138,18 +219,41 @@ export default function GameNew({ navigate }) {
           </div>
         </div>
 
-        {/* Start button (emerald) */}
-        <div className="pt-1">
-          <button
-            type="button"
-            onClick={startGame}
-            disabled={saving}
-            className="btn btn-emerald h-11 rounded-xl text-base font-semibold"
-          >
-            {saving ? "Starting…" : "Start Game"}
-          </button>
-        </div>
       </section>
+
+      {pendingAthlete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirm athlete change"
+        >
+          <div className="w-[92%] max-w-sm rounded-2xl bg-white p-4 shadow-xl">
+            <h2 className="text-base font-semibold text-slate-900">
+              Change active athlete?
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Switch to {athleteName(pendingAthlete)} for this game?
+            </p>
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={cancelAthleteChange}
+                className="h-9 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmAthleteChange}
+                className="btn btn-blue h-9 px-3 rounded-lg text-sm font-semibold"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -23,6 +23,12 @@ import {
   getGamePerformance,
   getPracticePerformance,
 } from "../lib/performance-db"
+import {
+  listAthletes,
+  getActiveAthleteId,
+  setActiveAthlete,
+} from "../lib/athlete-db"
+import ActiveAthleteSwitcher from "../components/ActiveAthleteSwitcher"
 
 const DEFAULT_RANGE_ID = TIME_RANGES[0]?.id || "30d"
 
@@ -45,6 +51,15 @@ const MODE_OPTIONS = [
   { id: "attempts", label: "Attempts" },
   { id: "fgpct", label: "FG%" },
 ]
+
+const EMPTY_PERF_DATA = {
+  metrics: [],
+  trend: [],
+  overallFgPct: 0,
+  overallEfgPct: 0,
+  totalAttempts: 0,
+  trendBuckets: { daily: [], weekly: [], monthly: [] },
+}
 
 function ContestedPills({ value, onChange }) {
   const handleClick = (id) => {
@@ -461,6 +476,9 @@ function SectionHeader({ title, expanded, onToggle }) {
 // ---- Main component ----
 
 export default function Performance({ navigate }) {
+  const [athletes, setAthletes] = useState(() => listAthletes())
+  const [activeAthleteId, setActiveAthleteId] = useState(() => getActiveAthleteId() || "")
+
   const [gameExpanded, setGameExpanded] = useState(true)
   const [practiceExpanded, setPracticeExpanded] = useState(true)
 
@@ -485,22 +503,8 @@ export default function Performance({ navigate }) {
   const [gameSelectedPoint, setGameSelectedPoint] = useState(null)
   const [practiceSelectedPoint, setPracticeSelectedPoint] = useState(null)
 
-  const [gameData, setGameData] = useState({
-    metrics: [],
-    trend: [],
-    overallFgPct: 0,
-    overallEfgPct: 0,
-    totalAttempts: 0,
-    trendBuckets: { daily: [], weekly: [], monthly: [] },
-  })
-  const [practiceData, setPracticeData] = useState({
-    metrics: [],
-    trend: [],
-    overallFgPct: 0,
-    overallEfgPct: 0,
-    totalAttempts: 0,
-    trendBuckets: { daily: [], weekly: [], monthly: [] },
-  })
+  const [gameData, setGameData] = useState(EMPTY_PERF_DATA)
+  const [practiceData, setPracticeData] = useState(EMPTY_PERF_DATA)
 
   // Restore accordion state
   useEffect(() => {
@@ -514,6 +518,11 @@ export default function Performance({ navigate }) {
     }
   }, [])
 
+  useEffect(() => {
+    setAthletes(listAthletes())
+    setActiveAthleteId(getActiveAthleteId() || "")
+  }, [])
+
   const gameRange = useMemo(() => getRangeById(gameRangeId), [gameRangeId])
   const practiceRange = useMemo(
     () => getRangeById(practiceRangeId),
@@ -524,9 +533,22 @@ export default function Performance({ navigate }) {
   useEffect(() => {
     let cancelled = false
     async function load() {
+      if (!activeAthleteId) {
+        if (!cancelled) {
+          setGameLoading(false)
+          setGameData(EMPTY_PERF_DATA)
+          setGameSelectedPoint(null)
+        }
+        return
+      }
       setGameLoading(true)
       try {
-        const data = await getGamePerformance({ days: gameRange.days, shotType: gameShotType, contested: gameContested })
+        const data = await getGamePerformance({
+          days: gameRange.days,
+          shotType: gameShotType,
+          contested: gameContested,
+          athleteId: activeAthleteId,
+        })
         if (!cancelled) {
           setGameData(data)
           setGameSelectedPoint(null)
@@ -534,14 +556,7 @@ export default function Performance({ navigate }) {
       } catch (err) {
         console.warn("[Performance] getGamePerformance error:", err)
         if (!cancelled) {
-          setGameData({
-            metrics: [],
-            trend: [],
-            overallFgPct: 0,
-            overallEfgPct: 0,
-            totalAttempts: 0,
-            trendBuckets: { daily: [], weekly: [], monthly: [] },
-          })
+          setGameData(EMPTY_PERF_DATA)
           setGameSelectedPoint(null)
         }
       } finally {
@@ -552,15 +567,28 @@ export default function Performance({ navigate }) {
     return () => {
       cancelled = true
     }
-  }, [gameRange.days, gameShotType, gameContested])
+  }, [gameRange.days, gameShotType, gameContested, activeAthleteId])
 
   // Load Practice performance
   useEffect(() => {
     let cancelled = false
     async function load() {
+      if (!activeAthleteId) {
+        if (!cancelled) {
+          setPracticeLoading(false)
+          setPracticeData(EMPTY_PERF_DATA)
+          setPracticeSelectedPoint(null)
+        }
+        return
+      }
       setPracticeLoading(true)
       try {
-        const data = await getPracticePerformance({ days: practiceRange.days, shotType: practiceShotType, contested: practiceContested })
+        const data = await getPracticePerformance({
+          days: practiceRange.days,
+          shotType: practiceShotType,
+          contested: practiceContested,
+          athleteId: activeAthleteId,
+        })
         if (!cancelled) {
           setPracticeData(data)
           setPracticeSelectedPoint(null)
@@ -568,14 +596,7 @@ export default function Performance({ navigate }) {
       } catch (err) {
         console.warn("[Performance] getPracticePerformance error:", err)
         if (!cancelled) {
-          setPracticeData({
-            metrics: [],
-            trend: [],
-            overallFgPct: 0,
-            overallEfgPct: 0,
-            totalAttempts: 0,
-            trendBuckets: { daily: [], weekly: [], monthly: [] },
-          })
+          setPracticeData(EMPTY_PERF_DATA)
           setPracticeSelectedPoint(null)
         }
       } finally {
@@ -586,7 +607,7 @@ export default function Performance({ navigate }) {
     return () => {
       cancelled = true
     }
-  }, [practiceRange.days, practiceShotType, practiceContested])
+  }, [practiceRange.days, practiceShotType, practiceContested, activeAthleteId])
 
   // Derived trend series and ticks (Game)
   const gameTrendData = useMemo(() => {
@@ -651,6 +672,23 @@ export default function Performance({ navigate }) {
       </header>
 
       <main className="max-w-screen-sm mx-auto p-4 pb-24 space-y-4">
+        <ActiveAthleteSwitcher
+          athletes={athletes}
+          activeAthleteId={activeAthleteId}
+          onSelectAthlete={(athleteId) => {
+            setActiveAthlete(athleteId)
+            setActiveAthleteId(athleteId)
+          }}
+        />
+
+        {!activeAthleteId && (
+          <section className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+            <div className="text-sm text-amber-900">
+              Select an active athlete from Dashboard to view performance.
+            </div>
+          </section>
+        )}
+
         {/* GAME PERFORMANCE */}
         <section className="rounded-2xl border border-slate-200 bg-white p-3 space-y-2">
           <SectionHeader

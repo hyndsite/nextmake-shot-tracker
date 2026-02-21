@@ -163,14 +163,15 @@ function sanitizeForUpsert(rows) {
 
     // ---- practice table whitelists ----
     if (_table === "practice_sessions") {
-      const { id, user_id, date_iso, started_at, ended_at, status } = r
-      return { id, user_id, date_iso, started_at, ended_at, status }
+      const { id, user_id, athlete_id, date_iso, started_at, ended_at, status } = r
+      return { id, user_id, athlete_id, date_iso, started_at, ended_at, status }
     }
 
     if (_table === "practice_entries") {
       const {
         id,
         user_id,
+        athlete_id,
         session_id,
         zone_id,
         shot_type,
@@ -192,6 +193,7 @@ function sanitizeForUpsert(rows) {
       return {
         id,
         user_id,
+        athlete_id,
         session_id,
         zone_id,
         shot_type,
@@ -203,8 +205,8 @@ function sanitizeForUpsert(rows) {
     }
 
     if (_table === "practice_markers") {
-      const { id, user_id, session_id, label, ts } = r
-      return { id, user_id, session_id, label, ts }
+      const { id, user_id, athlete_id, session_id, label, ts } = r
+      return { id, user_id, athlete_id, session_id, label, ts }
     }
 
     return r

@@ -66,6 +66,7 @@ describe('game-db', () => {
     mockKeys.mockClear()
     mockDel.mockClear()
     notifyLocalMutate.mockClear()
+    localStorage.clear()
 
     // Default mock implementations
     mockGet.mockResolvedValue(null)
@@ -131,6 +132,23 @@ describe('game-db', () => {
 
       expect(result).toHaveLength(1)
       expect(result[0].id).toBe('id1')
+    })
+
+    it('should filter to active athlete id while keeping legacy unassigned rows', async () => {
+      localStorage.setItem('nm_active_athlete_id', 'ath-1')
+      localStorage.setItem('nm_athletes', JSON.stringify([
+        { id: 'ath-1', first_name: 'Max', last_name: '', avatar_color: '#BFDBFE', initials: 'M' },
+        { id: 'ath-2', first_name: 'Ava', last_name: '', avatar_color: '#FBCFE8', initials: 'A' },
+      ]))
+      mockKeys.mockResolvedValue(['id1', 'id2', 'id3'])
+      mockGet
+        .mockResolvedValueOnce({ id: 'id1', athlete_id: 'ath-1', started_at: '2024-01-03T00:00:00Z', _deleted: false })
+        .mockResolvedValueOnce({ id: 'id2', athlete_id: 'ath-2', started_at: '2024-01-02T00:00:00Z', _deleted: false })
+        .mockResolvedValueOnce({ id: 'id3', athlete_id: null, started_at: '2024-01-01T00:00:00Z', _deleted: false })
+
+      const result = await listGameSessions()
+
+      expect(result.map((r) => r.id)).toEqual(['id1', 'id3'])
     })
   })
 
@@ -265,6 +283,17 @@ describe('game-db', () => {
       const result = await addGameSession()
 
       expect(result.date_iso).toBe('2024-01-15')
+    })
+
+    it('should attach athlete_id from active athlete', async () => {
+      localStorage.setItem('nm_active_athlete_id', 'ath-1')
+      localStorage.setItem('nm_athletes', JSON.stringify([
+        { id: 'ath-1', first_name: 'Max', last_name: '', avatar_color: '#BFDBFE', initials: 'M' },
+      ]))
+
+      const result = await addGameSession()
+
+      expect(result.athlete_id).toBe('ath-1')
     })
 
     it('should use provided date_iso', async () => {
@@ -424,6 +453,10 @@ describe('game-db', () => {
     })
 
     it('should add a shot event with required fields', async () => {
+      localStorage.setItem('nm_active_athlete_id', 'ath-1')
+      localStorage.setItem('nm_athletes', JSON.stringify([
+        { id: 'ath-1', first_name: 'Max', last_name: '', avatar_color: '#BFDBFE', initials: 'M' },
+      ]))
       mockGet.mockResolvedValue(null)
       mockKeys.mockResolvedValue([])
 
@@ -440,6 +473,7 @@ describe('game-db', () => {
 
       expect(result.id).toBe('test-uuid-123')
       expect(result.game_id).toBe('game-1')
+      expect(result.athlete_id).toBe('ath-1')
       expect(result.type).toBe('shot')
       expect(result.zone_id).toBe('zone-1')
       expect(result.shot_type).toBe('catch_shoot')
@@ -669,6 +703,23 @@ describe('game-db', () => {
       const result = await listGameEventsBySession('game-1')
 
       expect(result).toEqual([])
+    })
+
+    it('should filter events to active athlete while keeping legacy unassigned rows', async () => {
+      localStorage.setItem('nm_active_athlete_id', 'ath-1')
+      localStorage.setItem('nm_athletes', JSON.stringify([
+        { id: 'ath-1', first_name: 'Max', last_name: '', avatar_color: '#BFDBFE', initials: 'M' },
+        { id: 'ath-2', first_name: 'Ava', last_name: '', avatar_color: '#FBCFE8', initials: 'A' },
+      ]))
+      mockKeys.mockResolvedValue(['e1', 'e2', 'e3'])
+      mockGet
+        .mockResolvedValueOnce({ id: 'e1', game_id: 'game-1', athlete_id: 'ath-1', ts: '2024-01-15T12:00:00Z', _deleted: false })
+        .mockResolvedValueOnce({ id: 'e2', game_id: 'game-1', athlete_id: 'ath-2', ts: '2024-01-15T12:01:00Z', _deleted: false })
+        .mockResolvedValueOnce({ id: 'e3', game_id: 'game-1', athlete_id: null, ts: '2024-01-15T12:02:00Z', _deleted: false })
+
+      const result = await listGameEventsBySession('game-1')
+
+      expect(result.map((r) => r.id)).toEqual(['e1', 'e3'])
     })
   })
 

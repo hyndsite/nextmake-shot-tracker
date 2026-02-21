@@ -4,6 +4,7 @@ import { uuid } from "./util-id"
 import { notifyLocalMutate } from "./sync-notify"
 import { whenIdbReady } from "./idb-init"
 import { supabase } from "./supabase"
+import { getActiveAthleteId } from "./athlete-db"
 
 const ready = whenIdbReady()
 const nowISO = () => new Date().toISOString()
@@ -21,6 +22,14 @@ function normalizeHomeAway(v) {
   if (s === "home" || s === "h") return "Home"
   if (s === "away" || s === "a") return "Away"
   return "Home"
+}
+
+function belongsToActiveAthlete(rowAthleteId) {
+  const activeAthleteId = getActiveAthleteId()
+  if (!activeAthleteId) return true
+  // Legacy rows may not have athlete_id yet; keep visible until full backfill.
+  if (!rowAthleteId) return true
+  return rowAthleteId === activeAthleteId
 }
 
 /**
@@ -91,7 +100,7 @@ export async function listGameSessions() {
   const rows = []
   for (const k of allKeys) {
     const row = await get(k, st.game.sessions)
-    if (row && !row._deleted) rows.push(row)
+    if (row && !row._deleted && belongsToActiveAthlete(row.athlete_id)) rows.push(row)
   }
   rows.sort((a, b) => (b.started_at || "").localeCompare(a.started_at || ""))
   return rows
@@ -100,7 +109,10 @@ export async function listGameSessions() {
 export async function getGameSession(id) {
   await ready
   if (!id) return null
-  return await get(id, st.game.sessions)
+  const row = await get(id, st.game.sessions)
+  if (!row) return null
+  if (!belongsToActiveAthlete(row.athlete_id)) return null
+  return row
 }
 
 export async function getActiveGameSession() {
@@ -115,9 +127,11 @@ export async function addGameSession(meta = {}) {
   const startedAt = nowISO()
 
   const homeAwayInput = meta.home_away ?? meta.homeAway ?? meta.homeOrAway
+  const athleteId = meta.athlete_id ?? meta.athleteId ?? getActiveAthleteId() ?? null
 
   const row = {
     id,
+    athlete_id: athleteId,
     status: "active",
     started_at: startedAt,
     ended_at: null,
@@ -207,6 +221,7 @@ export async function addGameEvent(input) {
   await ready
 
   const game_id = input.game_id ?? input.gameId
+  const athlete_id = input.athlete_id ?? input.athleteId ?? getActiveAthleteId() ?? null
   const zone_id = input.zone_id ?? input.zoneId ?? null
   const shot_type = input.shot_type ?? input.shotType ?? null
   const is_three =
@@ -247,6 +262,7 @@ export async function addGameEvent(input) {
     ...(existing || {}),
     id,
     game_id,
+    athlete_id,
     user_id: user_id ?? existing?.user_id ?? null,
     mode,
     type,
@@ -315,7 +331,11 @@ export async function listGameEventsBySession(gameId) {
   const allKeys = await keys(st.game.events)
   for (const k of allKeys) {
     const ev = await get(k, st.game.events)
-    if (ev?.game_id === gameId && !ev._deleted) out.push(ev)
+    if (
+      ev?.game_id === gameId &&
+      !ev._deleted &&
+      belongsToActiveAthlete(ev.athlete_id)
+    ) out.push(ev)
   }
   out.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime())
   return out

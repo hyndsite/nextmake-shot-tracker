@@ -1,5 +1,6 @@
 // src/lib/goals-db.js
 import { supabase, getUser } from "./supabase"
+import { getActiveAthleteId } from "./athlete-db"
 
 /**
  * Internal: ensure we have an authenticated user and return their id.
@@ -21,8 +22,9 @@ async function requireUserId() {
  *   { id, name, type, due_date, created_at, goals: [ ... ] }
  * ]
  */
-export async function listGoalSetsWithGoals() {
+export async function listGoalSetsWithGoals({ athleteId } = {}) {
   const userId = await requireUserId()
+  const resolvedAthleteId = athleteId ?? getActiveAthleteId()
 
   const { data: sets, error: setErr } = await supabase
     .from("goal_sets")
@@ -36,8 +38,12 @@ export async function listGoalSetsWithGoals() {
   }
 
   if (!sets?.length) return []
+  if (!resolvedAthleteId) return []
 
-  const setIds = sets.map((s) => s.id)
+  const filteredSets = sets.filter((s) => s.athlete_id === resolvedAthleteId)
+  if (!filteredSets.length) return []
+
+  const setIds = filteredSets.map((s) => s.id)
 
   const { data: goals, error: goalErr } = await supabase
     .from("goals")
@@ -53,11 +59,12 @@ export async function listGoalSetsWithGoals() {
 
   const bySet = new Map()
   for (const g of goals || []) {
+    if (g.athlete_id !== resolvedAthleteId) continue
     if (!bySet.has(g.set_id)) bySet.set(g.set_id, [])
     bySet.get(g.set_id).push(g)
   }
 
-  return sets.map((s) => ({
+  return filteredSets.map((s) => ({
     ...s,
     goals: bySet.get(s.id) || [],
   }))
@@ -74,12 +81,17 @@ export async function listGoalSetsWithGoals() {
  */
 export async function createGoalSet({ name, type, dueDate, startDate }) {
   const userId = await requireUserId()
+  const athleteId = getActiveAthleteId()
+  if (!athleteId) {
+    throw new Error("No active athlete selected")
+  }
 
   const { data, error } = await supabase
     .from("goal_sets")
     .insert([
       {
         user_id: userId,
+        athlete_id: athleteId,
         name,
         type, // "practice" | "game"
         due_date: dueDate,
@@ -184,6 +196,7 @@ export async function deleteGoalSet(id) {
  */
 export async function createGoal({
   setId,
+  athleteId,
   name,
   details,
   metric,
@@ -193,12 +206,16 @@ export async function createGoal({
   zoneId = null,
 }) {
   const userId = await requireUserId()
+  if (!athleteId) {
+    throw new Error("No active athlete selected")
+  }
 
   const { data, error } = await supabase
     .from("goals")
     .insert([
       {
         user_id: userId,
+        athlete_id: athleteId,
         set_id: setId,
         name: name ?? null,
         details: details ?? null,

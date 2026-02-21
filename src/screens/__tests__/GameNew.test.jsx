@@ -8,11 +8,18 @@ vi.mock('../../lib/game-db', () => ({
   addGameSession: vi.fn(),
 }))
 
+vi.mock('../../lib/athlete-db', () => ({
+  listAthletes: vi.fn(),
+  getActiveAthleteId: vi.fn(),
+  setActiveAthlete: vi.fn(),
+}))
+
 vi.mock('lucide-react', () => ({
   ArrowLeft: () => <div data-testid="arrow-left-icon">ArrowLeft</div>,
 }))
 
 import { addGameSession } from '../../lib/game-db'
+import { listAthletes, getActiveAthleteId, setActiveAthlete } from '../../lib/athlete-db'
 
 const getFieldControl = (labelText) => {
   const label = screen.getByText(labelText)
@@ -22,33 +29,45 @@ const getFieldControl = (labelText) => {
 
 describe('GameNew Component', () => {
   let mockNavigate
-  let dateNowSpy
+  const todayISO = () => new Date().toISOString().slice(0, 10)
 
   beforeEach(() => {
     mockNavigate = vi.fn()
     addGameSession.mockResolvedValue({ id: 'game-123' })
-    dateNowSpy = vi
-      .spyOn(Date, 'now')
-      .mockReturnValue(new Date('2026-02-03T12:00:00Z').valueOf())
+    listAthletes.mockReturnValue([
+      { id: 'ath-1', first_name: 'Max', last_name: 'McCarty' },
+      { id: 'ath-2', first_name: 'Jane', last_name: 'Doe' },
+    ])
+    getActiveAthleteId.mockReturnValue('ath-1')
     vi.spyOn(window, 'alert').mockImplementation(() => {})
   })
 
   afterEach(() => {
     vi.clearAllMocks()
-    dateNowSpy?.mockRestore()
   })
 
   it('should render form fields with default values', () => {
     render(<GameNew navigate={mockNavigate} />)
 
     expect(screen.getByText('New Game')).toBeInTheDocument()
-    expect(getFieldControl('Date')).toHaveValue('2026-02-03')
+    expect(getFieldControl('Athlete')).toHaveValue('ath-1')
+    expect(getFieldControl('Date')).toHaveValue(todayISO())
     expect(getFieldControl('Your Team')).toHaveValue('')
     expect(getFieldControl('Opponent')).toHaveValue('')
     expect(getFieldControl('Venue')).toHaveValue('')
     expect(getFieldControl('Level')).toHaveValue('High School')
     expect(getFieldControl('Home/Away')).toHaveValue('Home')
     expect(screen.getByText('Start Game')).toBeInTheDocument()
+  })
+
+  it('should render Start Game button in the athlete row', () => {
+    render(<GameNew navigate={mockNavigate} />)
+
+    const athleteRow = screen.getByTestId('athlete-start-row')
+    const startButton = screen.getByRole('button', { name: 'Start Game' })
+
+    expect(athleteRow).toContainElement(startButton)
+    expect(athleteRow).toContainElement(screen.getByText('Athlete'))
   })
 
   it('should navigate back to gate when Back is clicked', async () => {
@@ -83,12 +102,16 @@ describe('GameNew Component', () => {
     await user.type(getFieldControl('Venue'), ' Main Gym ')
     await user.selectOptions(getFieldControl('Level'), 'Middle School')
     await user.selectOptions(getFieldControl('Home/Away'), 'Away')
+    await user.selectOptions(getFieldControl('Athlete'), 'ath-2')
+    await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
     await user.click(screen.getByText('Start Game'))
 
     await waitFor(() => {
+      expect(setActiveAthlete).toHaveBeenCalledWith('ath-2')
       expect(addGameSession).toHaveBeenCalledWith({
-        date_iso: '2026-02-03',
+        athlete_id: 'ath-2',
+        date_iso: todayISO(),
         team_name: 'Warriors',
         opponent_name: 'Lakers',
         venue: 'Main Gym',
@@ -121,10 +144,46 @@ describe('GameNew Component', () => {
     await waitFor(() => {
       expect(addGameSession).toHaveBeenCalledWith(
         expect.objectContaining({
+          athlete_id: 'ath-1',
           venue: null,
         })
       )
       expect(mockNavigate).toHaveBeenCalledWith('game-logger', { id: 'game-999' })
     })
+  })
+
+  it('should block start when no athlete profiles exist', async () => {
+    const user = userEvent.setup()
+    listAthletes.mockReturnValue([])
+    getActiveAthleteId.mockReturnValue(null)
+
+    render(<GameNew navigate={mockNavigate} />)
+
+    await user.type(getFieldControl('Your Team'), 'Warriors')
+    await user.type(getFieldControl('Opponent'), 'Lakers')
+    await user.click(screen.getByText('Start Game'))
+
+    expect(window.alert).toHaveBeenCalledWith('Select an athlete profile first.')
+    expect(addGameSession).not.toHaveBeenCalled()
+  })
+
+  it('should ask for confirmation before changing athlete and allow cancel', async () => {
+    const user = userEvent.setup()
+    render(<GameNew navigate={mockNavigate} />)
+
+    await user.selectOptions(getFieldControl('Athlete'), 'ath-2')
+
+    expect(
+      screen.getByText('Switch to Jane Doe for this game?')
+    ).toBeInTheDocument()
+    expect(getFieldControl('Athlete')).toHaveValue('ath-1')
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(
+      screen.queryByText('Switch to Jane Doe for this game?')
+    ).not.toBeInTheDocument()
+    expect(getFieldControl('Athlete')).toHaveValue('ath-1')
+    expect(setActiveAthlete).not.toHaveBeenCalledWith('ath-2')
   })
 })

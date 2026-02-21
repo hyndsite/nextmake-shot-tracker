@@ -20,6 +20,12 @@ vi.mock('../../lib/supabase', () => ({
   getUser: vi.fn(),
 }))
 
+vi.mock('../../lib/athlete-db', () => ({
+  listAthletes: vi.fn(),
+  getActiveAthleteId: vi.fn(),
+  setActiveAthlete: vi.fn(),
+}))
+
 vi.mock('lucide-react', () => ({
   ArrowLeft: () => <div data-testid="arrow-left-icon">ArrowLeft</div>,
   Calendar: () => <div data-testid="calendar-icon">Calendar</div>,
@@ -27,6 +33,7 @@ vi.mock('lucide-react', () => ({
   Trash2: () => <div data-testid="trash-icon">Trash2</div>,
   ChevronDown: () => <div data-testid="chevron-icon">ChevronDown</div>,
   Archive: () => <div data-testid="archive-icon">Archive</div>,
+  ArrowLeftRight: () => <div data-testid="switch-athlete-icon">Switch</div>,
 }))
 
 vi.mock('react-icons/md', () => ({
@@ -35,6 +42,7 @@ vi.mock('react-icons/md', () => ({
 
 import { listGoalSetsWithGoals } from '../../lib/goals-db'
 import { supabase, getUser } from '../../lib/supabase'
+import { listAthletes, getActiveAthleteId, setActiveAthlete } from '../../lib/athlete-db'
 
 const buildSupabaseQuery = (data, error = null) => {
   const query = {
@@ -89,6 +97,11 @@ describe('GoalsManager Progress (Game vs Practice)', () => {
   ]
 
   beforeEach(() => {
+    listAthletes.mockReturnValue([
+      { id: 'ath-1', first_name: 'Ava', last_name: '', initials: 'A', avatar_color: '#BFDBFE' },
+    ])
+    getActiveAthleteId.mockReturnValue('ath-1')
+    setActiveAthlete.mockImplementation(() => {})
     getUser.mockResolvedValue({ id: 'user-1' })
     supabase.from.mockImplementation((table) => {
       if (table === 'game_events') return buildSupabaseQuery(gameEvents)

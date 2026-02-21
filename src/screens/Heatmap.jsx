@@ -5,6 +5,12 @@ import { supabase, getUser } from "../lib/supabase"
 import { TIME_RANGES, getRangeById } from "../constants/timeRange"
 import { ZONES } from "../constants/zones"
 import { ZONE_ANCHORS } from "../constants/zoneAnchors"
+import {
+  listAthletes,
+  getActiveAthleteId,
+  setActiveAthlete,
+} from "../lib/athlete-db"
+import ActiveAthleteSwitcher from "../components/ActiveAthleteSwitcher"
 
 const DEFAULT_RANGE_ID = TIME_RANGES[2]?.id || TIME_RANGES[0]?.id || "30d" // default to 30 days if present
 
@@ -352,6 +358,8 @@ export default function Heatmap({ navigate }) {
   const [shotType, setShotType] = useState("Catch & Shoot")
   const [contested, setContested] = useState("all")
   const [rangeId, setRangeId] = useState(DEFAULT_RANGE_ID)
+  const [athletes, setAthletes] = useState(() => listAthletes())
+  const [activeAthleteId, setActiveAthleteId] = useState(() => getActiveAthleteId() || "")
 
   const [zones, setZones] = useState([])
   const [loading, setLoading] = useState(false)
@@ -396,6 +404,11 @@ export default function Heatmap({ navigate }) {
     [rangeId],
   )
 
+  useEffect(() => {
+    setAthletes(listAthletes())
+    setActiveAthleteId(getActiveAthleteId() || "")
+  }, [])
+
   function handleImgLoad(e) {
     const img = e.currentTarget
     const w = img.naturalWidth || 0
@@ -410,6 +423,11 @@ export default function Heatmap({ navigate }) {
     async function load() {
       setLoading(true)
       try {
+        if (!activeAthleteId) {
+          if (!cancelled) setZones([])
+          return
+        }
+
         const user = await getUser()
         if (!user) {
           if (!cancelled) setZones([])
@@ -417,7 +435,11 @@ export default function Heatmap({ navigate }) {
         }
 
         const table = source === "game" ? "game_events" : "practice_entries"
-        let query = supabase.from(table).select("*").eq("user_id", user.id)
+        let query = supabase
+          .from(table)
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("athlete_id", activeAthleteId)
 
         if (range.days && Number.isFinite(range.days)) {
           const since = new Date(
@@ -448,7 +470,7 @@ export default function Heatmap({ navigate }) {
     return () => {
       cancelled = true
     }
-  }, [source, range.days, mode, shotType, contested])
+  }, [source, range.days, mode, shotType, contested, activeAthleteId])
 
   const totalAttempts = useMemo(
     () => zones.reduce((sum, z) => sum + z.attempts, 0),
@@ -479,6 +501,23 @@ export default function Heatmap({ navigate }) {
       </header>
 
       <main className="max-w-screen-sm mx-auto p-4 pb-24 space-y-4">
+        <ActiveAthleteSwitcher
+          athletes={athletes}
+          activeAthleteId={activeAthleteId}
+          onSelectAthlete={(athleteId) => {
+            setActiveAthlete(athleteId)
+            setActiveAthleteId(athleteId)
+          }}
+        />
+
+        {!activeAthleteId && (
+          <section className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+            <div className="text-sm text-amber-900">
+              Select an active athlete from Dashboard to view heatmap.
+            </div>
+          </section>
+        )}
+
         {/* TOP: Source pills (Game / Practice) */}
         <section className="space-y-1">
           <span className="block text-xs font-semibold text-slate-700">
