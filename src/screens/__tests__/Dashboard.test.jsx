@@ -123,4 +123,18 @@ describe("Dashboard", () => {
     expect(screen.getByText("Max")).toBeInTheDocument()
     expect(screen.queryByText("Ava")).not.toBeInTheDocument()
   })
+
+  it("uses a mobile-safe actions group for active athlete controls", async () => {
+    render(<Dashboard />)
+
+    await waitFor(() => {
+      expect(listAthleteProfiles).toHaveBeenCalled()
+    })
+
+    const actionsGroup = screen.getByRole("group", {
+      name: "Active athlete actions",
+    })
+    expect(actionsGroup.className).toContain("shrink-0")
+    expect(actionsGroup.className).toContain("justify-end")
+  })
 })

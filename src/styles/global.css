@@ -110,8 +110,15 @@ html, body, #root {
     .bottom-nav button,
     .bottom-nav [role="button"] {
       background-color: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
       -webkit-appearance: none;
       appearance: none;
+    }
+
+    .bottom-nav button:hover,
+    .bottom-nav [role="button"]:hover {
+      border-color: transparent !important;
     }
   
     .btn-blue {

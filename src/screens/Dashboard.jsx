@@ -145,13 +145,13 @@ export default function Dashboard() {
 
       <main className="max-w-screen-sm mx-auto p-4 pb-24 space-y-4">
         <section className="card space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="flex-1 rounded-2xl border border-slate-300 bg-white p-[2px] shadow-sm">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+            <div className="min-w-0 rounded-2xl border border-slate-300 bg-white p-[2px] shadow-sm">
               <div
                 className="rounded-[14px] p-[2px]"
                 style={{ backgroundColor: activeAthlete?.avatar_color || "#CBD5E1" }}
               >
-                <div className="rounded-xl bg-gradient-to-r from-white to-slate-50 px-3 py-2.5 flex items-center gap-3">
+                <div className="rounded-xl bg-gradient-to-r from-white to-slate-50 px-2.5 py-2 flex items-center gap-2.5">
                   <Avatar athlete={activeAthlete} />
                   <div className="min-w-0">
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Active athlete</div>
@@ -161,36 +161,42 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <button
-              type="button"
-              className="h-10 px-3 rounded-xl border border-sky-300 bg-sky-50 text-sky-700 inline-flex items-center justify-center shadow-sm transition hover:bg-sky-100"
-              onClick={() => setShowSwitch((v) => !v)}
-              aria-label="Switch athlete"
-              title="Switch athlete"
+            <div
+              role="group"
+              aria-label="Active athlete actions"
+              className="flex items-center justify-end gap-1.5 shrink-0"
             >
-              <ArrowLeftRight className="h-4 w-4 shrink-0" strokeWidth={2.5} />
-            </button>
+              <button
+                type="button"
+                className="h-9 w-9 p-0 rounded-full border border-sky-300 bg-sky-50 text-sky-700 inline-flex items-center justify-center shadow-sm transition hover:bg-sky-100"
+                onClick={() => setShowSwitch((v) => !v)}
+                aria-label="Switch athlete"
+                title="Switch athlete"
+              >
+                <ArrowLeftRight className="h-4 w-4 shrink-0" strokeWidth={2.5} />
+              </button>
 
-            <button
-              type="button"
-              className="h-10 w-10 p-0 rounded-full border-2 border-emerald-600 bg-white text-emerald-600 inline-flex items-center justify-center shadow-sm transition hover:bg-emerald-50"
-              onClick={() => setShowAdd((v) => !v)}
-              aria-label="Open add athlete"
-              title="Add athlete"
-            >
-              <Plus className="h-5 w-5 shrink-0" strokeWidth={2.5} />
-            </button>
+              <button
+                type="button"
+                className="h-9 w-9 p-0 rounded-full border-2 border-emerald-600 bg-white text-emerald-600 inline-flex items-center justify-center shadow-sm transition hover:bg-emerald-50"
+                onClick={() => setShowAdd((v) => !v)}
+                aria-label="Open add athlete"
+                title="Add athlete"
+              >
+                <Plus className="h-4 w-4 shrink-0" strokeWidth={2.5} />
+              </button>
 
-            <button
-              type="button"
-              className="h-10 w-10 p-0 rounded-full border border-amber-500 bg-white text-amber-600 inline-flex items-center justify-center shadow-sm transition hover:bg-amber-50 disabled:opacity-40 disabled:cursor-not-allowed"
-              onClick={handleArchiveAthlete}
-              aria-label="Archive athlete"
-              title="Archive athlete"
-              disabled={!activeAthlete}
-            >
-              <Archive className="h-4 w-4 shrink-0" strokeWidth={2.5} />
-            </button>
+              <button
+                type="button"
+                className="h-9 w-9 p-0 rounded-full border border-amber-500 bg-white text-amber-600 inline-flex items-center justify-center shadow-sm transition hover:bg-amber-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                onClick={handleArchiveAthlete}
+                aria-label="Archive athlete"
+                title="Archive athlete"
+                disabled={!activeAthlete}
+              >
+                <Archive className="h-4 w-4 shrink-0" strokeWidth={2.5} />
+              </button>
+            </div>
           </div>
 
           {showSwitch && (

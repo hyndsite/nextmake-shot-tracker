@@ -46,8 +46,8 @@ export default function BottomNav({ activeTab, onChange }) {
                     onClick={() => onChange?.(key)}
                     aria-label={label}
                     aria-current={active ? "page" : undefined}
-                    className="w-full py-2 bg-transparent focus:outline-none focus-visible:ring-2
-                              focus-visible:ring-sky-400 rounded-lg"
+                    className="w-full py-2 bg-transparent border-0 shadow-none
+                              focus:outline-none focus-visible:outline-none rounded-lg"
                   >
                   <div className="flex flex-col items-center justify-center gap-1">
                     <Icon
