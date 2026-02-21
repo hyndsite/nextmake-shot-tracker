@@ -102,9 +102,9 @@ export default function GameNew({ navigate }) {
       <section className="section space-y-4">
         <div
           data-testid="athlete-start-row"
-          className="flex items-end gap-3"
+          className="flex items-start gap-3"
         >
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <label className="block text-sm font-medium text-slate-700 mb-1">Athlete</label>
             <select
               value={athleteId}
@@ -117,26 +117,12 @@ export default function GameNew({ navigate }) {
                 </option>
               ))}
             </select>
-            {selectedAthlete && (
-              <p className="mt-1 text-xs text-slate-500">
-                This game will be saved to {athleteName(selectedAthlete)}.
-              </p>
-            )}
             {!athletes.length && (
               <p className="mt-1 text-xs text-red-600">
                 No athlete profiles found. Add one from Dashboard first.
               </p>
             )}
           </div>
-
-          <button
-            type="button"
-            onClick={startGame}
-            disabled={saving}
-            className="btn btn-emerald h-11 rounded-xl text-base font-semibold px-5 shrink-0"
-          >
-            {saving ? "Starting…" : "Start Game"}
-          </button>
         </div>
 
         {/* Date */}
@@ -218,6 +204,15 @@ export default function GameNew({ navigate }) {
             </select>
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={startGame}
+          disabled={saving}
+          className="btn btn-emerald w-full h-11 rounded-xl text-base font-semibold"
+        >
+          {saving ? "Starting…" : "Start Game"}
+        </button>
 
       </section>
 

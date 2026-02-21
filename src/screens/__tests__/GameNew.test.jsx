@@ -60,14 +60,17 @@ describe('GameNew Component', () => {
     expect(screen.getByText('Start Game')).toBeInTheDocument()
   })
 
-  it('should render Start Game button in the athlete row', () => {
+  it('should render Start Game button below the athlete row as a full-width action', () => {
     render(<GameNew navigate={mockNavigate} />)
 
     const athleteRow = screen.getByTestId('athlete-start-row')
     const startButton = screen.getByRole('button', { name: 'Start Game' })
+    const athleteSelect = getFieldControl('Athlete')
 
-    expect(athleteRow).toContainElement(startButton)
+    expect(athleteRow).not.toContainElement(startButton)
     expect(athleteRow).toContainElement(screen.getByText('Athlete'))
+    expect(startButton.className).toContain('w-full')
+    expect(athleteSelect.className).toContain('w-full')
   })
 
   it('should navigate back to gate when Back is clicked', async () => {
