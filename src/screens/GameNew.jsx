@@ -29,10 +29,6 @@ export default function GameNew({ navigate }) {
   const [homeAway, setHomeAway] = useState("Home")
   const [saving, setSaving]     = useState(false)
   const [pendingAthleteId, setPendingAthleteId] = useState("")
-  const selectedAthlete = useMemo(
-    () => athletes.find((row) => row.id === athleteId) ?? null,
-    [athletes, athleteId]
-  )
   const pendingAthlete = useMemo(
     () => athletes.find((row) => row.id === pendingAthleteId) ?? null,
     [athletes, pendingAthleteId]
