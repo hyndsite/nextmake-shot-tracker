@@ -1,6 +1,6 @@
 // src/screens/__tests__/GameNew.test.jsx
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import GameNew from '../GameNew.jsx'
 
@@ -55,7 +55,8 @@ describe('GameNew Component', () => {
     expect(getFieldControl('Your Team')).toHaveValue('')
     expect(getFieldControl('Opponent')).toHaveValue('')
     expect(getFieldControl('Venue')).toHaveValue('')
-    expect(getFieldControl('Level')).toHaveValue('High School')
+    expect(getFieldControl('Level')).toHaveValue('k_12')
+    expect(getFieldControl('Grade')).toHaveValue('')
     expect(getFieldControl('Home/Away')).toHaveValue('Home')
     expect(screen.getByText('Start Game')).toBeInTheDocument()
   })
@@ -103,7 +104,8 @@ describe('GameNew Component', () => {
     await user.type(getFieldControl('Your Team'), ' Warriors ')
     await user.type(getFieldControl('Opponent'), ' Lakers ')
     await user.type(getFieldControl('Venue'), ' Main Gym ')
-    await user.selectOptions(getFieldControl('Level'), 'Middle School')
+    await user.selectOptions(getFieldControl('Level'), 'college')
+    await user.selectOptions(getFieldControl('Academic Season'), '2025-26')
     await user.selectOptions(getFieldControl('Home/Away'), 'Away')
     await user.selectOptions(getFieldControl('Athlete'), 'ath-2')
     await user.click(screen.getByRole('button', { name: 'Confirm' }))
@@ -118,7 +120,12 @@ describe('GameNew Component', () => {
         team_name: 'Warriors',
         opponent_name: 'Lakers',
         venue: 'Main Gym',
-        level: 'Middle School',
+        level_category: 'college',
+        level_grade: null,
+        college_season: '2025-26',
+        aau_season: null,
+        aau_competition_level: null,
+        level: 'College · 2025-26',
         home_away: 'away',
       })
       expect(mockNavigate).toHaveBeenCalledWith('game-logger', { id: 'game-123' })
@@ -137,6 +144,7 @@ describe('GameNew Component', () => {
 
     await user.type(getFieldControl('Your Team'), 'Warriors')
     await user.type(getFieldControl('Opponent'), 'Lakers')
+    await user.selectOptions(getFieldControl('Grade'), '1st Grade')
     await user.click(screen.getByText('Start Game'))
 
     const startButton = screen.getByText('Starting…').closest('button')
@@ -168,6 +176,111 @@ describe('GameNew Component', () => {
 
     expect(window.alert).toHaveBeenCalledWith('Select an athlete profile first.')
     expect(addGameSession).not.toHaveBeenCalled()
+  })
+
+  it('should require a detail selection for the chosen level category', async () => {
+    const user = userEvent.setup()
+    render(<GameNew navigate={mockNavigate} />)
+
+    await user.type(getFieldControl('Your Team'), 'Warriors')
+    await user.type(getFieldControl('Opponent'), 'Lakers')
+    await user.click(screen.getByText('Start Game'))
+
+    expect(window.alert).toHaveBeenCalledWith('Select a K-12 grade.')
+
+    await user.selectOptions(getFieldControl('Level'), 'aau')
+    await user.click(screen.getByText('Start Game'))
+
+    expect(window.alert).toHaveBeenCalledWith('Select an AAU season.')
+
+    await user.selectOptions(getFieldControl('AAU Season'), 'Summer')
+    await user.click(screen.getByText('Start Game'))
+
+    expect(window.alert).toHaveBeenCalledWith('Select an AAU competition level.')
+  })
+
+  it('should switch the detail dropdown and clear stale values when the level category changes', async () => {
+    const user = userEvent.setup()
+    render(<GameNew navigate={mockNavigate} />)
+
+    await user.selectOptions(getFieldControl('Grade'), '1st Grade')
+    expect(getFieldControl('Grade')).toHaveValue('1st Grade')
+
+    await user.selectOptions(getFieldControl('Level'), 'college')
+
+    expect(screen.queryByText('Grade')).not.toBeInTheDocument()
+    expect(getFieldControl('Academic Season')).toHaveValue('')
+
+    await user.selectOptions(getFieldControl('Level'), 'k_12')
+    expect(getFieldControl('Grade')).toHaveValue('')
+  })
+
+  it('should render the AAU season dropdown when AAU / Travel is selected', async () => {
+    const user = userEvent.setup()
+    render(<GameNew navigate={mockNavigate} />)
+
+    await user.selectOptions(getFieldControl('Level'), 'aau')
+
+    expect(getFieldControl('AAU Season')).toHaveValue('')
+    expect(getFieldControl('Competition Level')).toHaveValue('')
+    expect(screen.getByRole('option', { name: 'Winter' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Spring' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Summer' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Fall' })).toBeInTheDocument()
+    expect(
+      within(getFieldControl('Competition Level')).getByRole('option', { name: 'College' })
+    ).toBeInTheDocument()
+    expect(
+      within(getFieldControl('Competition Level')).getByRole('option', { name: 'Adult' })
+    ).toBeInTheDocument()
+  })
+
+  it('should submit AAU with season and competition level', async () => {
+    const user = userEvent.setup()
+    render(<GameNew navigate={mockNavigate} />)
+
+    await user.type(getFieldControl('Your Team'), 'Warriors')
+    await user.type(getFieldControl('Opponent'), 'Lakers')
+    await user.selectOptions(getFieldControl('Level'), 'aau')
+    await user.selectOptions(getFieldControl('AAU Season'), 'Summer')
+    await user.selectOptions(getFieldControl('Competition Level'), '7th Grade')
+    await user.click(screen.getByText('Start Game'))
+
+    await waitFor(() => {
+      expect(addGameSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          level_category: 'aau',
+          level_grade: null,
+          college_season: null,
+          aau_season: 'Summer',
+          aau_competition_level: '7th Grade',
+          level: 'AAU / Travel · Summer · 7th Grade',
+        })
+      )
+    })
+  })
+
+  it('should allow Other without a detail selection', async () => {
+    const user = userEvent.setup()
+    render(<GameNew navigate={mockNavigate} />)
+
+    await user.type(getFieldControl('Your Team'), 'Warriors')
+    await user.type(getFieldControl('Opponent'), 'Lakers')
+    await user.selectOptions(getFieldControl('Level'), 'other')
+    await user.click(screen.getByText('Start Game'))
+
+    await waitFor(() => {
+      expect(addGameSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          level_category: 'other',
+          level_grade: null,
+          college_season: null,
+          aau_season: null,
+          aau_competition_level: null,
+          level: 'Other',
+        })
+      )
+    })
   })
 
   it('should ask for confirmation before changing athlete and allow cancel', async () => {

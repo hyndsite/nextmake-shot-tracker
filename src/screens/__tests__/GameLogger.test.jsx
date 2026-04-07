@@ -807,6 +807,22 @@ describe('GameLogger Component', () => {
       })
     })
 
+    it('should render structured level labels from saved game sessions', async () => {
+      getGameSession.mockResolvedValue({
+        ...mockGameSession,
+        home_away: 'away',
+        level: 'College · 2025-26',
+      })
+
+      render(<GameLogger id="game-123" navigate={mockNavigate} />)
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(/Warriors vs Lakers · Away · College · 2025-26/)
+        ).toBeInTheDocument()
+      })
+    })
+
     it('should record a missed shot', async () => {
       const user = userEvent.setup()
       render(<GameLogger id="game-123" navigate={mockNavigate} />)
@@ -1680,9 +1696,10 @@ describe('GameLogger Component', () => {
       render(<GameLogger id="game-123" navigate={mockNavigate} />)
 
       await waitFor(() => {
+        expect(screen.getByText('Warriors vs Lakers · Home')).toBeInTheDocument()
         expect(
-          screen.getByText(/Warriors vs Lakers · Home/)
-        ).toBeInTheDocument()
+          screen.queryByText('Warriors vs Lakers · Home ·')
+        ).not.toBeInTheDocument()
       })
     })
 

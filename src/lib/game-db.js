@@ -5,6 +5,7 @@ import { notifyLocalMutate } from "./sync-notify"
 import { whenIdbReady } from "./idb-init"
 import { supabase } from "./supabase"
 import { getActiveAthleteId } from "./athlete-db"
+import { formatGameLevelLabel } from "../constants/programLevel"
 
 const ready = whenIdbReady()
 const nowISO = () => new Date().toISOString()
@@ -128,6 +129,25 @@ export async function addGameSession(meta = {}) {
 
   const homeAwayInput = meta.home_away ?? meta.homeAway ?? meta.homeOrAway
   const athleteId = meta.athlete_id ?? meta.athleteId ?? getActiveAthleteId() ?? null
+  const levelCategory = meta.level_category ?? meta.levelCategory ?? null
+  const levelGrade =
+    levelCategory === "k_12" ? meta.level_grade ?? meta.levelGrade ?? null : null
+  const collegeSeason =
+    levelCategory === "college" ? meta.college_season ?? meta.collegeSeason ?? null : null
+  const aauSeason =
+    levelCategory === "aau" ? meta.aau_season ?? meta.aauSeason ?? null : null
+  const aauCompetitionLevel =
+    levelCategory === "aau"
+      ? meta.aau_competition_level ?? meta.aauCompetitionLevel ?? null
+      : null
+  const level = formatGameLevelLabel({
+    ...meta,
+    level_category: levelCategory,
+    level_grade: levelGrade,
+    college_season: collegeSeason,
+    aau_season: aauSeason,
+    aau_competition_level: aauCompetitionLevel,
+  })
 
   const row = {
     id,
@@ -140,7 +160,12 @@ export async function addGameSession(meta = {}) {
     team_name: meta.team_name ?? meta.teamName ?? "",
     opponent_name: meta.opponent_name ?? meta.opponentName ?? "",
     venue: meta.venue ?? null,
-    level: meta.level ?? "High School",
+    level,
+    level_category: levelCategory,
+    level_grade: levelGrade,
+    college_season: collegeSeason,
+    aau_season: aauSeason,
+    aau_competition_level: aauCompetitionLevel,
     home_away: normalizeHomeAway(homeAwayInput),
 
     _dirty: true,

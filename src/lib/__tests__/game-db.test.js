@@ -221,6 +221,7 @@ describe('game-db', () => {
       expect(result.status).toBe('active')
       expect(result.started_at).toBe('2024-01-15T12:00:00.000Z')
       expect(result.ended_at).toBeNull()
+      expect(result.level).toBe('High School')
       expect(result._dirty).toBe(true)
       expect(result._deleted).toBe(false)
       expect(result._table).toBe('game_sessions')
@@ -234,7 +235,8 @@ describe('game-db', () => {
         team_name: 'Warriors',
         opponent_name: 'Lakers',
         venue: 'Home Court',
-        level: 'College',
+        level_category: 'college',
+        college_season: '2025-26',
         home_away: 'Away',
       }
 
@@ -243,8 +245,41 @@ describe('game-db', () => {
       expect(result.team_name).toBe('Warriors')
       expect(result.opponent_name).toBe('Lakers')
       expect(result.venue).toBe('Home Court')
-      expect(result.level).toBe('College')
+      expect(result.level).toBe('College · 2025-26')
+      expect(result.level_category).toBe('college')
+      expect(result.college_season).toBe('2025-26')
+      expect(result.level_grade).toBeNull()
+      expect(result.aau_season).toBeNull()
+      expect(result.aau_competition_level).toBeNull()
       expect(result.home_away).toBe('Away')
+    })
+
+    it('should preserve legacy level values when structured classification is not provided', async () => {
+      const result = await addGameSession({ level: 'High School' })
+
+      expect(result.level).toBe('High School')
+      expect(result.level_category).toBeNull()
+      expect(result.level_grade).toBeNull()
+      expect(result.college_season).toBeNull()
+      expect(result.aau_season).toBeNull()
+      expect(result.aau_competition_level).toBeNull()
+    })
+
+    it('should ignore unrelated detail fields for the selected category', async () => {
+      const result = await addGameSession({
+        level_category: 'aau',
+        level_grade: '6th Grade',
+        college_season: '2025-26',
+        aau_season: 'Spring',
+        aau_competition_level: 'College',
+      })
+
+      expect(result.level).toBe('AAU / Travel · Spring · College')
+      expect(result.level_category).toBe('aau')
+      expect(result.level_grade).toBeNull()
+      expect(result.college_season).toBeNull()
+      expect(result.aau_season).toBe('Spring')
+      expect(result.aau_competition_level).toBe('College')
     })
 
     it('should normalize home_away values', async () => {

@@ -38,7 +38,7 @@ Table: `public.athlete_dashboard_metrics`
 
 ## Required DB migration
 Run SQL file:
-- `supabase-athlete-dashboard-metrics.sql`
+- `docs/SQL/supabase-athlete-dashboard-metrics.sql`
 
 Minimum critical migration (if only patching):
 - add `source_mode` column

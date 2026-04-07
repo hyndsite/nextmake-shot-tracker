@@ -162,7 +162,7 @@ git commit -m "test: cover structured game level labels"
 ### Task 5: Add Supabase migration for structured classification fields
 
 **Files:**
-- Create: `supabase-game-session-level-classification.sql`
+- Create: `docs/SQL/supabase-game-session-level-classification.sql`
 
 **Step 1: Write the migration**
 
@@ -185,7 +185,7 @@ Keep the migration additive only. Do not rewrite or backfill legacy rows in this
 **Step 4: Commit**
 
 ```bash
-git add supabase-game-session-level-classification.sql
+git add docs/SQL/supabase-game-session-level-classification.sql
 git commit -m "feat: add game session level classification columns"
 ```
 
@@ -217,6 +217,6 @@ Expected: only the intended constants, game-session logic, tests, docs, and migr
 **Step 4: Commit**
 
 ```bash
-git add src/constants/programLevel.js src/constants/__tests__/programLevel.test.js src/lib/game-db.js src/lib/__tests__/game-db.test.js src/screens/GameNew.jsx src/screens/__tests__/GameNew.test.jsx src/screens/__tests__/GameLogger.test.jsx src/screens/__tests__/GameDetail.test.jsx supabase-game-session-level-classification.sql
+git add src/constants/programLevel.js src/constants/__tests__/programLevel.test.js src/lib/game-db.js src/lib/__tests__/game-db.test.js src/screens/GameNew.jsx src/screens/__tests__/GameNew.test.jsx src/screens/__tests__/GameLogger.test.jsx src/screens/__tests__/GameDetail.test.jsx docs/SQL/supabase-game-session-level-classification.sql
 git commit -m "feat: support structured game session level classification"
 ```

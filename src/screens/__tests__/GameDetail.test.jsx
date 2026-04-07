@@ -136,6 +136,27 @@ describe('GameDetail Component', () => {
     dateSpy.mockRestore()
   })
 
+  it('should render structured level labels in the subtitle', async () => {
+    const dateSpy = vi
+      .spyOn(Date.prototype, 'toLocaleDateString')
+      .mockReturnValue('Jan 20, 2025')
+
+    getGameSession.mockResolvedValue({
+      ...mockGameSession,
+      level: 'AAU / Travel · Summer',
+    })
+
+    render(<GameDetail id="game-123" navigate={mockNavigate} />)
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Warriors · Home · AAU / Travel · Summer')
+      ).toBeInTheDocument()
+    })
+
+    dateSpy.mockRestore()
+  })
+
   it('should render final score inputs and save button disabled by default', async () => {
     render(<GameDetail id="game-123" navigate={mockNavigate} />)
 

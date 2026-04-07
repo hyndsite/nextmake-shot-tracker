@@ -1,6 +1,13 @@
 import React, { useMemo, useState } from "react"
 import { addGameSession } from "../lib/game-db"
-import {LEVELS } from "../constants/programLevel"     // <- ensure this file exists per our constants step
+import {
+  AAU_COMPETITION_LEVEL_OPTIONS,
+  AAU_SEASON_OPTIONS,
+  formatGameLevelLabel,
+  getCollegeSeasonOptions,
+  K12_GRADE_OPTIONS,
+  LEVEL_CATEGORY_OPTIONS,
+} from "../constants/programLevel"
 import { HOME_AWAY } from "../constants/homeAway" // <- Home/Away dropdown options
 import { ArrowLeft } from "lucide-react"
 import {
@@ -25,7 +32,12 @@ export default function GameNew({ navigate }) {
   const [teamName, setTeamName] = useState("")
   const [opponent, setOpponent] = useState("")
   const [venue, setVenue]       = useState("")
-  const [level, setLevel]       = useState("High School")
+  const [levelCategory, setLevelCategory] = useState("k_12")
+  const collegeSeasonOptions = useMemo(() => getCollegeSeasonOptions(new Date()), [])
+  const [levelGrade, setLevelGrade] = useState("")
+  const [collegeSeason, setCollegeSeason] = useState("")
+  const [aauSeason, setAauSeason] = useState("")
+  const [aauCompetitionLevel, setAauCompetitionLevel] = useState("")
   const [homeAway, setHomeAway] = useState("Home")
   const [saving, setSaving]     = useState(false)
   const [pendingAthleteId, setPendingAthleteId] = useState("")
@@ -40,6 +52,10 @@ export default function GameNew({ navigate }) {
     if (!teamName.trim()) return "Enter your team."
     if (!opponent.trim()) return "Enter the opponent."
     if (!dateISO)         return "Pick a date."
+    if (levelCategory === "k_12" && !levelGrade) return "Select a K-12 grade."
+    if (levelCategory === "college" && !collegeSeason) return "Select a college academic season."
+    if (levelCategory === "aau" && !aauSeason) return "Select an AAU season."
+    if (levelCategory === "aau" && !aauCompetitionLevel) return "Select an AAU competition level."
     return null
   }
 
@@ -50,13 +66,21 @@ export default function GameNew({ navigate }) {
     setSaving(true)
     try {
       setActiveAthlete(athleteId)
+      const payload = {
+        level_category: levelCategory,
+        level_grade: levelCategory === "k_12" ? levelGrade : null,
+        college_season: levelCategory === "college" ? collegeSeason : null,
+        aau_season: levelCategory === "aau" ? aauSeason : null,
+        aau_competition_level: levelCategory === "aau" ? aauCompetitionLevel : null,
+      }
       const row = await addGameSession({
         athlete_id: athleteId,
         date_iso: dateISO,
         team_name: teamName.trim(),
         opponent_name: opponent.trim(),
         venue: venue.trim() || null,
-        level,                                  // e.g., "High School"
+        ...payload,
+        level: formatGameLevelLabel(payload),
         home_away: homeAway.toLowerCase(),      // "home" | "away"
       })
       navigate?.("game-logger", { id: row.id })
@@ -79,6 +103,96 @@ export default function GameNew({ navigate }) {
 
   function cancelAthleteChange() {
     setPendingAthleteId("")
+  }
+
+  function onLevelCategoryChange(nextCategory) {
+    setLevelCategory(nextCategory)
+    setLevelGrade("")
+    setCollegeSeason("")
+    setAauSeason("")
+    setAauCompetitionLevel("")
+  }
+
+  function renderLevelDetailField() {
+    if (levelCategory === "k_12") {
+      return (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Grade</label>
+          <select
+            value={levelGrade}
+            onChange={e => setLevelGrade(e.target.value)}
+            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-900"
+          >
+            <option value="">Select grade</option>
+            {K12_GRADE_OPTIONS.map((opt) => (
+              <option key={opt.key} value={opt.label}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )
+    }
+
+    if (levelCategory === "college") {
+      return (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Academic Season</label>
+          <select
+            value={collegeSeason}
+            onChange={e => setCollegeSeason(e.target.value)}
+            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-900"
+          >
+            <option value="">Select academic season</option>
+            {collegeSeasonOptions.map((opt) => (
+              <option key={opt.key} value={opt.label}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )
+    }
+
+    if (levelCategory === "aau") {
+      return (
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">AAU Season</label>
+            <select
+              value={aauSeason}
+              onChange={e => setAauSeason(e.target.value)}
+              className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-900"
+            >
+              <option value="">Select AAU season</option>
+              {AAU_SEASON_OPTIONS.map((opt) => (
+                <option key={opt.key} value={opt.label}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Competition Level</label>
+            <select
+              value={aauCompetitionLevel}
+              onChange={e => setAauCompetitionLevel(e.target.value)}
+              className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-900"
+            >
+              <option value="">Select competition level</option>
+              {AAU_COMPETITION_LEVEL_OPTIONS.map((opt) => (
+                <option key={opt.key} value={opt.label}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )
+    }
+
+    return null
   }
 
   return (
@@ -173,12 +287,12 @@ export default function GameNew({ navigate }) {
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Level</label>
             <select
-              value={level}
-              onChange={e => setLevel(e.target.value)}
+              value={levelCategory}
+              onChange={e => onLevelCategoryChange(e.target.value)}
               className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-900"
             >
-              {LEVELS.map(l => (
-                <option key={l.key} value={l.label}>
+              {LEVEL_CATEGORY_OPTIONS.map(l => (
+                <option key={l.key} value={l.key}>
                   {l.label}
                 </option>
               ))}
@@ -200,6 +314,8 @@ export default function GameNew({ navigate }) {
             </select>
           </div>
         </div>
+
+        {renderLevelDetailField()}
 
         <button
           type="button"

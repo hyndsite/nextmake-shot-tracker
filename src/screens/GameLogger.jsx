@@ -175,7 +175,7 @@ export default function GameLogger({ id: gameId, navigate }) {
   function titleLine(g) {
     if (!g) return ""
     const ha = (g.home_away || "").toLowerCase() === "home" ? "Home" : "Away"
-    return `${g.team_name} vs ${g.opponent_name} · ${ha} · ${g.level || ""}`.trim()
+    return `${g.team_name} vs ${g.opponent_name} · ${ha} · ${g.level || ""}`.replace(/\s·\s$/, "")
   }
 
   // Live stats (includes forced turnovers)

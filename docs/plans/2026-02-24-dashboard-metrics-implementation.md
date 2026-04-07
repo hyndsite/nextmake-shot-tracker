@@ -13,7 +13,7 @@
 ### Task 1: Add source-mode support to DB schema and helper validation
 
 **Files:**
-- Modify: `supabase-athlete-dashboard-metrics.sql`
+- Modify: `docs/SQL/supabase-athlete-dashboard-metrics.sql`
 - Modify: `src/lib/athlete-dashboard-db.js`
 - Modify: `src/lib/__tests__/athlete-dashboard-db.test.js`
 
@@ -40,7 +40,7 @@
 
 **Step 5: Commit**
 ```bash
-git add supabase-athlete-dashboard-metrics.sql src/lib/athlete-dashboard-db.js src/lib/__tests__/athlete-dashboard-db.test.js
+git add docs/SQL/supabase-athlete-dashboard-metrics.sql src/lib/athlete-dashboard-db.js src/lib/__tests__/athlete-dashboard-db.test.js
 git commit -m "feat: add source mode to athlete dashboard metrics"
 ```
 
@@ -186,7 +186,7 @@ git commit -m "feat: render configurable dashboard line charts"
 - `npm test -- src/screens/__tests__/Dashboard.test.jsx src/lib/__tests__/athlete-dashboard-db.test.js`
 
 **Step 3: Confirm SQL migration readiness**
-- Ensure `supabase-athlete-dashboard-metrics.sql` is idempotent in policy section.
+- Ensure `docs/SQL/supabase-athlete-dashboard-metrics.sql` is idempotent in policy section.
 
 **Step 4: Commit verification artifacts if any (none expected)**
 - No commit required unless files changed.
