@@ -1,42 +1,15 @@
-import { useState, useRef } from "react"
-import { supabase } from "../lib/supabase"
+import { useLoginFlow } from "../hooks/useLoginFlow"
 
-export default function Login({ onSuccess }){
-  const [email, setEmail] = useState("")
-  const [status, setStatus] = useState("idle") // idle | sending | sent | err
-  const [msg, setMsg] = useState("")
-  const inputRef = useRef(null)
-
-  async function sendLink(e){
-    e.preventDefault()
-    setStatus("sending"); setMsg("")
-
-    // ✅ Ensure redirect matches where the user is (localhost, preview, prod)
-    const redirectTo = window.location.origin + "/"
-
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: redirectTo }
-    })
-
-    if (error) {
-      setStatus("err"); setMsg(error.message)
-      return
-    }
-
-    // ✅ Clear the email field after a successful send
-    setStatus("sent")
-    setMsg("Magic link sent. Check your email, then return here.")
-    setEmail("")
-    // optional UX: drop focus to make autofill less sticky
-    inputRef.current?.blur()
-  }
-
-  async function checkSession(){
-    const { data } = await supabase.auth.getSession()
-    if (data?.session) onSuccess?.()
-    else { setStatus("err"); setMsg("No active session yet. Open the email link, then tap this again.") }
-  }
+export default function Login({ onSuccess }) {
+  const {
+    email,
+    msg,
+    inputRef,
+    sendLink,
+    setEmail,
+    status,
+    checkSession,
+  } = useLoginFlow({ onSuccess })
 
   return (
     <div className="min-h-dvh flex items-center justify-center bg-white">
@@ -56,18 +29,18 @@ export default function Login({ onSuccess }){
             type="email"
             value={email}
             placeholder="you@example.com"
-            onChange={(e)=>setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value)}
             required
             autoCapitalize="none"
             autoCorrect="off"
             autoComplete="email"
             inputMode="email"
           />
-          <button className="btn btn-blue w-full" disabled={status==="sending"}>
-            {status==="sending" ? "Sending magic link…" : "Send magic link"}
+          <button className="btn btn-blue w-full" disabled={status === "sending"}>
+            {status === "sending" ? "Sending magic link…" : "Send magic link"}
           </button>
           {msg && (
-            <p className={status==="err" ? "text-sm text-red-600" : "text-sm text-slate-600"}>
+            <p className={status === "err" ? "text-sm text-red-600" : "text-sm text-slate-600"}>
               {msg}
             </p>
           )}

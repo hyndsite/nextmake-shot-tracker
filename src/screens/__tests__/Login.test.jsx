@@ -67,6 +67,7 @@ describe('Login Component', () => {
     })
 
     expect(emailInput).toHaveValue('')
+    expect(emailInput).not.toHaveFocus()
   })
 
   it('should show an error message when sending fails', async () => {
@@ -127,6 +128,56 @@ describe('Login Component', () => {
   })
 
   it('should show an error message when no session is found', async () => {
+    const user = userEvent.setup()
+    render(<Login />)
+
+    await user.click(screen.getByText('I clicked the link'))
+
+    await waitFor(() => {
+      const msg = screen.getByText(
+        'No active session yet. Open the email link, then tap this again.'
+      )
+      expect(msg).toBeInTheDocument()
+      expect(msg).toHaveClass('text-red-600')
+    })
+  })
+
+  it('should continue to onSuccess after a send succeeds and the session becomes active', async () => {
+    supabase.auth.getSession.mockResolvedValue({
+      data: { session: { user: { id: 'user-1' } } },
+    })
+
+    const user = userEvent.setup()
+    const onSuccess = vi.fn()
+    render(<Login onSuccess={onSuccess} />)
+
+    await user.type(screen.getByLabelText('Email'), 'player@example.com')
+    await user.click(screen.getByText('Send magic link'))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Magic link sent. Check your email, then return here.')
+      ).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('I clicked the link'))
+
+    await waitFor(() => {
+      expect(supabase.auth.getSession).toHaveBeenCalledTimes(1)
+      expect(onSuccess).toHaveBeenCalled()
+    })
+
+    expect(
+      screen.queryByText('No active session yet. Open the email link, then tap this again.')
+    ).not.toBeInTheDocument()
+  })
+
+  it('should show the existing error message when session lookup returns an auth error', async () => {
+    supabase.auth.getSession.mockResolvedValue({
+      data: { session: null },
+      error: new Error('network down'),
+    })
+
     const user = userEvent.setup()
     render(<Login />)
 
