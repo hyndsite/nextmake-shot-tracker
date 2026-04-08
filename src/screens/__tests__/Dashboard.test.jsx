@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
 import Dashboard from "../Dashboard"
@@ -65,6 +65,10 @@ function buildSupabaseQuery(data) {
   }
 }
 
+function getActiveAthleteCard() {
+  return screen.getByText("Active athlete").closest("div.min-w-0.rounded-2xl")
+}
+
 describe("Dashboard", () => {
   beforeEach(() => {
     localStorage.clear()
@@ -118,6 +122,14 @@ describe("Dashboard", () => {
     render(<Dashboard />)
 
     expect(await screen.findByText("Zoe Smith")).toBeInTheDocument()
+    expect(within(getActiveAthleteCard()).getByText("Zoe Smith")).toBeInTheDocument()
+    expect(listAthleteProfiles).toHaveBeenCalled()
+    await waitFor(() => {
+      expect(listAthleteDashboardMetrics).toHaveBeenCalledWith({
+        athleteId: "remote_zoe",
+        includeDisabled: true,
+      })
+    })
   })
 
   it("adds athlete inline and shows active profile", async () => {
@@ -136,22 +148,40 @@ describe("Dashboard", () => {
     expect(screen.getByText("Max McCarty")).toBeInTheDocument()
   })
 
-  it("switches active athlete from selector", async () => {
+  it("switches active athlete from selector and reloads metrics", async () => {
     const user = userEvent.setup()
+    listAthleteProfiles.mockResolvedValueOnce([
+      {
+        id: "remote_max",
+        first_name: "Max",
+        last_name: "McCarty",
+        initials: "MM",
+        avatar_color: "#BFDBFE",
+        created_at: new Date().toISOString(),
+        archived_at: null,
+      },
+      {
+        id: "remote_ava",
+        first_name: "Ava",
+        last_name: "Lopez",
+        initials: "AL",
+        avatar_color: "#BFDBFE",
+        created_at: new Date().toISOString(),
+        archived_at: null,
+      },
+    ])
     render(<Dashboard />)
 
-    await user.click(screen.getByLabelText("Open add athlete"))
-    await user.type(screen.getByLabelText("First name"), "Max")
-    await user.click(screen.getByRole("button", { name: "Add athlete" }))
-
-    await user.click(screen.getByLabelText("Open add athlete"))
-    await user.type(screen.getByLabelText("First name"), "Ava")
-    await user.click(screen.getByRole("button", { name: "Add athlete" }))
-
     await user.click(screen.getByLabelText("Switch athlete"))
-    await user.click(screen.getByRole("button", { name: /Ava/i }))
+    await user.click(screen.getByRole("button", { name: "Ava Lopez" }))
 
-    expect(screen.getByText("Ava")).toBeInTheDocument()
+    expect(within(getActiveAthleteCard()).getByText("Ava Lopez")).toBeInTheDocument()
+    await waitFor(() => {
+      expect(listAthleteDashboardMetrics).toHaveBeenLastCalledWith({
+        athleteId: "remote_ava",
+        includeDisabled: true,
+      })
+    })
   })
 
   it("archives the active athlete without deleting other athletes", async () => {
@@ -259,6 +289,12 @@ describe("Dashboard", () => {
 
     render(<Dashboard />)
 
+    await waitFor(() => {
+      expect(listAthleteDashboardMetrics).toHaveBeenCalledWith({
+        athleteId: "remote_zoe",
+        includeDisabled: true,
+      })
+    })
     expect(await screen.findByText("eFG% (overall)")).toBeInTheDocument()
     expect(screen.getByText(/Game vs Practice/)).toBeInTheDocument()
     expect(screen.getByText("Add up to 4 metrics")).toBeInTheDocument()
