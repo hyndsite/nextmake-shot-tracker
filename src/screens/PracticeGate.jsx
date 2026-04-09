@@ -9,6 +9,7 @@ import { PlayCircle } from "lucide-react"
 import {
   setActiveAthlete,
 } from "../lib/athlete-db"
+import PracticeExistingSessionModal from "../components/PracticeExistingSessionModal"
 import PracticeStartPanel from "../components/PracticeStartPanel"
 import PracticeSessionHistory from "../components/PracticeSessionHistory"
 import { usePracticeGateData } from "../hooks/usePracticeGateData"
@@ -148,18 +149,10 @@ export default function PracticeGate({ navigate }) {
 
       {/* Existing active session modal */}
       {existingActiveSession && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-[90%] max-w-sm rounded-2xl bg-white p-4 shadow-xl">
-            <div className="text-base font-semibold mb-1">Active Session Found</div>
-            <p className="text-sm text-slate-600 mb-4">
-              This athlete already has an active session. Please resume that session instead of starting a new one.
-            </p>
-            <div className="flex justify-end gap-2">
-              <button className="btn btn-blue" onClick={() => setExistingActiveSession(null)}>Cancel</button>
-              <button className="btn btn-emerald" onClick={resumeExistingSession}>Resume Existing Session</button>
-            </div>
-          </div>
-        </div>
+        <PracticeExistingSessionModal
+          onCancel={() => setExistingActiveSession(null)}
+          onResume={resumeExistingSession}
+        />
       )}
     </div>
   )
