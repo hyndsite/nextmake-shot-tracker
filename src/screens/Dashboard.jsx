@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react"
+import { useMemo } from "react"
 import { Archive, ArrowLeftRight, Plus } from "lucide-react"
 import {
   CartesianGrid,
@@ -10,12 +10,6 @@ import {
   YAxis,
 } from "recharts"
 
-import { addAthlete, archiveAthlete } from "../lib/athlete-db"
-import {
-  archiveAthleteProfile,
-  createAthleteProfile,
-} from "../lib/athlete-profiles-db"
-import { replaceAthleteDashboardMetrics } from "../lib/athlete-dashboard-db"
 import {
   DASHBOARD_METRIC_GROUPS,
   DASHBOARD_METRIC_BY_KEY,
@@ -23,6 +17,11 @@ import {
 } from "../constants/dashboard-metrics"
 import { buildDashboardMetricSeries } from "../lib/dashboard-metric-series"
 import { useDashboardData } from "../hooks/useDashboardData"
+import { useDashboardAthleteActions } from "../hooks/useDashboardAthleteActions"
+import {
+  normalizeSourceMode,
+  useDashboardCustomization,
+} from "../hooks/useDashboardCustomization"
 
 function fullName(athlete) {
   if (!athlete) return "No active athlete"
@@ -83,35 +82,6 @@ function AthleteRow({ athlete, selected, onClick }) {
 
 const RANGE_OPTIONS = ["7d", "30d", "90d", "180d", "1y"]
 
-function normalizeSourceMode(mode) {
-  return mode === "game" || mode === "practice" || mode === "both" ? mode : "both"
-}
-
-function sourceFlags(mode) {
-  const normalized = normalizeSourceMode(mode)
-  return {
-    game: normalized === "game" || normalized === "both",
-    practice: normalized === "practice" || normalized === "both",
-  }
-}
-
-function toSourceMode(game, practice) {
-  if (game && practice) return "both"
-  if (game) return "game"
-  if (practice) return "practice"
-  return ""
-}
-
-function buildEmptyMetricRow(position = 0) {
-  return {
-    metricKey: "",
-    rangeKey: "7d",
-    sourceMode: "both",
-    position,
-    enabled: true,
-  }
-}
-
 export default function Dashboard() {
   const {
     athletes,
@@ -129,19 +99,44 @@ export default function Dashboard() {
     dashboardMetricsLoading,
     dashboardMetricsError,
   } = useDashboardData()
-  const [showSwitch, setShowSwitch] = useState(false)
-  const [showAdd, setShowAdd] = useState(false)
-  const [firstName, setFirstName] = useState("")
-  const [lastName, setLastName] = useState("")
-  const [error, setError] = useState("")
-  const [dashboardActionError, setDashboardActionError] = useState("")
-  const [showCustomize, setShowCustomize] = useState(false)
-  const [draftMetrics, setDraftMetrics] = useState([])
-  const [draftError, setDraftError] = useState("")
-  const [savingDashboardMetrics, setSavingDashboardMetrics] = useState(false)
-  const [removingMetricPosition, setRemovingMetricPosition] = useState(null)
-  const draftMetricsRef = useRef([])
-  const dashboardSaveRequestRef = useRef(0)
+  const {
+    showSwitch,
+    setShowSwitch,
+    showAdd,
+    setShowAdd,
+    firstName,
+    setFirstName,
+    lastName,
+    setLastName,
+    error,
+    handleSelectAthlete,
+    handleAddAthlete,
+    handleArchiveAthlete,
+  } = useDashboardAthleteActions({
+    activeAthlete,
+    refreshAthletes,
+    selectAthlete,
+  })
+  const {
+    dashboardActionError,
+    showCustomize,
+    draftMetrics,
+    draftError,
+    savingDashboardMetrics,
+    removingMetricPosition,
+    openCustomizeDrawer,
+    closeCustomizeDrawer,
+    updateDraftMetric,
+    addDraftMetric,
+    removeDraftMetric,
+    removeConfiguredMetric,
+    sourceFlags,
+    toSourceMode,
+  } = useDashboardCustomization({
+    activeAthleteId: activeId,
+    dashboardMetrics,
+    setDashboardMetrics,
+  })
 
   const configuredMetricCards = useMemo(() => {
     return (dashboardMetrics || [])
@@ -182,177 +177,6 @@ export default function Dashboard() {
     if (remaining === 0) return "Max number metrics reached"
     return `Add up to ${remaining} metrics`
   }, [configuredMetricCards.length])
-
-  const handleSelectAthlete = (id) => {
-    setDashboardActionError("")
-    selectAthlete(id)
-    setShowSwitch(false)
-  }
-
-  const handleAddAthlete = async (e) => {
-    e.preventDefault()
-    setError("")
-
-    try {
-      const remote = await createAthleteProfile({ firstName, lastName })
-      const created = addAthlete({
-        firstName: remote.first_name,
-        lastName: remote.last_name || "",
-        id: remote.id,
-        createdAt: remote.created_at,
-        avatarColor: remote.avatar_color || undefined,
-      })
-      setFirstName("")
-      setLastName("")
-      setShowAdd(false)
-      selectAthlete(created.id)
-    } catch (err) {
-      setError(err?.message || "Unable to add athlete")
-    }
-  }
-
-  const handleArchiveAthlete = async () => {
-    if (!activeAthlete?.id) return
-    const ok = window.confirm(`Archive ${fullName(activeAthlete)}?`)
-    if (!ok) return
-    setError("")
-
-    try {
-      await archiveAthleteProfile(activeAthlete.id)
-      archiveAthlete(activeAthlete.id)
-      setShowSwitch(false)
-      refreshAthletes()
-    } catch (err) {
-      setError(err?.message || "Unable to archive athlete")
-    }
-  }
-
-  const openCustomizeDrawer = () => {
-    setDashboardActionError("")
-    const nextRows = [...(dashboardMetrics || [])]
-      .sort((a, b) => Number(a.position || 0) - Number(b.position || 0))
-      .slice(0, 5)
-      .map((row, index) => ({
-        metricKey: row.metric_key || "",
-        rangeKey: row.range_key || "7d",
-        sourceMode: normalizeSourceMode(row.source_mode || "both"),
-        position: Number.isInteger(row.position) ? row.position : index,
-        enabled: row.enabled !== false,
-      }))
-    draftMetricsRef.current = nextRows
-    setDraftMetrics(nextRows)
-    setDraftError("")
-    setShowCustomize(true)
-  }
-
-  const closeCustomizeDrawer = () => {
-    setShowCustomize(false)
-    setDraftError("")
-  }
-
-  const toCleanedDraftRows = (rows) => rows
-    .map((row, index) => ({
-      metricKey: String(row.metricKey || "").trim(),
-      rangeKey: row.rangeKey || "7d",
-      sourceMode: normalizeSourceMode(row.sourceMode || "both"),
-      position: index,
-      enabled: row.enabled !== false,
-    }))
-    .filter((row) => row.metricKey)
-
-  const persistDraftMetrics = async (rows) => {
-    if (!activeId) {
-      setDraftError("Select an active athlete before saving.")
-      return
-    }
-
-    const cleaned = toCleanedDraftRows(rows)
-    if (cleaned.length > 5) {
-      setDraftError("You can select at most 5 metrics.")
-      return
-    }
-    for (const row of cleaned) {
-      const flags = sourceFlags(row.sourceMode)
-      if (!flags.game && !flags.practice) {
-        setDraftError("Each metric must include Game, Practice, or both.")
-        return
-      }
-    }
-
-    const requestId = dashboardSaveRequestRef.current + 1
-    dashboardSaveRequestRef.current = requestId
-    setSavingDashboardMetrics(true)
-    setDraftError("")
-    try {
-      const rowsSaved = await replaceAthleteDashboardMetrics(activeId, cleaned)
-      if (dashboardSaveRequestRef.current !== requestId) return
-      setDashboardMetrics(rowsSaved || [])
-    } catch (err) {
-      if (dashboardSaveRequestRef.current !== requestId) return
-      setDraftError(err?.message || "Unable to save dashboard settings")
-    } finally {
-      if (dashboardSaveRequestRef.current === requestId) {
-        setSavingDashboardMetrics(false)
-      }
-    }
-  }
-
-  const updateDraftMetric = (index, patch) => {
-    const prev = draftMetricsRef.current
-    const next = prev.map((row, i) => (
-      i === index ? { ...row, ...patch, position: i } : { ...row, position: i }
-    ))
-    draftMetricsRef.current = next
-    setDraftMetrics(next)
-    void persistDraftMetrics(next)
-  }
-
-  const addDraftMetric = () => {
-    const prev = draftMetricsRef.current
-    if (prev.length >= 5) return
-    const next = [...prev, buildEmptyMetricRow(prev.length)]
-    draftMetricsRef.current = next
-    setDraftMetrics(next)
-    void persistDraftMetrics(next)
-  }
-
-  const removeDraftMetric = (index) => {
-    const prev = draftMetricsRef.current
-    const next = prev
-      .filter((_, i) => i !== index)
-      .map((row, i) => ({ ...row, position: i }))
-    draftMetricsRef.current = next
-    setDraftMetrics(next)
-    void persistDraftMetrics(next)
-  }
-
-  const removeConfiguredMetric = async (position) => {
-    if (!activeId) return
-
-    const remainingRows = [...(dashboardMetrics || [])]
-      .sort((a, b) => Number(a.position || 0) - Number(b.position || 0))
-      .filter((row) => Number(row.position) !== Number(position))
-      .slice(0, 5)
-      .map((row, index) => ({
-        metricKey: row.metric_key || "",
-        rangeKey: row.range_key || "7d",
-        sourceMode: normalizeSourceMode(row.source_mode || "both"),
-        position: index,
-        enabled: row.enabled !== false,
-      }))
-      .filter((row) => row.metricKey)
-
-    setRemovingMetricPosition(position)
-    setDashboardActionError("")
-    try {
-      const rows = await replaceAthleteDashboardMetrics(activeId, remainingRows)
-      setDashboardMetrics(rows || [])
-    } catch (err) {
-      setDashboardActionError(err?.message || "Unable to remove dashboard metric")
-    } finally {
-      setRemovingMetricPosition(null)
-    }
-  }
 
   return (
     <div className="min-h-dvh bg-white">
