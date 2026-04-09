@@ -1,23 +1,12 @@
 import { Archive, ArrowLeftRight, Plus } from "lucide-react"
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts"
 
+import DashboardMetricsSection from "../components/DashboardMetricsSection"
+import DashboardSnapshotSection from "../components/DashboardSnapshotSection"
 import {
   DASHBOARD_METRIC_GROUPS,
 } from "../constants/dashboard-metrics"
 import {
-  fmtPct,
-  fmtValue,
   fullName,
-  pct,
-  zoneLabel,
 } from "../lib/dashboard-formatters"
 import { useDashboardData } from "../hooks/useDashboardData"
 import { useDashboardAthleteActions } from "../hooks/useDashboardAthleteActions"
@@ -231,172 +220,17 @@ export default function Dashboard() {
           )}
         </section>
 
-        <section className="card space-y-3">
-          <div>
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900">Dashboard Metrics</h3>
-              <div className="text-xs text-slate-500">{dashboardMetricsSubtitle}</div>
-            </div>
-          </div>
-          {dashboardMetricsLoading && (
-            <div className="text-xs text-slate-500">Loading dashboard metrics...</div>
-          )}
-          {(dashboardActionError || dashboardMetricsError) && (
-            <div className="text-xs text-red-600">{dashboardActionError || dashboardMetricsError}</div>
-          )}
-          {configuredMetricCards.length > 0 && (
-            <div className="space-y-2">
-              {configuredMetricCards.map((card) => (
-                <div key={card.id} className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm font-semibold text-slate-900">{card.label}</div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-xs text-slate-500">
-                        {card.rangeKey} • {card.sourceLabel}
-                      </div>
-                      <button
-                        type="button"
-                        className="text-xs font-semibold text-rose-600 disabled:opacity-50"
-                        aria-label={`Remove ${card.label}`}
-                        onClick={() => removeConfiguredMetric(card.position)}
-                        disabled={removingMetricPosition === card.position}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                  <div className="h-36">
-                    <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={120}>
-                      <LineChart data={card.series.points}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                        <XAxis dataKey="dayKey" tick={{ fontSize: 10 }} />
-                        <YAxis tick={{ fontSize: 10 }} />
-                        <Tooltip formatter={(value) => fmtValue(value, card.format)} />
-                        {(card.sourceMode === "both" || card.sourceMode === "game") && (
-                          <Line
-                            type="monotone"
-                            dataKey="game"
-                            stroke="#0EA5E9"
-                            dot={false}
-                            strokeWidth={2}
-                            name="Game"
-                          />
-                        )}
-                        {(card.sourceMode === "both" || card.sourceMode === "practice") && (
-                          <Line
-                            type="monotone"
-                            dataKey="practice"
-                            stroke="#10B981"
-                            dot={false}
-                            strokeWidth={2}
-                            name="Practice"
-                          />
-                        )}
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          {configuredMetricCards.length < 5 && (
-            <button
-              type="button"
-              className="group w-1/2 aspect-square rounded-2xl border-2 border-slate-300 bg-gradient-to-br from-white via-slate-50 to-slate-100 text-sm font-semibold text-slate-700 shadow-[0_5px_12px_-9px_rgba(15,23,42,0.35),inset_0_1px_0_rgba(255,255,255,0.85)] transition duration-150 hover:-translate-y-0.5 hover:shadow-[0_8px_14px_-10px_rgba(15,23,42,0.35),inset_0_1px_0_rgba(255,255,255,0.9)] active:translate-y-0 active:shadow-[0_3px_8px_-7px_rgba(15,23,42,0.32),inset_0_1px_0_rgba(255,255,255,0.8)]"
-              onClick={openCustomizeDrawer}
-            >
-              <span className="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white/80 px-3 py-1 shadow-sm">
-                + Add Metric
-              </span>
-            </button>
-          )}
-        </section>
+        <DashboardMetricsSection
+          subtitle={dashboardMetricsSubtitle}
+          loading={dashboardMetricsLoading}
+          error={dashboardActionError || dashboardMetricsError}
+          cards={configuredMetricCards}
+          removingMetricPosition={removingMetricPosition}
+          onAddMetric={openCustomizeDrawer}
+          onRemoveMetric={removeConfiguredMetric}
+        />
 
-        <section className="card space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-900">Performance Snapshot</h3>
-            {snapshotLoading && <span className="text-xs text-slate-500">Updating...</span>}
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-              <div className="text-[11px] uppercase tracking-wide text-slate-500">eFG% (7d)</div>
-              <div className="text-lg font-semibold text-slate-900">{fmtPct(snapshot.efgPct7d)}</div>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-              <div className="text-[11px] uppercase tracking-wide text-slate-500">FG% (7d)</div>
-              <div className="text-lg font-semibold text-slate-900">{fmtPct(snapshot.fgPct7d)}</div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-              <div className="text-[11px] text-slate-500">Shots Today</div>
-              <div className="text-base font-semibold text-slate-900">{snapshot.attemptsToday}</div>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-              <div className="text-[11px] text-slate-500">Shots (7d)</div>
-              <div className="text-base font-semibold text-slate-900">{snapshot.attempts7d}</div>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-              <div className="text-[11px] text-slate-500">Streak</div>
-              <div className="text-base font-semibold text-slate-900">{snapshot.streakDays}d</div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-              <div className="text-[11px] text-slate-500">Makes / Attempts (7d)</div>
-              <div className="text-sm font-semibold text-slate-900">
-                {snapshot.makes7d} / {snapshot.attempts7d} ({fmtPct(pct(snapshot.makes7d, snapshot.attempts7d))})
-              </div>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-              <div className="text-[11px] text-slate-500">Practice vs Game (7d)</div>
-              <div className="text-sm font-semibold text-slate-900">
-                P {snapshot.practiceAttempts7d} • G {snapshot.gameAttempts7d}
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-              <div className="text-[11px] text-slate-500">Top Zone (7d)</div>
-              <div className="text-sm font-semibold text-slate-900">
-                {snapshot.topZone
-                  ? `${zoneLabel(snapshot.topZone.zoneId)} · ${fmtPct(snapshot.topZone.fgPct)}`
-                  : "Not enough shots"}
-              </div>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-              <div className="text-[11px] text-slate-500">Weakest Zone (7d)</div>
-              <div className="text-sm font-semibold text-slate-900">
-                {snapshot.weakestZone
-                  ? `${zoneLabel(snapshot.weakestZone.zoneId)} · ${fmtPct(snapshot.weakestZone.fgPct)}`
-                  : "Not enough shots"}
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-              <div className="text-[11px] text-slate-500">Last Session</div>
-              <div className="text-sm font-semibold text-slate-900">
-                {snapshot.lastSession
-                  ? `${snapshot.lastSession.source === "game" ? "Game" : "Practice"} · ${zoneLabel(snapshot.lastSession.zoneId)} · ${snapshot.lastSession.makes}/${snapshot.lastSession.attempts}`
-                  : "No sessions yet"}
-              </div>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-              <div className="text-[11px] text-slate-500">Current Goal Progress</div>
-              <div className="text-sm font-semibold text-slate-900">
-                {snapshot.goalSummary
-                  ? `${snapshot.goalSummary.progressPct}% · ${snapshot.goalSummary.setName}`
-                  : "No active goals"}
-              </div>
-            </div>
-          </div>
-        </section>
+        <DashboardSnapshotSection snapshot={snapshot} loading={snapshotLoading} />
       </main>
 
       {showCustomize && (
