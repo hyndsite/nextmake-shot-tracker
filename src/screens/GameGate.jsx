@@ -2,54 +2,14 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { PlayCircle, Gamepad2, Trash2 } from "lucide-react"
 import {
-  listGameSessions,
-  getActiveGameSession,
   endGameSession,
   deleteGameSession,
 } from "../lib/game-db"
+import { useGameGateData } from "../hooks/useGameGateData"
 
 export default function GameGate({ navigate }) {
-  const [sessions, setSessions] = useState([])
-  const [active, setActive] = useState(null)
   const [showConfirmNew, setShowConfirmNew] = useState(false)
-
-  // ---------- data load ----------
-  async function refresh() {
-    const [all, current] = await Promise.all([
-      listGameSessions(),
-      getActiveGameSession(),
-    ])
-    setSessions(all || [])
-    setActive(current || null)
-  }
-  useEffect(() => {
-    void refresh()
-  }, [])
-
-  // ---------- derived ----------
-  const previous = useMemo(
-    () => (sessions || []).filter((s) => s.status === "completed"),
-    [sessions],
-  )
-
-  // Group by level (fallback to "Games")
-  const groupedPrev = useMemo(() => {
-    const g = new Map()
-    for (const s of previous) {
-      const key = s.level || "Games"
-      if (!g.has(key)) g.set(key, [])
-      g.get(key).push(s)
-    }
-    // sort each group by date desc (date_iso or started_at)
-    for (const arr of g.values()) {
-      arr.sort((a, b) =>
-        (b.date_iso || b.started_at || "").localeCompare(
-          a.date_iso || a.started_at || "",
-        ),
-      )
-    }
-    return g
-  }, [previous])
+  const { sessions, active, groupedPrev, refresh } = useGameGateData()
 
   // ---------- helpers ----------
   function computeResultSummary(session) {
