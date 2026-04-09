@@ -1,10 +1,6 @@
 import React, { useMemo, useState } from "react"
 import { ArrowLeftRight } from "lucide-react"
-
-function athleteName(athlete) {
-  if (!athlete) return "No active athlete"
-  return `${athlete.first_name}${athlete.last_name ? ` ${athlete.last_name}` : ""}`
-}
+import { fullName } from "../lib/dashboard-formatters"
 
 function AthleteAvatar({ athlete }) {
   return (
@@ -30,7 +26,7 @@ function AthleteRow({ athlete, selected, onClick }) {
       }`}
     >
       <AthleteAvatar athlete={athlete} />
-      <div className="text-sm font-medium text-slate-900 truncate">{athleteName(athlete)}</div>
+      <div className="text-sm font-medium text-slate-900 truncate">{fullName(athlete)}</div>
     </button>
   )
 }
@@ -62,7 +58,7 @@ export default function ActiveAthleteSwitcher({
                   Active athlete
                 </div>
                 <div className="text-sm font-semibold text-slate-900 truncate">
-                  {athleteName(activeAthlete)}
+                  {fullName(activeAthlete)}
                 </div>
               </div>
             </div>

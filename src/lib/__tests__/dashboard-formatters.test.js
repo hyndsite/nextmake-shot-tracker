@@ -5,6 +5,7 @@ import { fmtPct, fmtValue, fullName, zoneLabel } from "../dashboard-formatters"
 describe("dashboard-formatters", () => {
   it("formats athlete names", () => {
     expect(fullName(null)).toBe("No active athlete")
+    expect(fullName(null, "Unknown athlete")).toBe("Unknown athlete")
     expect(fullName({ first_name: "Zoe", last_name: "Smith" })).toBe("Zoe Smith")
     expect(fullName({ first_name: "Ava", last_name: "" })).toBe("Ava")
   })

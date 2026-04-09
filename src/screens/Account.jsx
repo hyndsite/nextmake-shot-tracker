@@ -7,6 +7,7 @@ import {
   replaceAthletes,
 } from "../lib/athlete-db"
 import { updateAthleteProfile } from "../lib/athlete-profiles-db"
+import { fullName } from "../lib/dashboard-formatters"
 
 const LAST_SYNC_KEY = "nm_last_sync" // kept in sync with lib/sync.js
 const COLOR_OPTIONS = [
@@ -19,11 +20,6 @@ const COLOR_OPTIONS = [
   "#DDD6FE",
   "#BBF7D0",
 ]
-
-function fullName(athlete) {
-  if (!athlete) return "Unknown athlete"
-  return `${athlete.first_name}${athlete.last_name ? ` ${athlete.last_name}` : ""}`
-}
 
 function isValidHex(value) {
   return /^#[0-9A-Fa-f]{6}$/.test(String(value || ""))
@@ -179,7 +175,7 @@ export default function Account({ onSignOut }){
 
           {athletes.map((athlete) => {
             const isEditing = athlete.id === editingAthleteId
-            const name = fullName(athlete)
+            const name = fullName(athlete, "Unknown athlete")
             return (
               <section key={athlete.id} className="card space-y-2">
                 <div className="flex items-center justify-between gap-3">

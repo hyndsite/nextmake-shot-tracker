@@ -1,5 +1,5 @@
-export function fullName(athlete) {
-  if (!athlete) return "No active athlete"
+export function fullName(athlete, emptyLabel = "No active athlete") {
+  if (!athlete) return emptyLabel
   return `${athlete.first_name}${athlete.last_name ? ` ${athlete.last_name}` : ""}`
 }
 

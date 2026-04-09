@@ -1,9 +1,5 @@
 import { ArrowLeftRight } from "lucide-react"
-
-function athleteName(athlete) {
-  if (!athlete) return "No active athlete"
-  return `${athlete.first_name}${athlete.last_name ? ` ${athlete.last_name}` : ""}`
-}
+import { fullName } from "../lib/dashboard-formatters"
 
 function Avatar({ athlete }) {
   return (
@@ -43,7 +39,7 @@ export default function PracticeStartPanel({
                   Active athlete
                 </div>
                 <div className="text-sm font-semibold text-slate-900 truncate">
-                  {athleteName(selectedAthlete)}
+                  {fullName(selectedAthlete)}
                 </div>
               </div>
             </div>
@@ -135,7 +131,7 @@ export default function PracticeStartPanel({
                   : "border-slate-200 bg-white text-slate-800"
               }`}
             >
-              {athleteName(athlete)}
+              {fullName(athlete)}
             </button>
           ))}
         </div>

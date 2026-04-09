@@ -15,11 +15,7 @@ import {
   listAthletes,
   setActiveAthlete,
 } from "../lib/athlete-db"
-
-function athleteName(athlete) {
-  if (!athlete) return "Unknown athlete"
-  return `${athlete.first_name}${athlete.last_name ? ` ${athlete.last_name}` : ""}`
-}
+import { fullName } from "../lib/dashboard-formatters"
 
 export default function GameNew({ navigate }) {
   // Defaults
@@ -223,7 +219,7 @@ export default function GameNew({ navigate }) {
             >
               {athletes.map((athlete) => (
                 <option key={athlete.id} value={athlete.id}>
-                  {athleteName(athlete)}
+                  {fullName(athlete, "Unknown athlete")}
                 </option>
               ))}
             </select>
@@ -340,7 +336,7 @@ export default function GameNew({ navigate }) {
               Change active athlete?
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              Switch to {athleteName(pendingAthlete)} for this game?
+              Switch to {fullName(pendingAthlete, "Unknown athlete")} for this game?
             </p>
             <div className="mt-4 flex items-center justify-end gap-2">
               <button

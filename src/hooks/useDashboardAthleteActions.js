@@ -5,11 +5,7 @@ import {
   archiveAthleteProfile,
   createAthleteProfile,
 } from "../lib/athlete-profiles-db"
-
-function fullName(athlete) {
-  if (!athlete) return "No active athlete"
-  return `${athlete.first_name}${athlete.last_name ? ` ${athlete.last_name}` : ""}`
-}
+import { fullName } from "../lib/dashboard-formatters"
 
 export function useDashboardAthleteActions({
   activeAthlete,
