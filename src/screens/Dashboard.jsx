@@ -1,4 +1,3 @@
-import { useMemo } from "react"
 import { Archive, ArrowLeftRight, Plus } from "lucide-react"
 import {
   CartesianGrid,
@@ -12,44 +11,20 @@ import {
 
 import {
   DASHBOARD_METRIC_GROUPS,
-  DASHBOARD_METRIC_BY_KEY,
-  getDashboardMetricLabel,
 } from "../constants/dashboard-metrics"
-import { buildDashboardMetricSeries } from "../lib/dashboard-metric-series"
+import {
+  fmtPct,
+  fmtValue,
+  fullName,
+  pct,
+  zoneLabel,
+} from "../lib/dashboard-formatters"
 import { useDashboardData } from "../hooks/useDashboardData"
 import { useDashboardAthleteActions } from "../hooks/useDashboardAthleteActions"
 import {
-  normalizeSourceMode,
   useDashboardCustomization,
 } from "../hooks/useDashboardCustomization"
-
-function fullName(athlete) {
-  if (!athlete) return "No active athlete"
-  return `${athlete.first_name}${athlete.last_name ? ` ${athlete.last_name}` : ""}`
-}
-
-function zoneLabel(zoneId) {
-  if (!zoneId) return "Unknown zone"
-  if (zoneId === "free_throw") return "Free Throw"
-  return zoneId
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ")
-}
-
-function pct(makes, attempts) {
-  if (!attempts) return 0
-  return (makes / attempts) * 100
-}
-
-function fmtPct(value) {
-  return `${(Math.round((Number(value) || 0) * 10) / 10).toFixed(1)}%`
-}
-
-function fmtValue(value, format) {
-  if (format === "percent") return fmtPct(value)
-  return String(Math.round(Number(value) || 0))
-}
+import { useDashboardMetricCards } from "../hooks/useDashboardMetricCards"
 
 function Avatar({ athlete }) {
   return (
@@ -137,46 +112,11 @@ export default function Dashboard() {
     dashboardMetrics,
     setDashboardMetrics,
   })
-
-  const configuredMetricCards = useMemo(() => {
-    return (dashboardMetrics || [])
-      .filter((row) => row.enabled !== false)
-      .sort((a, b) => Number(a.position || 0) - Number(b.position || 0))
-      .slice(0, 5)
-      .map((row) => {
-        const metricKey = row.metric_key
-        const rangeKey = row.range_key || "7d"
-        const sourceMode = normalizeSourceMode(row.source_mode || "both")
-        const sourceLabel = sourceMode === "both"
-          ? "Game vs Practice"
-          : sourceMode === "game"
-            ? "Game"
-            : "Practice"
-
-        return {
-          id: row.id || `${metricKey}-${row.position}`,
-          position: Number.isInteger(row.position) ? row.position : 0,
-          label: getDashboardMetricLabel(metricKey),
-          rangeKey,
-          sourceMode,
-          sourceLabel,
-          format: DASHBOARD_METRIC_BY_KEY[metricKey]?.format || "number",
-          series: buildDashboardMetricSeries({
-            metricKey,
-            rangeKey,
-            sourceMode,
-            gameEvents: gameRows,
-            practiceEntries: practiceRows,
-          }),
-        }
-      })
-  }, [dashboardMetrics, gameRows, practiceRows])
-
-  const dashboardMetricsSubtitle = useMemo(() => {
-    const remaining = Math.max(0, 5 - configuredMetricCards.length)
-    if (remaining === 0) return "Max number metrics reached"
-    return `Add up to ${remaining} metrics`
-  }, [configuredMetricCards.length])
+  const { configuredMetricCards, dashboardMetricsSubtitle } = useDashboardMetricCards({
+    dashboardMetrics,
+    gameRows,
+    practiceRows,
+  })
 
   return (
     <div className="min-h-dvh bg-white">
