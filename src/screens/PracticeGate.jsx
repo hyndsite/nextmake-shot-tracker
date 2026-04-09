@@ -1,17 +1,15 @@
 // src/screens/PracticeGate.jsx
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   addPracticeSession,
   deletePracticeSession,
-  listPracticeSessions,
   listActivePracticeSessions,
 } from "../lib/practice-db"
 import { PlayCircle, Trash2, ChevronDown, ArrowLeftRight } from "lucide-react"
 import {
-  listAthletes,
-  getActiveAthleteId,
   setActiveAthlete,
 } from "../lib/athlete-db"
+import { usePracticeGateData } from "../hooks/usePracticeGateData"
 
 function athleteName(athlete) {
   if (!athlete) return "No active athlete"
@@ -38,89 +36,23 @@ function dayName(iso) {
   try { return new Date(iso).toLocaleDateString(undefined, { weekday: "long" }) } catch { return "—" }
 }
 
-function monthKey(iso) {
-  try {
-    const d = new Date(iso || Date.now())
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, "0")
-    return `${y}-${m}`
-  } catch {
-    return "0000-00"
-  }
-}
-
-function monthLabel(iso) {
-  try {
-    const d = new Date(iso || Date.now())
-    return d.toLocaleDateString(undefined, { month: "long", year: "numeric" })
-  } catch {
-    return "Unknown"
-  }
-}
-
 export default function PracticeGate({ navigate }) {
-  const [sessions, setSessions] = useState([])
-  const [active, setActive] = useState(null)
   const [existingActiveSession, setExistingActiveSession] = useState(null)
   const [openMonth, setOpenMonth] = useState(null)
-  const [athletes, setAthletes] = useState(() => listAthletes())
-  const [selectedAthleteId, setSelectedAthleteId] = useState(() => {
-    const rows = listAthletes()
-    return getActiveAthleteId() || rows[0]?.id || ""
-  })
   const [showStartCard, setShowStartCard] = useState(false)
   const [showSwitchAthlete, setShowSwitchAthlete] = useState(false)
   const chooserRef = useRef(null)
-
-  const selectedAthlete = useMemo(
-    () => athletes.find((row) => row.id === selectedAthleteId) ?? null,
-    [athletes, selectedAthleteId]
-  )
-  const canStartForSelectedAthlete = Boolean(selectedAthleteId)
-
-  const groupedMonths = useMemo(() => {
-    const rows = sessions
-      // don't show the current active session in "Previous"
-      .filter(s => !active || s.id !== active.id)
-      .filter(s => s.started_at || s.date_iso)
-
-    if (!rows.length) return []
-
-    const map = new Map()
-    for (const s of rows) {
-      const base = s.started_at || s.date_iso
-      const key = monthKey(base)
-      const label = monthLabel(base)
-      if (!map.has(key)) {
-        map.set(key, { key, label, sessions: [] })
-      }
-      map.get(key).sessions.push(s)
-    }
-
-    const months = Array.from(map.values())
-    // Months in descending order
-    months.sort((a, b) => b.key.localeCompare(a.key))
-    // Sessions within each month in descending order
-    for (const m of months) {
-      m.sessions.sort((a, b) => {
-        const da = a.started_at || a.date_iso || ""
-        const db = b.started_at || b.date_iso || ""
-        return db.localeCompare(da)
-      })
-    }
-    return months
-  }, [sessions, active])
-
-  async function refresh() {
-    const all = await listPracticeSessions()
-    const actives = await listActivePracticeSessions()
-    setSessions(all)
-    setActive(actives[0] || null)
-    const nextAthletes = listAthletes()
-    setAthletes(nextAthletes)
-    setSelectedAthleteId(getActiveAthleteId() || nextAthletes[0]?.id || "")
-  }
-  useEffect(() => { refresh() }, [])
+  const {
+    sessions,
+    active,
+    athletes,
+    selectedAthleteId,
+    setSelectedAthleteId,
+    selectedAthlete,
+    canStartForSelectedAthlete,
+    groupedMonths,
+    refresh,
+  } = usePracticeGateData()
 
   useEffect(() => {
     if (!showStartCard) return undefined
