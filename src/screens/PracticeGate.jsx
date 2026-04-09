@@ -5,20 +5,13 @@ import {
   deletePracticeSession,
   listActivePracticeSessions,
 } from "../lib/practice-db"
-import { PlayCircle, Trash2, ChevronDown } from "lucide-react"
+import { PlayCircle } from "lucide-react"
 import {
   setActiveAthlete,
 } from "../lib/athlete-db"
 import PracticeStartPanel from "../components/PracticeStartPanel"
+import PracticeSessionHistory from "../components/PracticeSessionHistory"
 import { usePracticeGateData } from "../hooks/usePracticeGateData"
-
-function fmtDate(iso) {
-  try { return new Date(iso).toLocaleDateString() } catch { return iso || "—" }
-}
-
-function dayName(iso) {
-  try { return new Date(iso).toLocaleDateString(undefined, { weekday: "long" }) } catch { return "—" }
-}
 
 export default function PracticeGate({ navigate }) {
   const [existingActiveSession, setExistingActiveSession] = useState(null)
@@ -145,62 +138,13 @@ export default function PracticeGate({ navigate }) {
         <PlayCircle size={18} /> Resume Active Session
       </button>
 
-      <h2 className="text-lg font-semibold mb-2">Previous Sessions</h2>
-
-      <div className="space-y-3">
-        {groupedMonths.map((month) => (
-          <div key={month.key} className="rounded-2xl border border-slate-200 bg-white">
-            <button
-              type="button"
-              onClick={() => setOpenMonth(openMonth === month.key ? null : month.key)}
-              className="w-full flex items-center justify-between px-3 py-2 accordion-header"
-            >
-              <span className="text-sm font-semibold text-slate-900">
-                {month.label}
-              </span>
-              <ChevronDown
-                size={18}
-                className={`transition-transform ${openMonth === month.key ? "rotate-180" : ""}`}
-              />
-            </button>
-
-            {openMonth === month.key && (
-              <div className="border-t border-slate-100 p-2 space-y-2">
-                {month.sessions.map((s) => (
-                  <div
-                    key={s.id}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white practice-session-row"
-                  >
-                    <button
-                      className="flex-1 min-w-0 text-left"
-                      onClick={() => openSession(s.id)}
-                      aria-label="Open session"
-                    >
-                      <div className="text-sm font-medium text-slate-900 truncate">
-                        {dayName(s.started_at || s.date_iso)} |{" "}
-                        <span className="text-slate-500">
-                          {fmtDate(s.started_at || s.date_iso)}
-                        </span>
-                      </div>
-                    </button>
-                    <button
-                      className="p-1.5 trash-btn"
-                      onClick={() => onDelete(s.id)}
-                      aria-label="Delete session"
-                      title="Delete session"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-        {groupedMonths.length === 0 && (
-          <div className="text-sm text-slate-500">No previous sessions yet.</div>
-        )}
-      </div>
+      <PracticeSessionHistory
+        groupedMonths={groupedMonths}
+        openMonth={openMonth}
+        setOpenMonth={setOpenMonth}
+        openSession={openSession}
+        onDelete={onDelete}
+      />
 
       {/* Existing active session modal */}
       {existingActiveSession && (
