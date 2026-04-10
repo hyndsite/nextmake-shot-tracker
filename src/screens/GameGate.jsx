@@ -1,10 +1,11 @@
 // src/screens/GameGate.jsx
 import React, { useEffect, useMemo, useState } from "react"
-import { PlayCircle, Gamepad2, Trash2 } from "lucide-react"
+import { PlayCircle } from "lucide-react"
 import {
   endGameSession,
   deleteGameSession,
 } from "../lib/game-db"
+import GameHistorySection from "../components/GameHistorySection"
 import { useGameGateData } from "../hooks/useGameGateData"
 
 export default function GameGate({ navigate }) {
@@ -138,79 +139,14 @@ export default function GameGate({ navigate }) {
         </section>
       )}
 
-      {/* Previous Games */}
-      <h2 className="mt-5 text-slate-900 font-semibold text-center">
-        Previous Games
-      </h2>
-
-      {[...groupedPrev.entries()].map(([group, rows]) => (
-        <section key={group} className="w-full mt-2 space-y-2">
-          {group !== "Games" && (
-            <div className="text-xs uppercase tracking-wide text-slate-500 pl-1">
-              {group}
-            </div>
-          )}
-
-          {rows.map((g) => {
-            const result = computeResultSummary(g)
-            return (
-              <div
-                key={g.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => openDetail(g.id)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault()
-                    openDetail(g.id)
-                  }
-                }}
-                className="w-full text-left rounded-2xl border border-slate-200 bg-white px-3 py-2.5
-                           flex items-center gap-3 hover:bg-slate-50 active:scale-[0.995]
-                           focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
-                aria-label={`${g.team_name} vs ${
-                  g.opponent_name
-                } on ${fmtDate(g.date_iso || g.started_at)}`}
-              >
-                <div className="shrink-0 mt-0.5">
-                  <Gamepad2 size={18} className="text-slate-500" />
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs text-slate-500">
-                    {fmtDate(g.date_iso || g.started_at)}
-                  </div>
-                  <div className="truncate text-slate-900 font-medium">
-                    {g.team_name} vs. {g.opponent_name}
-                  </div>
-
-                  {/* Home/Away + W/L|Score in two columns */}
-                  <div className="mt-1 flex items-center gap-3">
-                    <div>{homeAwayPill(g)}</div>
-                    {result && (
-                      <div className="text-xs font-medium text-slate-700 text-right">
-                        {result.letter} | {result.team} - {result.opp}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Trash (does not trigger card click) */}
-                <div className="shrink-0 pl-2">
-                  <button
-                    type="button"
-                    onClick={(e) => onDelete(g.id, e)}
-                    className="trash-btn"
-                    aria-label="Delete game"
-                  >
-                    <Trash2 size={18} className="text-red-600" />
-                  </button>
-                </div>
-              </div>
-            )
-          })}
-        </section>
-      ))}
+      <GameHistorySection
+        groupedPrev={groupedPrev}
+        computeResultSummary={computeResultSummary}
+        fmtDate={fmtDate}
+        homeAwayPill={homeAwayPill}
+        openDetail={openDetail}
+        onDelete={onDelete}
+      />
 
       {/* Confirm new (active exists) */}
       {showConfirmNew && (
