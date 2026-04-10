@@ -5,6 +5,7 @@ import {
   endGameSession,
   deleteGameSession,
 } from "../lib/game-db"
+import GameExistingSessionModal from "../components/GameExistingSessionModal"
 import GameHistorySection from "../components/GameHistorySection"
 import { useGameGateData } from "../hooks/useGameGateData"
 
@@ -150,34 +151,12 @@ export default function GameGate({ navigate }) {
 
       {/* Confirm new (active exists) */}
       {showConfirmNew && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-[92%] max-w-sm rounded-2xl bg-white p-4 shadow-xl">
-            <div className="text-base font-semibold mb-1">
-              Active Game Detected
-            </div>
-            <p className="text-sm text-slate-600 mb-4">
-              An active game session already exists:{" "}
-              <span className="font-medium">{active?.team_name}</span> vs{" "}
-              <span className="font-medium">{active?.opponent_name}</span> on{" "}
-              {fmtDate(active?.started_at)}. Starting a new game will end
-              the current one. Do you want to continue?
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                className="btn btn-blue"
-                onClick={() => setShowConfirmNew(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn btn-emerald"
-                onClick={confirmEndAndStart}
-              >
-                End &amp; Start New
-              </button>
-            </div>
-          </div>
-        </div>
+        <GameExistingSessionModal
+          activeGame={active}
+          fmtDate={fmtDate}
+          onCancel={() => setShowConfirmNew(false)}
+          onConfirm={confirmEndAndStart}
+        />
       )}
     </div>
   )
