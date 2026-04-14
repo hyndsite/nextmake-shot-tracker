@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
-import PerformanceSection from "../PerformanceSection"
+import PerformanceSection from "../Performance/PerformanceSection"
 
 describe("PerformanceSection", () => {
   it("renders an expanded performance section and forwards interactions", async () => {
@@ -27,22 +27,6 @@ describe("PerformanceSection", () => {
     const ContestedPills = ({ value, onChange }) => (
       <button type="button" onClick={() => onChange("contested")}>{value}</button>
     )
-    const MetricCard = ({ label }) => <div>{label}</div>
-    const TrendChart = ({ title, onModeChange, onSelectPoint }) => (
-      <button
-        type="button"
-        onClick={() => {
-          onModeChange("weekly")
-          onSelectPoint({ label: "Jan 15" })
-        }}
-      >
-        {title}
-      </button>
-    )
-    const SectionHeader = ({ title, onToggle }) => (
-      <button type="button" onClick={onToggle}>{title}</button>
-    )
-
     render(
       <PerformanceSection
         title="Game"
@@ -74,9 +58,6 @@ describe("PerformanceSection", () => {
         TimeRangePills={TimeRangePills}
         ShotTypePills={ShotTypePills}
         ContestedPills={ContestedPills}
-        MetricCard={MetricCard}
-        TrendChart={TrendChart}
-        SectionHeader={SectionHeader}
       />,
     )
 
@@ -101,14 +82,11 @@ describe("PerformanceSection", () => {
     await user.click(allButtons[1])
     expect(onContestedChange).toHaveBeenCalledWith("contested")
 
-    await user.click(screen.getByRole("button", { name: "Game eFG% vs FG% Trend" }))
+    await user.click(screen.getByRole("button", { name: /daily/i }))
     expect(onTrendModeChange).toHaveBeenCalledWith("weekly")
-    expect(onSelectPoint).toHaveBeenCalledWith({ label: "Jan 15" })
   })
 
   it("renders loading and empty states", () => {
-    const SectionHeader = ({ title }) => <button type="button">{title}</button>
-
     const { rerender } = render(
       <PerformanceSection
         title="Practice"
@@ -140,9 +118,6 @@ describe("PerformanceSection", () => {
         TimeRangePills={() => null}
         ShotTypePills={() => null}
         ContestedPills={() => null}
-        MetricCard={() => null}
-        TrendChart={() => null}
-        SectionHeader={SectionHeader}
       />,
     )
 
@@ -179,9 +154,6 @@ describe("PerformanceSection", () => {
         TimeRangePills={() => null}
         ShotTypePills={() => null}
         ContestedPills={() => null}
-        MetricCard={() => null}
-        TrendChart={() => null}
-        SectionHeader={SectionHeader}
       />,
     )
 

@@ -1,3 +1,7 @@
+import PerformanceMetricCard from "./PerformanceMetricCard"
+import PerformanceSectionHeader from "./PerformanceSectionHeader"
+import PerformanceTrendChart from "./PerformanceTrendChart"
+
 export default function PerformanceSection({
   title,
   expanded,
@@ -28,13 +32,14 @@ export default function PerformanceSection({
   TimeRangePills,
   ShotTypePills,
   ContestedPills,
-  MetricCard,
-  TrendChart,
-  SectionHeader,
 }) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-3 space-y-2">
-      <SectionHeader title={title} expanded={expanded} onToggle={onToggle} />
+      <PerformanceSectionHeader
+        title={title}
+        expanded={expanded}
+        onToggle={onToggle}
+      />
 
       {expanded && (
         <>
@@ -64,7 +69,7 @@ export default function PerformanceSection({
             )}
             {!loading &&
               metrics.map((metric) => (
-                <MetricCard
+                <PerformanceMetricCard
                   key={metric.id}
                   label={metric.label}
                   fgPct={metric.fgPct}
@@ -79,7 +84,7 @@ export default function PerformanceSection({
           </div>
 
           <div className="mt-4">
-            <TrendChart
+            <PerformanceTrendChart
               title={trendTitle}
               data={trendData}
               mode={trendMode}
