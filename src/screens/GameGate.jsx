@@ -12,7 +12,7 @@ import { useGameGateData } from "../hooks/useGameGateData"
 
 export default function GameGate({ navigate }) {
   const [showConfirmNew, setShowConfirmNew] = useState(false)
-  const { sessions, active, groupedPrev, refresh } = useGameGateData()
+  const { active, groupedPrev, refresh } = useGameGateData()
 
   // ---------- helpers ----------
   function computeResultSummary(session) {
