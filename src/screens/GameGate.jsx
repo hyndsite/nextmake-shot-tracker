@@ -1,10 +1,11 @@
 // src/screens/GameGate.jsx
-import React, { useEffect, useMemo, useState } from "react"
+import { useState } from "react"
 import { PlayCircle } from "lucide-react"
 import {
   endGameSession,
   deleteGameSession,
 } from "../lib/game-db"
+import GameActiveSessionCard from "../components/GameActiveSessionCard"
 import GameExistingSessionModal from "../components/GameExistingSessionModal"
 import GameHistorySection from "../components/GameHistorySection"
 import { useGameGateData } from "../hooks/useGameGateData"
@@ -113,31 +114,11 @@ export default function GameGate({ navigate }) {
 
       {/* Resume card */}
       {active && (
-        <section className="section mt-3">
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5">
-              <PlayCircle className="text-sky-600" size={24} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-slate-900 font-semibold">
-                Resume Active Game
-              </div>
-              <div className="text-sm text-slate-600 truncate">
-                {active.team_name} vs {active.opponent_name}
-              </div>
-              <div className="mt-1">{homeAwayPill(active)}</div>
-            </div>
-            <div className="shrink-0">
-              <button
-                type="button"
-                onClick={resumeActive}
-                className="btn btn-blue h-9 px-3 rounded-lg text-sm font-semibold"
-              >
-                Resume
-              </button>
-            </div>
-          </div>
-        </section>
+        <GameActiveSessionCard
+          activeGame={active}
+          homeAwayPill={homeAwayPill}
+          onResume={resumeActive}
+        />
       )}
 
       <GameHistorySection
