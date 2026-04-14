@@ -1,8 +1,7 @@
 // src/Performance.jsx
 
-import React, { useEffect, useMemo, useState } from "react"
+import React from "react"
 import {
-  ArrowLeft,
   ChevronDown,
   ChevronUp,
   Filter as FilterIcon,
@@ -18,19 +17,9 @@ import {
   ResponsiveContainer,
 } from "recharts"
 
-import { TIME_RANGES, getRangeById } from "../constants/timeRange"
-import {
-  getGamePerformance,
-  getPracticePerformance,
-} from "../lib/performance-db"
-import {
-  listAthletes,
-  getActiveAthleteId,
-  setActiveAthlete,
-} from "../lib/athlete-db"
+import { TIME_RANGES } from "../constants/timeRange"
 import ActiveAthleteSwitcher from "../components/ActiveAthleteSwitcher"
-
-const DEFAULT_RANGE_ID = TIME_RANGES[0]?.id || "30d"
+import { usePerformanceData } from "../hooks/usePerformanceData"
 
 // Shot Type filter pills
 // NOTE: IDs here must match the values expected by performance-db.js filtering.
@@ -51,15 +40,6 @@ const MODE_OPTIONS = [
   { id: "attempts", label: "Attempts" },
   { id: "fgpct", label: "FG%" },
 ]
-
-const EMPTY_PERF_DATA = {
-  metrics: [],
-  trend: [],
-  overallFgPct: 0,
-  overallEfgPct: 0,
-  totalAttempts: 0,
-  trendBuckets: { daily: [], weekly: [], monthly: [] },
-}
 
 function ContestedPills({ value, onChange }) {
   const handleClick = (id) => {
@@ -212,52 +192,6 @@ function MetricCard({ label, fgPct, attempts, makes, attemptsLabel, goalPct, mod
 }
 
 // ---- Trend chart + tick helpers ----
-
-// Convert #days to a coarse range key so we don't depend on pill IDs
-function rangeKeyFromDays(days) {
-  if (days == null) return "all"
-  if (days <= 30) return "30"
-  if (days <= 60) return "60"
-  if (days <= 180) return "180"
-  return "all"
-}
-
-/**
- * Max ticks per mode / range key
- */
-const MAX_TICKS = {
-  daily: { "30": 7, "60": 8, "180": 8, all: 8 },
-  weekly: { "30": 4, "60": 4, "180": 4, all: 4 },
-  monthly: { "30": 1, "60": 2, "180": 6, all: 6 },
-}
-
-// Evenly sample labels from the data
-function selectLabelsEvenly(data, maxTicks) {
-  if (!Array.isArray(data) || data.length === 0 || !maxTicks) return undefined
-
-  const n = Math.min(maxTicks, data.length)
-  if (n <= 1) return [data[0].label]
-
-  const indices = []
-  const lastIndex = data.length - 1
-  for (let i = 0; i < n; i++) {
-    const idx = Math.round((i * lastIndex) / (n - 1))
-    indices.push(idx)
-  }
-
-  const labels = indices
-    .map((i) => data[i]?.label)
-    .filter((l) => typeof l === "string")
-
-  return [...new Set(labels)]
-}
-
-function buildTicks(data, mode, days) {
-  const rangeKey = rangeKeyFromDays(days)
-  const cfg = MAX_TICKS[mode] || {}
-  const maxTicks = cfg[rangeKey] ?? cfg.all ?? 8
-  return selectLabelsEvenly(data, maxTicks)
-}
 
 function formatSelectedDate(payload) {
   if (!payload) return "—"
@@ -476,188 +410,47 @@ function SectionHeader({ title, expanded, onToggle }) {
 // ---- Main component ----
 
 export default function Performance({ navigate }) {
-  const [athletes, setAthletes] = useState(() => listAthletes())
-  const [activeAthleteId, setActiveAthleteId] = useState(() => getActiveAthleteId() || "")
-
-  const [gameExpanded, setGameExpanded] = useState(true)
-  const [practiceExpanded, setPracticeExpanded] = useState(true)
-
-  const [gameRangeId, setGameRangeId] = useState(DEFAULT_RANGE_ID)
-  const [practiceRangeId, setPracticeRangeId] = useState(DEFAULT_RANGE_ID)
-
-  const [gameShotType, setGameShotType] = useState("all")
-  const [practiceShotType, setPracticeShotType] = useState("all")
-
-  const [gameContested, setGameContested] = useState("all")
-  const [practiceContested, setPracticeContested] = useState("all")
-
-  const [gameMode, setGameMode] = useState("fgpct")
-  const [practiceMode, setPracticeMode] = useState("fgpct")
-
-  const [gameTrendMode, setGameTrendMode] = useState("daily")
-  const [practiceTrendMode, setPracticeTrendMode] = useState("daily")
-
-  const [gameLoading, setGameLoading] = useState(false)
-  const [practiceLoading, setPracticeLoading] = useState(false)
-
-  const [gameSelectedPoint, setGameSelectedPoint] = useState(null)
-  const [practiceSelectedPoint, setPracticeSelectedPoint] = useState(null)
-
-  const [gameData, setGameData] = useState(EMPTY_PERF_DATA)
-  const [practiceData, setPracticeData] = useState(EMPTY_PERF_DATA)
-
-  // Restore accordion state
-  useEffect(() => {
-    try {
-      const g = window.localStorage.getItem("nm_perf_game_expanded")
-      const p = window.localStorage.getItem("nm_perf_practice_expanded")
-      if (g != null) setGameExpanded(g === "true")
-      if (p != null) setPracticeExpanded(p === "true")
-    } catch {
-      // ignore
-    }
-  }, [])
-
-  useEffect(() => {
-    setAthletes(listAthletes())
-    setActiveAthleteId(getActiveAthleteId() || "")
-  }, [])
-
-  const gameRange = useMemo(() => getRangeById(gameRangeId), [gameRangeId])
-  const practiceRange = useMemo(
-    () => getRangeById(practiceRangeId),
-    [practiceRangeId],
-  )
-
-  // Load Game performance
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      if (!activeAthleteId) {
-        if (!cancelled) {
-          setGameLoading(false)
-          setGameData(EMPTY_PERF_DATA)
-          setGameSelectedPoint(null)
-        }
-        return
-      }
-      setGameLoading(true)
-      try {
-        const data = await getGamePerformance({
-          days: gameRange.days,
-          shotType: gameShotType,
-          contested: gameContested,
-          athleteId: activeAthleteId,
-        })
-        if (!cancelled) {
-          setGameData(data)
-          setGameSelectedPoint(null)
-        }
-      } catch (err) {
-        console.warn("[Performance] getGamePerformance error:", err)
-        if (!cancelled) {
-          setGameData(EMPTY_PERF_DATA)
-          setGameSelectedPoint(null)
-        }
-      } finally {
-        if (!cancelled) setGameLoading(false)
-      }
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [gameRange.days, gameShotType, gameContested, activeAthleteId])
-
-  // Load Practice performance
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      if (!activeAthleteId) {
-        if (!cancelled) {
-          setPracticeLoading(false)
-          setPracticeData(EMPTY_PERF_DATA)
-          setPracticeSelectedPoint(null)
-        }
-        return
-      }
-      setPracticeLoading(true)
-      try {
-        const data = await getPracticePerformance({
-          days: practiceRange.days,
-          shotType: practiceShotType,
-          contested: practiceContested,
-          athleteId: activeAthleteId,
-        })
-        if (!cancelled) {
-          setPracticeData(data)
-          setPracticeSelectedPoint(null)
-        }
-      } catch (err) {
-        console.warn("[Performance] getPracticePerformance error:", err)
-        if (!cancelled) {
-          setPracticeData(EMPTY_PERF_DATA)
-          setPracticeSelectedPoint(null)
-        }
-      } finally {
-        if (!cancelled) setPracticeLoading(false)
-      }
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [practiceRange.days, practiceShotType, practiceContested, activeAthleteId])
-
-  // Derived trend series and ticks (Game)
-  const gameTrendData = useMemo(() => {
-    const buckets = gameData.trendBuckets || {}
-    if (gameTrendMode === "daily") return buckets.daily || []
-    if (gameTrendMode === "weekly") return buckets.weekly || []
-    if (gameTrendMode === "monthly")
-      return buckets.monthly || gameData.trend || []
-    return gameData.trend || []
-  }, [gameData, gameTrendMode])
-
-  const gameTrendTicks = useMemo(
-    () => buildTicks(gameTrendData, gameTrendMode, gameRange.days),
-    [gameTrendData, gameTrendMode, gameRange.days],
-  )
-
-  // Derived trend series and ticks (Practice)
-  const practiceTrendData = useMemo(() => {
-    const buckets = practiceData.trendBuckets || {}
-    if (practiceTrendMode === "daily") return buckets.daily || []
-    if (practiceTrendMode === "weekly") return buckets.weekly || []
-    if (practiceTrendMode === "monthly")
-      return buckets.monthly || practiceData.trend || []
-    return practiceData.trend || []
-  }, [practiceData, practiceTrendMode])
-
-  const practiceTrendTicks = useMemo(
-    () => buildTicks(practiceTrendData, practiceTrendMode, practiceRange.days),
-    [practiceTrendData, practiceTrendMode, practiceRange.days],
-  )
-
-  function toggleGameExpanded() {
-    setGameExpanded((prev) => {
-      const next = !prev
-      try {
-        window.localStorage.setItem("nm_perf_game_expanded", String(next))
-      } catch {}
-      return next
-    })
-  }
-
-  function togglePracticeExpanded() {
-    setPracticeExpanded((prev) => {
-      const next = !prev
-      try {
-        window.localStorage.setItem("nm_perf_practice_expanded", String(next))
-      } catch {}
-      return next
-    })
-  }
+  const {
+    athletes,
+    activeAthleteId,
+    handleSelectAthlete,
+    gameExpanded,
+    toggleGameExpanded,
+    practiceExpanded,
+    togglePracticeExpanded,
+    gameRangeId,
+    setGameRangeId,
+    practiceRangeId,
+    setPracticeRangeId,
+    gameShotType,
+    setGameShotType,
+    practiceShotType,
+    setPracticeShotType,
+    gameContested,
+    setGameContested,
+    practiceContested,
+    setPracticeContested,
+    gameMode,
+    setGameMode,
+    practiceMode,
+    setPracticeMode,
+    gameTrendMode,
+    setGameTrendMode,
+    practiceTrendMode,
+    setPracticeTrendMode,
+    gameLoading,
+    practiceLoading,
+    gameSelectedPoint,
+    setGameSelectedPoint,
+    practiceSelectedPoint,
+    setPracticeSelectedPoint,
+    gameData,
+    practiceData,
+    gameTrendData,
+    gameTrendTicks,
+    practiceTrendData,
+    practiceTrendTicks,
+  } = usePerformanceData()
 
   return (
     <div className="min-h-dvh bg-white">
@@ -675,10 +468,7 @@ export default function Performance({ navigate }) {
         <ActiveAthleteSwitcher
           athletes={athletes}
           activeAthleteId={activeAthleteId}
-          onSelectAthlete={(athleteId) => {
-            setActiveAthlete(athleteId)
-            setActiveAthleteId(athleteId)
-          }}
+          onSelectAthlete={handleSelectAthlete}
         />
 
         {!activeAthleteId && (
