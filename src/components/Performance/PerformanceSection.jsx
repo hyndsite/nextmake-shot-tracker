@@ -1,4 +1,10 @@
 import PerformanceMetricCard from "./PerformanceMetricCard"
+import {
+  PerformanceContestedPills,
+  PerformanceModePills,
+  PerformanceShotTypePills,
+  PerformanceTimeRangePills,
+} from "./PerformancePills"
 import PerformanceSectionHeader from "./PerformanceSectionHeader"
 import PerformanceTrendChart from "./PerformanceTrendChart"
 
@@ -28,10 +34,6 @@ export default function PerformanceSection({
   onSelectPoint,
   vizMode,
   totalAttempts,
-  ModePills,
-  TimeRangePills,
-  ShotTypePills,
-  ContestedPills,
 }) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-3 space-y-2">
@@ -44,20 +46,29 @@ export default function PerformanceSection({
       {expanded && (
         <>
           <div className="flex items-center justify-between mt-1">
-            <ModePills value={modeValue} onChange={onModeChange} />
+            <PerformanceModePills value={modeValue} onChange={onModeChange} />
             <div className="text-[11px] text-slate-500">{totalAttemptsText}</div>
           </div>
 
           <div className="flex items-center justify-between mt-1">
-            <TimeRangePills value={rangeValue} onChange={onRangeChange} />
+            <PerformanceTimeRangePills
+              value={rangeValue}
+              onChange={onRangeChange}
+            />
           </div>
 
           <div className="mt-2 flex items-center justify-between">
-            <ShotTypePills value={shotTypeValue} onChange={onShotTypeChange} />
+            <PerformanceShotTypePills
+              value={shotTypeValue}
+              onChange={onShotTypeChange}
+            />
           </div>
 
           <div className="mt-2 flex items-center justify-between">
-            <ContestedPills value={contestedValue} onChange={onContestedChange} />
+            <PerformanceContestedPills
+              value={contestedValue}
+              onChange={onContestedChange}
+            />
           </div>
 
           <div className="mt-3 space-y-2">

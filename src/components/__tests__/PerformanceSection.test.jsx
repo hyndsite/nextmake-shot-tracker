@@ -15,18 +15,6 @@ describe("PerformanceSection", () => {
     const onTrendModeChange = vi.fn()
     const onSelectPoint = vi.fn()
 
-    const ModePills = ({ value, onChange }) => (
-      <button type="button" onClick={() => onChange("attempts")}>{value}</button>
-    )
-    const TimeRangePills = ({ value, onChange }) => (
-      <button type="button" onClick={() => onChange("60d")}>{value}</button>
-    )
-    const ShotTypePills = ({ value, onChange }) => (
-      <button type="button" onClick={() => onChange("catch_shoot")}>{value}</button>
-    )
-    const ContestedPills = ({ value, onChange }) => (
-      <button type="button" onClick={() => onChange("contested")}>{value}</button>
-    )
     render(
       <PerformanceSection
         title="Game"
@@ -54,10 +42,6 @@ describe("PerformanceSection", () => {
         onSelectPoint={onSelectPoint}
         vizMode="fgpct"
         totalAttempts={100}
-        ModePills={ModePills}
-        TimeRangePills={TimeRangePills}
-        ShotTypePills={ShotTypePills}
-        ContestedPills={ContestedPills}
       />,
     )
 
@@ -69,17 +53,16 @@ describe("PerformanceSection", () => {
     await user.click(screen.getByRole("button", { name: "Game" }))
     expect(onToggle).toHaveBeenCalled()
 
-    await user.click(screen.getByRole("button", { name: "fgpct" }))
+    await user.click(screen.getByRole("button", { name: "Attempts" }))
     expect(onModeChange).toHaveBeenCalledWith("attempts")
 
-    await user.click(screen.getByRole("button", { name: "30d" }))
+    await user.click(screen.getByRole("button", { name: "60D" }))
     expect(onRangeChange).toHaveBeenCalledWith("60d")
 
-    const allButtons = screen.getAllByRole("button", { name: "all" })
-    await user.click(allButtons[0])
+    await user.click(screen.getByRole("button", { name: "Catch & Shoot" }))
     expect(onShotTypeChange).toHaveBeenCalledWith("catch_shoot")
 
-    await user.click(allButtons[1])
+    await user.click(screen.getByRole("button", { name: "Contested" }))
     expect(onContestedChange).toHaveBeenCalledWith("contested")
 
     await user.click(screen.getByRole("button", { name: /daily/i }))
@@ -114,10 +97,6 @@ describe("PerformanceSection", () => {
         onSelectPoint={vi.fn()}
         vizMode="fgpct"
         totalAttempts={0}
-        ModePills={() => null}
-        TimeRangePills={() => null}
-        ShotTypePills={() => null}
-        ContestedPills={() => null}
       />,
     )
 
@@ -150,10 +129,6 @@ describe("PerformanceSection", () => {
         onSelectPoint={vi.fn()}
         vizMode="fgpct"
         totalAttempts={0}
-        ModePills={() => null}
-        TimeRangePills={() => null}
-        ShotTypePills={() => null}
-        ContestedPills={() => null}
       />,
     )
 

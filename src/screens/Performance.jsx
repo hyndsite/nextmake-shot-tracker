@@ -2,118 +2,9 @@
 
 import React from "react"
 
-import { TIME_RANGES } from "../constants/timeRange"
 import ActiveAthleteSwitcher from "../components/ActiveAthleteSwitcher"
 import PerformanceSection from "../components/Performance/PerformanceSection"
 import { usePerformanceData } from "../hooks/usePerformanceData"
-
-// Shot Type filter pills
-// NOTE: IDs here must match the values expected by performance-db.js filtering.
-const SHOT_TYPE_FILTERS = [
-  { id: "all", label: "All" },
-  { id: "catch_shoot", label: "Catch & Shoot" },
-  { id: "off_dribble", label: "Off-dribble" },
-]
-
-// Contested filter pills (no title section per requirement)
-const CONTEST_FILTERS = [
-  { id: "contested", label: "Contested" },
-  { id: "uncontested", label: "Uncontested" },
-]
-
-// Mode toggle (Attempts vs FG%) – mirrors Heatmap MODE_OPTIONS
-const MODE_OPTIONS = [
-  { id: "attempts", label: "Attempts" },
-  { id: "fgpct", label: "FG%" },
-]
-
-function ContestedPills({ value, onChange }) {
-  const handleClick = (id) => {
-    // Toggle off if already active (returns to "all"), otherwise select
-    onChange(value === id ? "all" : id)
-  }
-
-  return (
-    <div className="time-pill-group">
-      {CONTEST_FILTERS.map((c) => {
-        const active = c.id === value
-        return (
-          <button
-            key={c.id}
-            type="button"
-            onClick={() => handleClick(c.id)}
-            className={"time-pill" + (active ? " time-pill--active" : "")}
-          >
-            {c.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-function ModePills({ value, onChange }) {
-  return (
-    <div className="time-pill-group">
-      {MODE_OPTIONS.map((m) => {
-        const active = m.id === value
-        return (
-          <button
-            key={m.id}
-            type="button"
-            onClick={() => onChange(m.id)}
-            className={"time-pill" + (active ? " time-pill--active" : "")}
-          >
-            {m.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-
-// ---- Pill component ----
-
-function TimeRangePills({ value, onChange }) {
-  return (
-    <div className="time-pill-group">
-      {TIME_RANGES.map((r) => {
-        const active = r.id === value
-        return (
-          <button
-            key={r.id}
-            type="button"
-            onClick={() => onChange(r.id)}
-            className={"time-pill" + (active ? " time-pill--active" : "")}
-          >
-            {r.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-function ShotTypePills({ value, onChange }) {
-  return (
-    <div className="time-pill-group">
-      {SHOT_TYPE_FILTERS.map((s) => {
-        const active = s.id === value
-        return (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => onChange(s.id)}
-            className={"time-pill" + (active ? " time-pill--active" : "")}
-          >
-            {s.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
 
 // ---- Main component ----
 
@@ -221,10 +112,6 @@ export default function Performance({ navigate }) {
           onSelectPoint={setGameSelectedPoint}
           vizMode={gameMode}
           totalAttempts={gameData.totalAttempts}
-          ModePills={ModePills}
-          TimeRangePills={TimeRangePills}
-          ShotTypePills={ShotTypePills}
-          ContestedPills={ContestedPills}
         />
 
         <PerformanceSection
@@ -261,10 +148,6 @@ export default function Performance({ navigate }) {
           onSelectPoint={setPracticeSelectedPoint}
           vizMode={practiceMode}
           totalAttempts={practiceData.totalAttempts}
-          ModePills={ModePills}
-          TimeRangePills={TimeRangePills}
-          ShotTypePills={ShotTypePills}
-          ContestedPills={ContestedPills}
         />
       </main>
     </div>
