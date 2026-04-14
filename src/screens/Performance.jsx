@@ -19,6 +19,7 @@ import {
 
 import { TIME_RANGES } from "../constants/timeRange"
 import ActiveAthleteSwitcher from "../components/ActiveAthleteSwitcher"
+import PerformanceSection from "../components/PerformanceSection"
 import { usePerformanceData } from "../hooks/usePerformanceData"
 
 // Shot Type filter pills
@@ -479,161 +480,91 @@ export default function Performance({ navigate }) {
           </section>
         )}
 
-        {/* GAME PERFORMANCE */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-3 space-y-2">
-          <SectionHeader
-            title="Game"
-            expanded={gameExpanded}
-            onToggle={toggleGameExpanded}
-          />
+        <PerformanceSection
+          title="Game"
+          expanded={gameExpanded}
+          onToggle={toggleGameExpanded}
+          modeValue={gameMode}
+          onModeChange={setGameMode}
+          totalAttemptsText={
+            gameData.totalAttempts
+              ? `${gameData.totalAttempts} FG attempts`
+              : "No shots yet"
+          }
+          rangeValue={gameRangeId}
+          onRangeChange={setGameRangeId}
+          shotTypeValue={gameShotType}
+          onShotTypeChange={setGameShotType}
+          contestedValue={gameContested}
+          onContestedChange={setGameContested}
+          loading={gameLoading}
+          emptyText="No game shots logged in this range yet."
+          metrics={gameData.metrics}
+          trendTitle={
+            gameMode === "attempts"
+              ? "Game Attempts Trend"
+              : "Game eFG% vs FG% Trend"
+          }
+          trendData={gameTrendData}
+          trendMode={gameTrendMode}
+          onTrendModeChange={setGameTrendMode}
+          trendTicks={gameTrendTicks}
+          sourceLabel="Game"
+          selectedPoint={gameSelectedPoint}
+          onSelectPoint={setGameSelectedPoint}
+          vizMode={gameMode}
+          totalAttempts={gameData.totalAttempts}
+          ModePills={ModePills}
+          TimeRangePills={TimeRangePills}
+          ShotTypePills={ShotTypePills}
+          ContestedPills={ContestedPills}
+          MetricCard={MetricCard}
+          TrendChart={TrendChart}
+          SectionHeader={SectionHeader}
+        />
 
-          {gameExpanded && (
-            <>
-              <div className="flex items-center justify-between mt-1">
-                <ModePills value={gameMode} onChange={setGameMode} />
-                <div className="text-[11px] text-slate-500">
-                  {gameData.totalAttempts
-                    ? `${gameData.totalAttempts} FG attempts`
-                    : "No shots yet"}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between mt-1">
-                <TimeRangePills value={gameRangeId} onChange={setGameRangeId} />
-              </div>
-
-              <div className="mt-2 flex items-center justify-between">
-                <ShotTypePills value={gameShotType} onChange={setGameShotType} />
-              </div>
-
-              <div className="mt-2 flex items-center justify-between">
-                <ContestedPills value={gameContested} onChange={setGameContested} />
-              </div>
-
-              <div className="mt-3 space-y-2">
-                {gameLoading && (
-                  <div className="text-xs text-slate-500">
-                    Loading game performance…
-                  </div>
-                )}
-                {!gameLoading && gameData.metrics.length === 0 && (
-                  <div className="text-xs text-slate-500">
-                    No game shots logged in this range yet.
-                  </div>
-                )}
-                {!gameLoading &&
-                  gameData.metrics.map((m) => (
-                    <MetricCard
-                      key={m.id}
-                      label={m.label}
-                      fgPct={m.fgPct}
-                      attempts={m.attempts}
-                      makes={m.makes}
-                      attemptsLabel={m.attemptsLabel}
-                      goalPct={m.goalPct}
-                      mode={gameMode}
-                      totalAttempts={gameData.totalAttempts}
-                    />
-                  ))}
-              </div>
-
-              <div className="mt-4">
-                <TrendChart
-                  title={gameMode === "attempts" ? "Game Attempts Trend" : "Game eFG% vs FG% Trend"}
-                  data={gameTrendData}
-                  mode={gameTrendMode}
-                  onModeChange={setGameTrendMode}
-                  ticks={gameTrendTicks}
-                  sourceLabel="Game"
-                  selectedPoint={gameSelectedPoint}
-                  onSelectPoint={setGameSelectedPoint}
-                  vizMode={gameMode}
-                />
-              </div>
-            </>
-          )}
-        </section>
-
-        {/* PRACTICE PERFORMANCE */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-3 space-y-2">
-          <SectionHeader
-            title="Practice"
-            expanded={practiceExpanded}
-            onToggle={togglePracticeExpanded}
-          />
-
-          {practiceExpanded && (
-            <>
-              <div className="flex items-center justify-between mt-1">
-                <ModePills value={practiceMode} onChange={setPracticeMode} />
-                <div className="text-[11px] text-slate-500">
-                  {practiceData.totalAttempts
-                    ? `${practiceData.totalAttempts} attempts`
-                    : "No attempts yet"}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between mt-1">
-                <TimeRangePills
-                  value={practiceRangeId}
-                  onChange={setPracticeRangeId}
-                />
-              </div>
-
-              <div className="mt-2 flex items-center justify-between">
-                <ShotTypePills
-                  value={practiceShotType}
-                  onChange={setPracticeShotType}
-                />
-              </div>
-
-              <div className="mt-2 flex items-center justify-between">
-                <ContestedPills value={practiceContested} onChange={setPracticeContested} />
-              </div>
-
-              <div className="mt-3 space-y-2">
-                {practiceLoading && (
-                  <div className="text-xs text-slate-500">
-                    Loading practice performance…
-                  </div>
-                )}
-                {!practiceLoading && practiceData.metrics.length === 0 && (
-                  <div className="text-xs text-slate-500">
-                    No practice entries logged in this range yet.
-                  </div>
-                )}
-                {!practiceLoading &&
-                  practiceData.metrics.map((m) => (
-                    <MetricCard
-                      key={m.id}
-                      label={m.label}
-                      fgPct={m.fgPct}
-                      attempts={m.attempts}
-                      makes={m.makes}
-                      attemptsLabel={m.attemptsLabel}
-                      goalPct={m.goalPct}
-                      mode={practiceMode}
-                      totalAttempts={practiceData.totalAttempts}
-                    />
-                  ))}
-              </div>
-
-              <div className="mt-4">
-                <TrendChart
-                  title={practiceMode === "attempts" ? "Practice Attempts Trend" : "Practice eFG% vs FG% Trend"}
-                  data={practiceTrendData}
-                  mode={practiceTrendMode}
-                  onModeChange={setPracticeTrendMode}
-                  ticks={practiceTrendTicks}
-                  sourceLabel="Practice"
-                  selectedPoint={practiceSelectedPoint}
-                  onSelectPoint={setPracticeSelectedPoint}
-                  vizMode={practiceMode}
-                />
-              </div>
-            </>
-          )}
-        </section>
+        <PerformanceSection
+          title="Practice"
+          expanded={practiceExpanded}
+          onToggle={togglePracticeExpanded}
+          modeValue={practiceMode}
+          onModeChange={setPracticeMode}
+          totalAttemptsText={
+            practiceData.totalAttempts
+              ? `${practiceData.totalAttempts} attempts`
+              : "No attempts yet"
+          }
+          rangeValue={practiceRangeId}
+          onRangeChange={setPracticeRangeId}
+          shotTypeValue={practiceShotType}
+          onShotTypeChange={setPracticeShotType}
+          contestedValue={practiceContested}
+          onContestedChange={setPracticeContested}
+          loading={practiceLoading}
+          emptyText="No practice entries logged in this range yet."
+          metrics={practiceData.metrics}
+          trendTitle={
+            practiceMode === "attempts"
+              ? "Practice Attempts Trend"
+              : "Practice eFG% vs FG% Trend"
+          }
+          trendData={practiceTrendData}
+          trendMode={practiceTrendMode}
+          onTrendModeChange={setPracticeTrendMode}
+          trendTicks={practiceTrendTicks}
+          sourceLabel="Practice"
+          selectedPoint={practiceSelectedPoint}
+          onSelectPoint={setPracticeSelectedPoint}
+          vizMode={practiceMode}
+          totalAttempts={practiceData.totalAttempts}
+          ModePills={ModePills}
+          TimeRangePills={TimeRangePills}
+          ShotTypePills={ShotTypePills}
+          ContestedPills={ContestedPills}
+          MetricCard={MetricCard}
+          TrendChart={TrendChart}
+          SectionHeader={SectionHeader}
+        />
       </main>
     </div>
   )
