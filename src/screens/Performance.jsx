@@ -8,7 +8,7 @@ import { usePerformanceData } from "../hooks/usePerformanceData"
 
 // ---- Main component ----
 
-export default function Performance({ navigate }) {
+export default function Performance() {
   const {
     athletes,
     activeAthleteId,

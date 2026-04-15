@@ -235,6 +235,7 @@ describe('Performance Component', () => {
 
     it('should show loading state initially', async () => {
       getGamePerformance.mockImplementation(() => new Promise(() => {}))
+      getPracticePerformance.mockImplementation(() => new Promise(() => {}))
 
       render(<Performance navigate={mockNavigate} />)
 
@@ -387,6 +388,8 @@ describe('Performance Component', () => {
         if (key === 'nm_perf_practice_expanded') return 'false'
         return null
       })
+      getGamePerformance.mockImplementation(() => new Promise(() => {}))
+      getPracticePerformance.mockImplementation(() => new Promise(() => {}))
 
       render(<Performance navigate={mockNavigate} />)
 
@@ -1119,7 +1122,7 @@ describe('Performance Component', () => {
       consoleWarnSpy.mockRestore()
     })
 
-    it('should handle navigate prop being undefined', async () => {
+    it('should render without optional props', async () => {
       render(<Performance />)
 
       await waitFor(() => {
@@ -1134,6 +1137,8 @@ describe('Performance Component', () => {
       Storage.prototype.getItem.mockImplementation(() => {
         throw new Error('localStorage not available')
       })
+      getGamePerformance.mockImplementation(() => new Promise(() => {}))
+      getPracticePerformance.mockImplementation(() => new Promise(() => {}))
 
       render(<Performance navigate={mockNavigate} />)
 
