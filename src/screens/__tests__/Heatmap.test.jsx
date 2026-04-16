@@ -1,6 +1,6 @@
 // src/screens/__tests__/Heatmap.test.jsx
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import Heatmap from '../Heatmap.jsx'
 
@@ -44,6 +44,15 @@ vi.mock('lucide-react', () => ({
 // Import mocked modules for assertions
 import { supabase, getUser } from '../../lib/supabase'
 import { listAthletes, getActiveAthleteId, setActiveAthlete } from '../../lib/athlete-db'
+
+function triggerCourtLoad(image, { width = 800, height = 1000 } = {}) {
+  Object.defineProperty(image, 'naturalWidth', { value: width, writable: true })
+  Object.defineProperty(image, 'naturalHeight', { value: height, writable: true })
+
+  act(() => {
+    fireEvent.load(image)
+  })
+}
 
 describe('Heatmap Component', () => {
   let mockNavigate
@@ -561,9 +570,7 @@ describe('Heatmap Component', () => {
 
       // Trigger image load to enable zone chips
       const courtImage = screen.getByAltText('Half court')
-      Object.defineProperty(courtImage, 'naturalWidth', { value: 800, writable: true })
-      Object.defineProperty(courtImage, 'naturalHeight', { value: 1000, writable: true })
-      courtImage.dispatchEvent(new Event('load'))
+      triggerCourtLoad(courtImage)
 
       await waitFor(() => {
         expect(screen.getByText('L Corner 3')).toBeInTheDocument()
@@ -599,9 +606,7 @@ describe('Heatmap Component', () => {
 
       // Trigger image load to enable zone chips
       const courtImage = screen.getByAltText('Half court')
-      Object.defineProperty(courtImage, 'naturalWidth', { value: 800, writable: true })
-      Object.defineProperty(courtImage, 'naturalHeight', { value: 1000, writable: true })
-      courtImage.dispatchEvent(new Event('load'))
+      triggerCourtLoad(courtImage)
 
       await waitFor(() => {
         expect(screen.queryByText('Loading…')).not.toBeInTheDocument()
@@ -641,9 +646,7 @@ describe('Heatmap Component', () => {
 
       // Trigger image load to enable zone chips
       const courtImage = screen.getByAltText('Half court')
-      Object.defineProperty(courtImage, 'naturalWidth', { value: 800, writable: true })
-      Object.defineProperty(courtImage, 'naturalHeight', { value: 1000, writable: true })
-      courtImage.dispatchEvent(new Event('load'))
+      triggerCourtLoad(courtImage)
 
       await waitFor(() => {
         expect(screen.getByText('L Corner 3')).toBeInTheDocument()
@@ -683,9 +686,7 @@ describe('Heatmap Component', () => {
 
       // Trigger image load to enable zone chips
       const courtImage = screen.getByAltText('Half court')
-      Object.defineProperty(courtImage, 'naturalWidth', { value: 800, writable: true })
-      Object.defineProperty(courtImage, 'naturalHeight', { value: 1000, writable: true })
-      courtImage.dispatchEvent(new Event('load'))
+      triggerCourtLoad(courtImage)
 
       await waitFor(() => {
         expect(screen.getByText('L Corner 3')).toBeInTheDocument()
@@ -726,9 +727,7 @@ describe('Heatmap Component', () => {
 
       // Trigger image load to enable zone chips
       const courtImage = screen.getByAltText('Half court')
-      Object.defineProperty(courtImage, 'naturalWidth', { value: 800, writable: true })
-      Object.defineProperty(courtImage, 'naturalHeight', { value: 1000, writable: true })
-      courtImage.dispatchEvent(new Event('load'))
+      triggerCourtLoad(courtImage)
 
       await waitFor(() => {
         expect(screen.getByText('L Corner 3')).toBeInTheDocument()
@@ -768,9 +767,7 @@ describe('Heatmap Component', () => {
 
       // Trigger image load to enable zone chips
       const courtImage = screen.getByAltText('Half court')
-      Object.defineProperty(courtImage, 'naturalWidth', { value: 800, writable: true })
-      Object.defineProperty(courtImage, 'naturalHeight', { value: 1000, writable: true })
-      courtImage.dispatchEvent(new Event('load'))
+      triggerCourtLoad(courtImage)
 
       // Default state (contested = "all") should show both pressured and non-pressured
       await waitFor(() => {
@@ -833,9 +830,7 @@ describe('Heatmap Component', () => {
 
       // Trigger image load to enable zone chips
       const courtImage = screen.getByAltText('Half court')
-      Object.defineProperty(courtImage, 'naturalWidth', { value: 800, writable: true })
-      Object.defineProperty(courtImage, 'naturalHeight', { value: 1000, writable: true })
-      courtImage.dispatchEvent(new Event('load'))
+      triggerCourtLoad(courtImage)
 
       await waitFor(() => {
         expect(screen.queryByText('Loading…')).not.toBeInTheDocument()
@@ -957,18 +952,12 @@ describe('Heatmap Component', () => {
     })
 
     it('should handle image load event', async () => {
-      mockSupabaseQuery.gte.mockResolvedValue({ data: [], error: null })
+      mockSupabaseQuery.gte.mockImplementation(() => new Promise(() => {}))
 
       render(<Heatmap navigate={mockNavigate} />)
 
       const courtImage = screen.getByAltText('Half court')
-
-      // Mock naturalWidth and naturalHeight
-      Object.defineProperty(courtImage, 'naturalWidth', { value: 800, writable: true })
-      Object.defineProperty(courtImage, 'naturalHeight', { value: 1000, writable: true })
-
-      // Trigger load event
-      courtImage.dispatchEvent(new Event('load'))
+      triggerCourtLoad(courtImage)
 
       // The component should update internal state (imgNatural)
       // We can't directly test state, but we can verify no errors occur
@@ -998,9 +987,7 @@ describe('Heatmap Component', () => {
 
       // Trigger image load to enable zone chips
       const courtImage = screen.getByAltText('Half court')
-      Object.defineProperty(courtImage, 'naturalWidth', { value: 800, writable: true })
-      Object.defineProperty(courtImage, 'naturalHeight', { value: 1000, writable: true })
-      courtImage.dispatchEvent(new Event('load'))
+      triggerCourtLoad(courtImage)
 
       await waitFor(() => {
         // Both should be recognized and displayed
@@ -1060,9 +1047,7 @@ describe('Heatmap Component', () => {
 
       // Trigger image load to enable zone chips
       const courtImage = screen.getByAltText('Half court')
-      Object.defineProperty(courtImage, 'naturalWidth', { value: 800, writable: true })
-      Object.defineProperty(courtImage, 'naturalHeight', { value: 1000, writable: true })
-      courtImage.dispatchEvent(new Event('load'))
+      triggerCourtLoad(courtImage)
 
       await waitFor(() => {
         // Should only show Catch & Shoot (default filter)
@@ -1136,9 +1121,7 @@ describe('Heatmap Component', () => {
 
       // Trigger image load to enable zone chips
       const courtImage = screen.getByAltText('Half court')
-      Object.defineProperty(courtImage, 'naturalWidth', { value: 800, writable: true })
-      Object.defineProperty(courtImage, 'naturalHeight', { value: 1000, writable: true })
-      courtImage.dispatchEvent(new Event('load'))
+      triggerCourtLoad(courtImage)
 
       await waitFor(() => {
         // 2 out of 8 total = 25%, 6 out of 8 = 75%
@@ -1228,9 +1211,7 @@ describe('Heatmap Component', () => {
 
       // Trigger image load to enable zone chips
       const courtImage = screen.getByAltText('Half court')
-      Object.defineProperty(courtImage, 'naturalWidth', { value: 800, writable: true })
-      Object.defineProperty(courtImage, 'naturalHeight', { value: 1000, writable: true })
-      courtImage.dispatchEvent(new Event('load'))
+      triggerCourtLoad(courtImage)
 
       await waitFor(() => {
         expect(screen.getByText('L Corner 3')).toBeInTheDocument()
@@ -1255,9 +1236,7 @@ describe('Heatmap Component', () => {
       render(<Heatmap navigate={mockNavigate} />)
 
       const courtImage = screen.getByAltText('Half court')
-      Object.defineProperty(courtImage, 'naturalWidth', { value: 800, writable: true })
-      Object.defineProperty(courtImage, 'naturalHeight', { value: 1000, writable: true })
-      courtImage.dispatchEvent(new Event('load'))
+      triggerCourtLoad(courtImage)
 
       // Component should render without errors
       expect(courtImage).toBeInTheDocument()
@@ -1330,9 +1309,7 @@ describe('Heatmap Component', () => {
       render(<Heatmap navigate={mockNavigate} />)
 
       const courtImage = screen.getByAltText('Half court')
-      Object.defineProperty(courtImage, 'naturalWidth', { value: 800, writable: true })
-      Object.defineProperty(courtImage, 'naturalHeight', { value: 1000, writable: true })
-      courtImage.dispatchEvent(new Event('load'))
+      triggerCourtLoad(courtImage)
 
       await waitFor(() => {
         // Default filter is "Catch & Shoot", so unrecognized shot is excluded
@@ -1366,9 +1343,7 @@ describe('Heatmap Component', () => {
 
       // Trigger image load to enable zone chips
       const courtImage = screen.getByAltText('Half court')
-      Object.defineProperty(courtImage, 'naturalWidth', { value: 800, writable: true })
-      Object.defineProperty(courtImage, 'naturalHeight', { value: 1000, writable: true })
-      courtImage.dispatchEvent(new Event('load'))
+      triggerCourtLoad(courtImage)
 
       await waitFor(() => {
         expect(screen.getByText('1 attempts')).toBeInTheDocument()
