@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import {
   BASE_METRIC_OPTIONS,
   GAME_ONLY_METRIC_OPTIONS,
+  metricLabel,
   metricIsPercent,
   metricIsCount,
   filterEventsByDate,
@@ -10,6 +11,8 @@ import {
   aggregateGameEvents,
   computeGameMetricValue,
   computePracticeMetricValue,
+  zoneLabel,
+  ZONE_METRICS,
 } from '../goal-metrics.js'
 
 describe('goal-metrics', () => {
@@ -63,6 +66,27 @@ describe('goal-metrics', () => {
       expect(values).toContain('steals_total')
       expect(values).toContain('assists_total')
       expect(values).toContain('rebounds_total')
+    })
+  })
+
+  describe('shared goal labels and zone constants', () => {
+    it('should expose zone-based goal metric keys', () => {
+      expect(ZONE_METRICS.has('fg_pct_zone')).toBe(true)
+      expect(ZONE_METRICS.has('attempts_zone')).toBe(true)
+      expect(ZONE_METRICS.has('makes')).toBe(false)
+    })
+
+    it('should resolve metric labels from the combined options list', () => {
+      expect(metricLabel('makes')).toBe('Makes (count)')
+      expect(metricLabel('points_total')).toBe('Total Points (Game)')
+      expect(metricLabel('unknown_metric')).toBe('unknown_metric')
+    })
+
+    it('should resolve zone labels from the zones constant', () => {
+      expect(zoneLabel('left_corner_3')).toBe('L Corner 3')
+      expect(zoneLabel('free_throw')).toBe('Free Throw')
+      expect(zoneLabel('unknown_zone')).toBe('unknown_zone')
+      expect(zoneLabel('')).toBe(null)
     })
   })
 

@@ -32,6 +32,17 @@ vi.mock('../../lib/goal-metrics', () => ({
     { value: 'makes', label: 'Makes (count)' },
   ],
   GAME_ONLY_METRIC_OPTIONS: [{ value: 'points_total', label: 'Total Points (Game)' }],
+  ZONE_METRICS: new Set(['fg_pct_zone', 'attempts_zone']),
+  metricLabel: vi.fn((metric) => {
+    if (metric === 'fg_pct_zone') return 'FG% (by zone)'
+    if (metric === 'makes') return 'Makes (count)'
+    if (metric === 'points_total') return 'Total Points (Game)'
+    return metric
+  }),
+  zoneLabel: vi.fn((zoneId) => {
+    if (zoneId === 'left_corner_3') return 'L Corner 3'
+    return zoneId || null
+  }),
   computeGameMetricValue: vi.fn().mockReturnValue(12),
   computePracticeMetricValue: vi.fn().mockReturnValue(20),
   metricIsPercent: vi.fn((metric) => metric === 'fg_pct_zone'),

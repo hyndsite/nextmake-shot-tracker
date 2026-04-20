@@ -26,6 +26,19 @@ export const GAME_ONLY_METRIC_OPTIONS = [
   { value: "rebounds_total", label: "Rebounds (Game)" },
 ]
 
+const ALL_METRIC_OPTIONS = [...BASE_METRIC_OPTIONS, ...GAME_ONLY_METRIC_OPTIONS]
+
+export const ZONE_METRICS = new Set(["fg_pct_zone", "attempts_zone"])
+
+export function metricLabel(value) {
+  return ALL_METRIC_OPTIONS.find((metric) => metric.value === value)?.label || value
+}
+
+export function zoneLabel(zoneId) {
+  if (!zoneId) return null
+  return ZONES.find((zone) => zone.id === zoneId)?.label || zoneId
+}
+
 // Convenience: which metrics are inherently percentages vs counts
 const PERCENT_METRICS = new Set([
   "efg_overall",
