@@ -1,4 +1,5 @@
-import { ChevronDown, Trash2 } from "lucide-react"
+import { Trash2 } from "lucide-react"
+import AccordionSection from "./ui/AccordionSection"
 
 function fmtDate(iso) {
   try { return new Date(iso).toLocaleDateString() } catch { return iso || "—" }
@@ -21,23 +22,14 @@ export default function PracticeSessionHistory({
 
       <div className="space-y-3">
         {groupedMonths.map((month) => (
-          <div key={month.key} className="rounded-2xl border border-slate-200 bg-white">
-            <button
-              type="button"
-              onClick={() => setOpenMonth(openMonth === month.key ? null : month.key)}
-              className="w-full flex items-center justify-between px-3 py-2 accordion-header"
-            >
-              <span className="text-sm font-semibold text-slate-900">
-                {month.label}
-              </span>
-              <ChevronDown
-                size={18}
-                className={`transition-transform ${openMonth === month.key ? "rotate-180" : ""}`}
-              />
-            </button>
-
-            {openMonth === month.key && (
-              <div className="border-t border-slate-100 p-2 space-y-2">
+          <AccordionSection
+            key={month.key}
+            title={month.label}
+            open={openMonth === month.key}
+            onToggle={() => setOpenMonth(openMonth === month.key ? null : month.key)}
+            headerClassName="w-full flex items-center justify-between px-3 py-2 accordion-header"
+            contentClassName="border-t border-slate-100 p-2 space-y-2"
+          >
                 {month.sessions.map((session) => (
                   <div
                     key={session.id}
@@ -65,9 +57,7 @@ export default function PracticeSessionHistory({
                     </button>
                   </div>
                 ))}
-              </div>
-            )}
-          </div>
+          </AccordionSection>
         ))}
         {groupedMonths.length === 0 && (
           <div className="text-sm text-slate-500">No previous sessions yet.</div>

@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react"
 import { Gamepad2, Trash2 } from "lucide-react"
+import AccordionSection from "./ui/AccordionSection"
 
 export default function GameHistorySection({
   groupedPrev,
@@ -8,6 +10,24 @@ export default function GameHistorySection({
   openDetail,
   onDelete,
 }) {
+  const [openGroups, setOpenGroups] = useState(() => new Set(groupedPrev.keys()))
+
+  useEffect(() => {
+    setOpenGroups(new Set(groupedPrev.keys()))
+  }, [groupedPrev])
+
+  function toggleGroup(group) {
+    setOpenGroups((current) => {
+      const next = new Set(current)
+      if (next.has(group)) {
+        next.delete(group)
+      } else {
+        next.add(group)
+      }
+      return next
+    })
+  }
+
   return (
     <>
       <h2 className="mt-5 text-slate-900 font-semibold text-center">
@@ -15,13 +35,14 @@ export default function GameHistorySection({
       </h2>
 
       {[...groupedPrev.entries()].map(([group, rows]) => (
-        <section key={group} className="w-full mt-2 space-y-2">
-          {group !== "Games" && (
-            <div className="text-xs uppercase tracking-wide text-slate-500 pl-1">
-              {group}
-            </div>
-          )}
-
+        <AccordionSection
+          key={group}
+          title={group}
+          open={openGroups.has(group)}
+          onToggle={() => toggleGroup(group)}
+          className="mt-2 w-full rounded-2xl border border-slate-200 bg-white"
+          contentClassName="space-y-2 border-t border-slate-100 p-2"
+        >
           {rows.map((game) => {
             const result = computeResultSummary(game)
             return (
@@ -78,7 +99,7 @@ export default function GameHistorySection({
               </div>
             )
           })}
-        </section>
+        </AccordionSection>
       ))}
     </>
   )

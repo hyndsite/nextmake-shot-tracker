@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event"
 import GameHistorySection from "../GameHistorySection"
 
 vi.mock("lucide-react", () => ({
+  ChevronDown: () => <span>chevron</span>,
   Gamepad2: () => <span>game</span>,
   Trash2: () => <span>trash</span>,
 }))
@@ -42,7 +43,17 @@ describe("GameHistorySection", () => {
     )
 
     expect(screen.getByText("Previous Games")).toBeInTheDocument()
-    expect(screen.getByText("Varsity")).toBeInTheDocument()
+    const groupButton = screen.getByRole("button", { name: "Varsity" })
+    const groupSection = groupButton.closest("section")
+    expect(groupSection).not.toBeNull()
+    expect(groupSection.className).toContain("rounded-2xl")
+
+    await user.click(groupButton)
+    expect(
+      screen.queryByRole("button", { name: /Warriors vs Bulls on Jan 10, 2025/i }),
+    ).not.toBeInTheDocument()
+
+    await user.click(groupButton)
 
     const card = screen.getByRole("button", {
       name: /Warriors vs Bulls on Jan 10, 2025/i,

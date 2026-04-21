@@ -269,7 +269,8 @@ describe('PracticeGate Component', () => {
     })
 
     const monthButton = screen.getByRole('button', { name: /january/i })
-    const monthContainer = monthButton.closest('div')
+    const monthContainer = monthButton.closest('section')
+    expect(monthContainer).not.toBeNull()
     expect(monthContainer.className).toContain('rounded-2xl')
     expect(monthContainer.className).toContain('border-slate-200')
     expect(monthButton.className).toContain('accordion-header')

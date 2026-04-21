@@ -50,7 +50,8 @@ describe("PracticeSessionHistory", () => {
     )
 
     const monthButton = screen.getByRole("button", { name: /january 2026/i })
-    const monthContainer = monthButton.closest("div")
+    const monthContainer = monthButton.closest("section")
+    expect(monthContainer).not.toBeNull()
     expect(monthContainer.className).toContain("rounded-2xl")
     expect(monthButton.className).toContain("accordion-header")
 

@@ -12,6 +12,7 @@ vi.mock('../../lib/game-db', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  ChevronDown: () => <div data-testid="chevron-down-icon">ChevronDown</div>,
   PlayCircle: () => <div data-testid="play-circle-icon">PlayCircle</div>,
   Gamepad2: () => <div data-testid="gamepad-icon">Gamepad2</div>,
   Trash2: () => <div data-testid="trash-icon">Trash2</div>,
@@ -196,7 +197,7 @@ describe('GameGate Component', () => {
     render(<GameGate navigate={mockNavigate} />)
 
     await waitFor(() => {
-      expect(screen.getByText('Previous Games')).toBeInTheDocument()
+      expect(screen.getByText('Warriors vs. Bulls')).toBeInTheDocument()
     })
 
     const card = screen.getByText('Warriors vs. Bulls').closest('[role="button"]')
@@ -218,7 +219,7 @@ describe('GameGate Component', () => {
     render(<GameGate navigate={mockNavigate} />)
 
     await waitFor(() => {
-      expect(screen.getByText('Previous Games')).toBeInTheDocument()
+      expect(screen.getByText('Warriors vs. Bulls')).toBeInTheDocument()
     })
 
     const card = screen.getByText('Warriors vs. Bulls').closest('[role="button"]')
@@ -235,7 +236,7 @@ describe('GameGate Component', () => {
     render(<GameGate navigate={mockNavigate} />)
 
     await waitFor(() => {
-      expect(screen.getByText('Previous Games')).toBeInTheDocument()
+      expect(screen.getByText('Warriors vs. Bulls')).toBeInTheDocument()
     })
 
     const card = screen.getByText('Warriors vs. Bulls').closest('[role="button"]')
