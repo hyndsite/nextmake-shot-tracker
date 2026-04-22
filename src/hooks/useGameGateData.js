@@ -4,6 +4,10 @@ import {
   getActiveGameSession,
   listGameSessions,
 } from "../lib/game-db"
+import {
+  groupPreviousGamesByLevel,
+  listPreviousGameSessions,
+} from "../lib/game-gate"
 
 export function useGameGateData() {
   const [sessions, setSessions] = useState([])
@@ -23,25 +27,12 @@ export function useGameGateData() {
   }, [])
 
   const previous = useMemo(
-    () => (sessions || []).filter((session) => session.status === "completed"),
+    () => listPreviousGameSessions(sessions),
     [sessions],
   )
 
   const groupedPrev = useMemo(() => {
-    const groups = new Map()
-    for (const session of previous) {
-      const key = session.level || "Games"
-      if (!groups.has(key)) groups.set(key, [])
-      groups.get(key).push(session)
-    }
-    for (const rows of groups.values()) {
-      rows.sort((a, b) =>
-        (b.date_iso || b.started_at || "").localeCompare(
-          a.date_iso || a.started_at || "",
-        ),
-      )
-    }
-    return groups
+    return groupPreviousGamesByLevel(previous)
   }, [previous])
 
   return {

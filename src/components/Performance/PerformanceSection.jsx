@@ -5,8 +5,8 @@ import {
   PerformanceShotTypePills,
   PerformanceTimeRangePills,
 } from "./PerformancePills"
-import PerformanceSectionHeader from "./PerformanceSectionHeader"
 import PerformanceTrendChart from "./PerformanceTrendChart"
+import AccordionSection from "../ui/AccordionSection"
 
 export default function PerformanceSection({
   title,
@@ -36,79 +36,72 @@ export default function PerformanceSection({
   totalAttempts,
 }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-3 space-y-2">
-      <PerformanceSectionHeader
-        title={title}
-        expanded={expanded}
-        onToggle={onToggle}
-      />
+    <AccordionSection
+      title={title}
+      open={expanded}
+      onToggle={onToggle}
+      className="rounded-2xl border border-slate-200 bg-white"
+      contentClassName="space-y-2 p-3"
+    >
+      <div className="flex items-center justify-between mt-1">
+        <PerformanceModePills value={modeValue} onChange={onModeChange} />
+        <div className="text-[11px] text-slate-500">{totalAttemptsText}</div>
+      </div>
 
-      {expanded && (
-        <>
-          <div className="flex items-center justify-between mt-1">
-            <PerformanceModePills value={modeValue} onChange={onModeChange} />
-            <div className="text-[11px] text-slate-500">{totalAttemptsText}</div>
-          </div>
+      <div className="flex items-center justify-between mt-1">
+        <PerformanceTimeRangePills value={rangeValue} onChange={onRangeChange} />
+      </div>
 
-          <div className="flex items-center justify-between mt-1">
-            <PerformanceTimeRangePills
-              value={rangeValue}
-              onChange={onRangeChange}
+      <div className="mt-2 flex items-center justify-between">
+        <PerformanceShotTypePills
+          value={shotTypeValue}
+          onChange={onShotTypeChange}
+        />
+      </div>
+
+      <div className="mt-2 flex items-center justify-between">
+        <PerformanceContestedPills
+          value={contestedValue}
+          onChange={onContestedChange}
+        />
+      </div>
+
+      <div className="mt-3 space-y-2">
+        {loading && (
+          <div className="text-xs text-slate-500">{`Loading ${title.toLowerCase()} performance…`}</div>
+        )}
+        {!loading && metrics.length === 0 && (
+          <div className="text-xs text-slate-500">{emptyText}</div>
+        )}
+        {!loading &&
+          metrics.map((metric) => (
+            <PerformanceMetricCard
+              key={metric.id}
+              label={metric.label}
+              fgPct={metric.fgPct}
+              attempts={metric.attempts}
+              makes={metric.makes}
+              attemptsLabel={metric.attemptsLabel}
+              goalPct={metric.goalPct}
+              mode={vizMode}
+              totalAttempts={totalAttempts}
             />
-          </div>
+          ))}
+      </div>
 
-          <div className="mt-2 flex items-center justify-between">
-            <PerformanceShotTypePills
-              value={shotTypeValue}
-              onChange={onShotTypeChange}
-            />
-          </div>
-
-          <div className="mt-2 flex items-center justify-between">
-            <PerformanceContestedPills
-              value={contestedValue}
-              onChange={onContestedChange}
-            />
-          </div>
-
-          <div className="mt-3 space-y-2">
-            {loading && (
-              <div className="text-xs text-slate-500">{`Loading ${title.toLowerCase()} performance…`}</div>
-            )}
-            {!loading && metrics.length === 0 && (
-              <div className="text-xs text-slate-500">{emptyText}</div>
-            )}
-            {!loading &&
-              metrics.map((metric) => (
-                <PerformanceMetricCard
-                  key={metric.id}
-                  label={metric.label}
-                  fgPct={metric.fgPct}
-                  attempts={metric.attempts}
-                  makes={metric.makes}
-                  attemptsLabel={metric.attemptsLabel}
-                  goalPct={metric.goalPct}
-                  mode={vizMode}
-                  totalAttempts={totalAttempts}
-                />
-              ))}
-          </div>
-
-          <div className="mt-4">
-            <PerformanceTrendChart
-              title={trendTitle}
-              data={trendData}
-              mode={trendMode}
-              onModeChange={onTrendModeChange}
-              ticks={trendTicks}
-              sourceLabel={sourceLabel}
-              selectedPoint={selectedPoint}
-              onSelectPoint={onSelectPoint}
-              vizMode={vizMode}
-            />
-          </div>
-        </>
-      )}
-    </section>
+      <div className="mt-4">
+        <PerformanceTrendChart
+          title={trendTitle}
+          data={trendData}
+          mode={trendMode}
+          onModeChange={onTrendModeChange}
+          ticks={trendTicks}
+          sourceLabel={sourceLabel}
+          selectedPoint={selectedPoint}
+          onSelectPoint={onSelectPoint}
+          vizMode={vizMode}
+        />
+      </div>
+    </AccordionSection>
   )
 }
