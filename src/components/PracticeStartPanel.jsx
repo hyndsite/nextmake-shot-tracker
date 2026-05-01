@@ -14,16 +14,25 @@ function Avatar({ athlete }) {
 }
 
 export default function PracticeStartPanel({
-  selectedAthlete,
-  athletes,
-  selectedAthleteId,
-  canStartForSelectedAthlete,
-  showSwitchAthlete,
-  setShowSwitchAthlete,
-  startForSelectedAthlete,
-  setSelectedAthleteId,
-  setActiveAthlete,
+  athleteData,
+  startUi,
+  startActions,
 }) {
+  const {
+    selectedAthlete,
+    athletes,
+    selectedAthleteId,
+  } = athleteData
+  const {
+    canStartForSelectedAthlete,
+    showSwitchAthlete,
+  } = startUi
+  const {
+    toggleSwitchAthlete,
+    startForSelectedAthlete,
+    selectSessionAthlete,
+  } = startActions
+
   return (
     <section className="mb-3">
       <div className="flex items-center gap-2">
@@ -99,7 +108,7 @@ export default function PracticeStartPanel({
 
         <button
           type="button"
-          onClick={() => setShowSwitchAthlete((v) => !v)}
+          onClick={toggleSwitchAthlete}
           className="h-10 px-3 rounded-xl border border-sky-300 bg-sky-50 text-sky-700 inline-flex items-center justify-center shadow-sm transition hover:bg-sky-100"
           aria-label="Switch athlete for session"
           title="Switch athlete"
@@ -120,11 +129,7 @@ export default function PracticeStartPanel({
             <button
               key={athlete.id}
               type="button"
-              onClick={() => {
-                setSelectedAthleteId(athlete.id)
-                setActiveAthlete(athlete.id)
-                setShowSwitchAthlete(false)
-              }}
+              onClick={() => selectSessionAthlete(athlete.id)}
               className={`w-full rounded-xl border px-3 py-2 text-left text-sm font-medium ${
                 athlete.id === selectedAthleteId
                   ? "border-sky-600 bg-sky-50 text-sky-900"
