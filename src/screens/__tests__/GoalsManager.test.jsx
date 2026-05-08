@@ -122,7 +122,6 @@ describe('GoalsManager Component', () => {
     ])
     getActiveAthleteId.mockReturnValue('ath-1')
     setActiveAthlete.mockImplementation(() => {})
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     vi.spyOn(window, 'alert').mockImplementation(() => {})
   })
 
@@ -315,6 +314,8 @@ describe('GoalsManager Component', () => {
     const setHeader = screen.getByText('January Goals').closest('[role="button"]')
     const setCard = setHeader.closest('.rounded-2xl')
     await user.click(within(setCard).getByLabelText('Archive goal set'))
+    expect(screen.getByText("Archive this Goal Set? It will move under 'Archived Goal Sets' and be hidden from the active list.")).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Archive Goal Set' }))
 
     await waitFor(() => {
       expect(archiveGoalSet).toHaveBeenCalledWith(baseSet.id)
@@ -340,6 +341,8 @@ describe('GoalsManager Component', () => {
     const setHeader = screen.getByText('January Goals').closest('[role="button"]')
     const setCard = setHeader.closest('.rounded-2xl')
     await user.click(within(setCard).getByLabelText('Delete goal set'))
+    expect(screen.getByText('Delete January Goals and all goals within it? This cannot be undone.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Delete Goal Set' }))
 
     await waitFor(() => {
       expect(deleteGoalsBySet).toHaveBeenCalledWith(baseSet.id)
@@ -385,6 +388,8 @@ describe('GoalsManager Component', () => {
     expect(within(goalCard).getByText(/Target: 40% · Value:/)).toBeInTheDocument()
 
     await user.click(within(goalCard).getByLabelText('Delete goal'))
+    expect(screen.getByText('Delete January Goals - FG% (by zone)?')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Delete Goal' }))
 
     await waitFor(() => {
       expect(deleteGoal).toHaveBeenCalledWith('goal-42')
@@ -665,6 +670,7 @@ describe('GoalsManager Component', () => {
     const setHeader = screen.getByText('January Goals').closest('[role="button"]')
     const setCard = setHeader.closest('.rounded-2xl')
     await user.click(within(setCard).getByLabelText('Delete goal set'))
+    await user.click(screen.getByRole('button', { name: 'Delete Goal Set' }))
 
     await waitFor(() => {
       expect(window.alert).toHaveBeenCalledWith('Could not delete goal set.')
@@ -688,6 +694,7 @@ describe('GoalsManager Component', () => {
     const setHeader = screen.getByText('January Goals').closest('[role="button"]')
     const setCard = setHeader.closest('.rounded-2xl')
     await user.click(within(setCard).getByLabelText('Archive goal set'))
+    await user.click(screen.getByRole('button', { name: 'Archive Goal Set' }))
 
     await waitFor(() => {
       expect(window.alert).toHaveBeenCalledWith('Could not archive goal set.')
@@ -784,6 +791,8 @@ describe('GoalsManager Component', () => {
     await user.click(setHeader)
 
     await user.click(screen.getByLabelText('Delete goal'))
+    expect(screen.getByText('Delete January Goals - Goal Fail?')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Delete Goal' }))
 
     await waitFor(() => {
       expect(window.alert).toHaveBeenCalledWith('Could not delete goal.')

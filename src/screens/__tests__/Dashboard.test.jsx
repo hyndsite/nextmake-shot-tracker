@@ -88,7 +88,6 @@ describe("Dashboard", () => {
     listGoalSetsWithGoals.mockResolvedValue([])
     getUser.mockResolvedValue(null)
     supabase.from.mockImplementation(() => buildSupabaseQuery([]))
-    vi.spyOn(window, "confirm").mockReturnValue(true)
   })
 
   afterEach(() => {
@@ -197,6 +196,8 @@ describe("Dashboard", () => {
     await user.click(screen.getByRole("button", { name: "Add athlete" }))
 
     await user.click(screen.getByLabelText("Archive athlete"))
+    expect(screen.getByText("Archive Ava?")).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Archive Athlete" }))
 
     expect(archiveAthleteProfile).toHaveBeenCalledWith("remote_ava")
     expect(screen.getByText("Max")).toBeInTheDocument()

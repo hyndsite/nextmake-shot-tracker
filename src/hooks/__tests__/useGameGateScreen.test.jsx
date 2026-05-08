@@ -24,7 +24,18 @@ describe("useGameGateScreen", () => {
     vi.clearAllMocks()
     refresh.mockResolvedValue(undefined)
     useGameGateData.mockReturnValue({
-      sessions: [],
+      sessions: [
+        {
+          id: "game-1",
+          team_name: "Warriors",
+          opponent_name: "Bulls",
+          home_away: "away",
+          date_iso: "2025-01-10T00:00:00.000Z",
+          started_at: "2025-01-09T12:00:00.000Z",
+          team_score: 80,
+          opponent_score: 75,
+        },
+      ],
       active: null,
       previous: [],
       groupedPrev: new Map([
@@ -47,7 +58,6 @@ describe("useGameGateScreen", () => {
     })
     endGameSession.mockResolvedValue({})
     deleteGameSession.mockResolvedValue({})
-    vi.spyOn(window, "confirm").mockReturnValue(true)
     vi.spyOn(window, "alert").mockImplementation(() => {})
     vi.spyOn(console, "warn").mockImplementation(() => {})
   })
@@ -62,6 +72,7 @@ describe("useGameGateScreen", () => {
     expect(result.current.startActions).toBeDefined()
     expect(result.current.modalActions).toBeDefined()
     expect(result.current.historyActions).toBeDefined()
+    expect(result.current.modal.pendingDeleteGameId).toBe(null)
 
     act(() => {
       result.current.startActions.startNew()
@@ -114,7 +125,7 @@ describe("useGameGateScreen", () => {
     expect(navigate).toHaveBeenCalledWith("game-logger", { id: "active-1" })
   })
 
-  it("opens detail and deletes a game with refresh", async () => {
+  it("opens detail and deletes a game with refresh after confirmation", async () => {
     const navigate = vi.fn()
     const { result } = renderHook(() => useGameGateScreen({ navigate }))
 
@@ -123,9 +134,15 @@ describe("useGameGateScreen", () => {
     })
 
     await act(async () => {
-      await result.current.historyActions.deleteGame("game-1", {
+      await result.current.historyActions.requestDeleteGame("game-1", {
         stopPropagation: vi.fn(),
       })
+    })
+    expect(result.current.modal.pendingDeleteGameId).toBe("game-1")
+    expect(result.current.modal.pendingDeleteGameLabel).toBe("Warriors vs Bulls | 1/9/2025")
+
+    await act(async () => {
+      await result.current.modalActions.confirmDeleteGame()
     })
 
     expect(navigate).toHaveBeenCalledWith("gameDetail", { id: "game-1" })
@@ -139,15 +156,35 @@ describe("useGameGateScreen", () => {
     const { result } = renderHook(() => useGameGateScreen({ navigate }))
 
     await act(async () => {
-      await result.current.historyActions.deleteGame("game-1", {
+      await result.current.historyActions.requestDeleteGame("game-1", {
         stopPropagation: vi.fn(),
       })
+    })
+    await act(async () => {
+      await result.current.modalActions.confirmDeleteGame()
     })
 
     expect(console.warn).toHaveBeenCalled()
     expect(window.alert).toHaveBeenCalledWith(
       "Could not delete game on this device.",
     )
+  })
+
+  it("dismisses the delete modal through modalActions", () => {
+    const navigate = vi.fn()
+    const { result } = renderHook(() => useGameGateScreen({ navigate }))
+
+    act(() => {
+      result.current.historyActions.requestDeleteGame("game-1", {
+        stopPropagation: vi.fn(),
+      })
+    })
+    expect(result.current.modal.pendingDeleteGameId).toBe("game-1")
+
+    act(() => {
+      result.current.modalActions.dismissDeleteGame()
+    })
+    expect(result.current.modal.pendingDeleteGameId).toBe(null)
   })
 
   it("dismisses the confirm modal through modalActions", () => {

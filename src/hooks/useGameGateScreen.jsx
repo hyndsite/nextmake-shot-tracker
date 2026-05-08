@@ -51,6 +51,7 @@ function homeAwayPill(session) {
 
 export function useGameGateScreen({ navigate }) {
   const [showConfirmNew, setShowConfirmNew] = useState(false)
+  const [pendingDeleteGameId, setPendingDeleteGameId] = useState(null)
   const {
     sessions,
     active,
@@ -85,18 +86,35 @@ export function useGameGateScreen({ navigate }) {
     navigate?.("gameDetail", { id })
   }
 
-  async function deleteGame(id, event) {
+  function requestDeleteGame(id, event) {
     event?.stopPropagation()
-    const ok = window.confirm("Delete this game and all its logged events?")
-    if (!ok) return
+    setPendingDeleteGameId(id)
+  }
+
+  function dismissDeleteGame() {
+    setPendingDeleteGameId(null)
+  }
+
+  async function confirmDeleteGame() {
+    if (!pendingDeleteGameId) return
+    const gameId = pendingDeleteGameId
+    setPendingDeleteGameId(null)
     try {
-      await deleteGameSession(id)
+      await deleteGameSession(gameId)
       await refresh()
     } catch (err) {
       console.warn("[GameGate] delete failed:", err)
       alert("Could not delete game on this device.")
     }
   }
+
+  const pendingDeleteGame =
+    sessions.find((session) => session.id === pendingDeleteGameId) || null
+  const pendingDeleteGameLabel = pendingDeleteGame
+    ? `${pendingDeleteGame.team_name || "Game"} vs ${pendingDeleteGame.opponent_name || "Opponent"} | ${fmtDate(
+        pendingDeleteGame.started_at || pendingDeleteGame.date_iso,
+      )}`
+    : null
 
   return {
     data: {
@@ -106,6 +124,10 @@ export function useGameGateScreen({ navigate }) {
     },
     startUi: {
       showConfirmNew,
+    },
+    modal: {
+      pendingDeleteGameId,
+      pendingDeleteGameLabel,
     },
     display: {
       computeResultSummary,
@@ -119,10 +141,12 @@ export function useGameGateScreen({ navigate }) {
     modalActions: {
       confirmEndAndStart,
       dismissConfirmNew,
+      confirmDeleteGame,
+      dismissDeleteGame,
     },
     historyActions: {
       openDetail,
-      deleteGame,
+      requestDeleteGame,
     },
   }
 }

@@ -17,6 +17,7 @@ export function useDashboardAthleteActions({
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
   const [error, setError] = useState("")
+  const [pendingArchiveAthlete, setPendingArchiveAthlete] = useState(null)
 
   const handleSelectAthlete = (id) => {
     setError("")
@@ -46,15 +47,23 @@ export function useDashboardAthleteActions({
     }
   }
 
-  const handleArchiveAthlete = async () => {
+  const handleArchiveAthlete = () => {
     if (!activeAthlete?.id) return
-    const ok = window.confirm(`Archive ${fullName(activeAthlete)}?`)
-    if (!ok) return
+    setPendingArchiveAthlete(activeAthlete)
+  }
+
+  const dismissArchiveAthlete = () => {
+    setPendingArchiveAthlete(null)
+  }
+
+  const confirmArchiveAthlete = async () => {
+    if (!pendingArchiveAthlete?.id) return
     setError("")
 
     try {
-      await archiveAthleteProfile(activeAthlete.id)
-      archiveAthlete(activeAthlete.id)
+      await archiveAthleteProfile(pendingArchiveAthlete.id)
+      archiveAthlete(pendingArchiveAthlete.id)
+      setPendingArchiveAthlete(null)
       setShowSwitch(false)
       refreshAthletes()
     } catch (err) {
@@ -72,8 +81,11 @@ export function useDashboardAthleteActions({
     lastName,
     setLastName,
     error,
+    pendingArchiveAthlete,
     handleSelectAthlete,
     handleAddAthlete,
     handleArchiveAthlete,
+    dismissArchiveAthlete,
+    confirmArchiveAthlete,
   }
 }

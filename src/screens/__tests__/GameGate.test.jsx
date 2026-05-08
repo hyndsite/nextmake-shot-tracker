@@ -67,7 +67,6 @@ describe('GameGate Component', () => {
     getActiveGameSession.mockResolvedValue(null)
     endGameSession.mockResolvedValue({})
     deleteGameSession.mockResolvedValue({})
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     vi.spyOn(window, 'alert').mockImplementation(() => {})
   })
 
@@ -182,9 +181,9 @@ describe('GameGate Component', () => {
       expect(screen.getByText('Varsity')).toBeInTheDocument()
     })
 
-    const card = screen.getByRole('button', {
-      name: /Warriors vs Bulls on Jan 10, 2025/i,
-    })
+    const card = screen.getAllByRole('button', {
+      name: /Warriors vs .* on Jan 10, 2025/i,
+    })[0]
     await user.click(card)
 
     expect(mockNavigate).toHaveBeenCalledWith('gameDetail', { id: 'game-1' })
@@ -204,6 +203,9 @@ describe('GameGate Component', () => {
     const deleteButton = within(card).getByRole('button', { name: 'Delete game' })
     await user.click(deleteButton)
 
+    expect(screen.getByText('Delete Warriors vs Bulls | 1/9/2025? This cannot be undone.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Delete Game' }))
+
     await waitFor(() => {
       expect(deleteGameSession).toHaveBeenCalledWith('game-1')
       expect(listGameSessions).toHaveBeenCalled()
@@ -215,7 +217,6 @@ describe('GameGate Component', () => {
 
   it('should not delete when confirmation is cancelled', async () => {
     const user = userEvent.setup()
-    window.confirm.mockReturnValue(false)
     render(<GameGate navigate={mockNavigate} />)
 
     await waitFor(() => {
@@ -225,6 +226,9 @@ describe('GameGate Component', () => {
     const card = screen.getByText('Warriors vs. Bulls').closest('[role="button"]')
     const deleteButton = within(card).getByRole('button', { name: 'Delete game' })
     await user.click(deleteButton)
+
+    expect(screen.getByText('Delete Warriors vs Bulls | 1/9/2025? This cannot be undone.')).toBeInTheDocument()
+    await user.click(screen.getByText('Cancel'))
 
     expect(deleteGameSession).not.toHaveBeenCalled()
   })
@@ -242,6 +246,7 @@ describe('GameGate Component', () => {
     const card = screen.getByText('Warriors vs. Bulls').closest('[role="button"]')
     const deleteButton = within(card).getByRole('button', { name: 'Delete game' })
     await user.click(deleteButton)
+    await user.click(screen.getByRole('button', { name: 'Delete Game' }))
 
     await waitFor(() => {
       expect(warnSpy).toHaveBeenCalled()

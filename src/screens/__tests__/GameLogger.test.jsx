@@ -151,8 +151,6 @@ describe('GameLogger Component', () => {
     addGameEvent.mockResolvedValue({ id: 'new-event' })
     endGameSession.mockResolvedValue(mockGameSession)
 
-    // Mock window.confirm
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
 
   afterEach(() => {
@@ -1291,7 +1289,7 @@ describe('GameLogger Component', () => {
       const endGameButton = screen.getByText('End Game')
       await user.click(endGameButton)
 
-      expect(window.confirm).toHaveBeenCalledWith('End this game?')
+      expect(screen.getByText('End this game?')).toBeInTheDocument()
     })
 
     it('should end game with final scores when confirmed', async () => {
@@ -1304,6 +1302,7 @@ describe('GameLogger Component', () => {
 
       const endGameButton = screen.getByText('End Game')
       await user.click(endGameButton)
+      await user.click(screen.getAllByRole('button', { name: 'End Game' })[1])
 
       await waitFor(() => {
         expect(endGameSession).toHaveBeenCalledWith('game-123', {
@@ -1323,6 +1322,7 @@ describe('GameLogger Component', () => {
 
       const endGameButton = screen.getByText('End Game')
       await user.click(endGameButton)
+      await user.click(screen.getAllByRole('button', { name: 'End Game' })[1])
 
       await waitFor(() => {
         expect(mockNavigate).toHaveBeenCalledWith('gate')
@@ -1330,7 +1330,6 @@ describe('GameLogger Component', () => {
     })
 
     it('should not end game when confirmation is cancelled', async () => {
-      window.confirm.mockReturnValue(false)
       const user = userEvent.setup()
       render(<GameLogger id="game-123" navigate={mockNavigate} />)
 
@@ -1340,6 +1339,7 @@ describe('GameLogger Component', () => {
 
       const endGameButton = screen.getByText('End Game')
       await user.click(endGameButton)
+      await user.click(screen.getByText('Cancel'))
 
       expect(endGameSession).not.toHaveBeenCalled()
       expect(mockNavigate).not.toHaveBeenCalled()
@@ -1360,6 +1360,7 @@ describe('GameLogger Component', () => {
 
       const endGameButton = screen.getByText('End Game')
       await user.click(endGameButton)
+      await user.click(screen.getAllByRole('button', { name: 'End Game' })[1])
 
       await waitFor(() => {
         expect(endGameSession).toHaveBeenCalledWith('game-123', {
@@ -1385,6 +1386,7 @@ describe('GameLogger Component', () => {
 
       const endGameButton = screen.getByText('End Game')
       await user.click(endGameButton)
+      await user.click(screen.getAllByRole('button', { name: 'End Game' })[1])
 
       await waitFor(() => {
         expect(endGameSession).toHaveBeenCalledWith('game-123', {
@@ -1408,6 +1410,7 @@ describe('GameLogger Component', () => {
 
       const endGameButton = screen.getByText('End Game')
       await user.click(endGameButton)
+      await user.click(screen.getAllByRole('button', { name: 'End Game' })[1])
 
       await waitFor(() => {
         expect(endGameSession).toHaveBeenCalledWith('game-123', {

@@ -21,7 +21,6 @@ vi.mock("../../lib/athlete-profiles-db", () => ({
 describe("useDashboardAthleteActions", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.spyOn(window, "confirm").mockReturnValue(true)
   })
 
   it("creates an athlete and selects it", async () => {
@@ -69,7 +68,7 @@ describe("useDashboardAthleteActions", () => {
     expect(result.current.lastName).toBe("")
   })
 
-  it("archives the active athlete and refreshes the list", async () => {
+  it("requests archive confirmation and archives the active athlete after confirm", async () => {
     const refreshAthletes = vi.fn()
 
     const { result } = renderHook(() =>
@@ -84,8 +83,14 @@ describe("useDashboardAthleteActions", () => {
       }),
     )
 
+    act(() => {
+      result.current.handleArchiveAthlete()
+    })
+
+    expect(result.current.pendingArchiveAthlete?.id).toBe("remote_ava")
+
     await act(async () => {
-      await result.current.handleArchiveAthlete()
+      await result.current.confirmArchiveAthlete()
     })
 
     expect(archiveAthleteProfile).toHaveBeenCalledWith("remote_ava")

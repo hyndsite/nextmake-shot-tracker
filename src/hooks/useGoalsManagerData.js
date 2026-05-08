@@ -24,6 +24,7 @@ import { useGoalSetForm } from "./goals-manager/useGoalSetForm"
 export function useGoalsManagerData() {
   const [activeAthleteId, setActiveAthleteId] = useState(() => getActiveAthleteId() || "")
   const [selectedSetIdForGoal, setSelectedSetIdForGoal] = useState("")
+  const [pendingConfirm, setPendingConfirm] = useState(null)
   const { loading, goalSets, athletes, gameEvents, practiceEntries, setGoalSets } =
     useGoalsManagerQuery({ activeAthleteId, setSelectedSetIdForGoal })
   const { activeSorted, archivedSorted, selectedSetForGoal, availableMetricOptions } =
@@ -111,12 +112,7 @@ export function useGoalsManagerData() {
     hydrateEditSetForm(set, setOpenCreateSet)
   }
 
-  async function handleDeleteSet(set) {
-    const ok = window.confirm(
-      "Delete this Goal Set and all goals within it? This cannot be undone.",
-    )
-    if (!ok) return
-
+  async function performDeleteSet(set) {
     try {
       await deleteGoalsBySet(set.id)
       await deleteGoalSet(set.id)
@@ -132,12 +128,7 @@ export function useGoalsManagerData() {
     }
   }
 
-  async function handleArchiveSet(set) {
-    const ok = window.confirm(
-      "Archive this Goal Set? It will move under 'Archived Goal Sets' and be hidden from the active list.",
-    )
-    if (!ok) return
-
+  async function performArchiveSet(set) {
     try {
       const updated = await archiveGoalSet(set.id)
       setGoalSets((prev) =>
@@ -210,10 +201,7 @@ export function useGoalsManagerData() {
     }
   }
 
-  async function handleDeleteGoal(goal) {
-    const ok = window.confirm("Delete this goal?")
-    if (!ok) return
-
+  async function performDeleteGoal(goal) {
     try {
       await deleteGoal(goal.id)
       setGoalSets((prev) =>
@@ -226,6 +214,49 @@ export function useGoalsManagerData() {
       console.warn("[GoalsManager] handleDeleteGoal error:", err)
       alert("Could not delete goal.")
     }
+  }
+
+  function handleDeleteSet(set) {
+    setPendingConfirm({
+      title: "Delete Goal Set",
+      body: `Delete ${set.name} and all goals within it? This cannot be undone.`,
+      confirmLabel: "Delete Goal Set",
+      action: () => performDeleteSet(set),
+    })
+  }
+
+  function handleArchiveSet(set) {
+    setPendingConfirm({
+      title: "Archive Goal Set",
+      body: "Archive this Goal Set? It will move under 'Archived Goal Sets' and be hidden from the active list.",
+      confirmLabel: "Archive Goal Set",
+      action: () => performArchiveSet(set),
+    })
+  }
+
+  function handleDeleteGoal(goal) {
+    const parentSet = goalSets.find((set) =>
+      (set.goals || []).some((row) => row.id === goal.id),
+    )
+    const setTitle = parentSet?.name || "Goal Set"
+    const label = goal.name || metricLabel(goal.metric)
+    setPendingConfirm({
+      title: "Delete Goal",
+      body: `Delete ${setTitle} - ${label}?`,
+      confirmLabel: "Delete Goal",
+      action: () => performDeleteGoal(goal),
+    })
+  }
+
+  function dismissPendingConfirm() {
+    setPendingConfirm(null)
+  }
+
+  async function confirmPendingAction() {
+    if (!pendingConfirm?.action) return
+    const action = pendingConfirm.action
+    setPendingConfirm(null)
+    await action()
   }
 
   function selectAthlete(athleteId) {
@@ -299,6 +330,13 @@ export function useGoalsManagerData() {
       openAddGoal,
       openArchived,
     },
+    modal: pendingConfirm
+      ? {
+          title: pendingConfirm.title,
+          body: pendingConfirm.body,
+          confirmLabel: pendingConfirm.confirmLabel,
+        }
+      : null,
     uiActions: {
       setOpenCreateSet,
       setOpenAddGoal,
@@ -317,6 +355,10 @@ export function useGoalsManagerData() {
     goalActions: {
       handleAddGoal,
       handleDeleteGoal,
+    },
+    modalActions: {
+      dismissPendingConfirm,
+      confirmPendingAction,
     },
   }
 }

@@ -1,4 +1,5 @@
 // src/screens/GameGate.jsx
+import ActionConfirmModal from "../components/ActionConfirmModal"
 import GameExistingSessionModal from "../components/GameExistingSessionModal"
 import GameGateStartSection from "../components/GameGateStartSection"
 import GameHistorySection from "../components/GameHistorySection"
@@ -8,6 +9,7 @@ export default function GameGate({ navigate }) {
   const {
     data,
     startUi,
+    modal,
     display,
     startActions,
     modalActions,
@@ -31,7 +33,7 @@ export default function GameGate({ navigate }) {
         fmtDate={display.fmtDate}
         homeAwayPill={display.homeAwayPill}
         openDetail={historyActions.openDetail}
-        onDelete={historyActions.deleteGame}
+        onDelete={historyActions.requestDeleteGame}
       />
 
       {/* Confirm new (active exists) */}
@@ -41,6 +43,18 @@ export default function GameGate({ navigate }) {
           fmtDate={display.fmtDate}
           onCancel={modalActions.dismissConfirmNew}
           onConfirm={modalActions.confirmEndAndStart}
+        />
+      )}
+
+      {modal.pendingDeleteGameId && (
+        <ActionConfirmModal
+          title="Delete Game"
+          body={`Delete ${modal.pendingDeleteGameLabel}? This cannot be undone.`}
+          cancelLabel="Cancel"
+          confirmLabel="Delete Game"
+          onCancel={modalActions.dismissDeleteGame}
+          onConfirm={modalActions.confirmDeleteGame}
+          widthClass="w-[90%] max-w-sm"
         />
       )}
     </div>

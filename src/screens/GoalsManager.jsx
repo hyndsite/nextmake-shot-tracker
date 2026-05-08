@@ -2,6 +2,7 @@
 import React from "react"
 import { ArrowLeft } from "lucide-react"
 import ActiveAthleteSwitcher from "../components/ActiveAthleteSwitcher"
+import ActionConfirmModal from "../components/ActionConfirmModal"
 import AddGoalFormSection from "../components/goals/AddGoalFormSection"
 import GoalSetCard from "../components/goals/GoalSetCard"
 import GoalSetFormSection from "../components/goals/GoalSetFormSection"
@@ -19,10 +20,12 @@ export default function GoalsManager({ navigate }) {
     goalForm,
     lists,
     ui,
+    modal,
     uiActions,
     athleteActions,
     setActions,
     goalActions,
+    modalActions,
   } = useGoalsManagerData()
 
   const handleGoalMetricChange = (nextMetric) => {
@@ -170,6 +173,18 @@ export default function GoalsManager({ navigate }) {
           })}
         </AccordionSection>
       </main>
+
+      {modal && (
+        <ActionConfirmModal
+          title={modal.title}
+          body={modal.body}
+          cancelLabel="Cancel"
+          confirmLabel={modal.confirmLabel}
+          onCancel={modalActions.dismissPendingConfirm}
+          onConfirm={modalActions.confirmPendingAction}
+          widthClass="w-[90%] max-w-sm"
+        />
+      )}
     </div>
   )
 }

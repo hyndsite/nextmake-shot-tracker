@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
+import ActionConfirmModal from "../components/ActionConfirmModal"
 import { SHOT_TYPES, PICKUP_TYPES, FINISH_TYPES } from "../constants/shotTypes"
 import { ZONES } from "../constants/zones"
 import { ZONE_ANCHORS } from "../constants/zoneAnchors"
@@ -107,6 +108,7 @@ export default function GameLogger({ id: gameId, navigate }) {
   const imgRef = useRef(null)
   const [teamScore, setTeamScore] = useState("")
   const [oppScore, setOppScore] = useState("")
+  const [showEndConfirm, setShowEndConfirm] = useState(false)
 
   // Court sizing / anchors
   const [imgNatural, setImgNatural] = useState({ w: 0, h: 0 })
@@ -333,8 +335,12 @@ export default function GameLogger({ id: gameId, navigate }) {
 
   async function onEndGame() {
     if (!game) return
-    const ok = window.confirm("End this game?")
-    if (!ok) return
+    setShowEndConfirm(true)
+  }
+
+  async function confirmEndGame() {
+    if (!game) return
+    setShowEndConfirm(false)
 
     const teamScoreInt =
       teamScore === "" ? null : Number.parseInt(teamScore, 10)
@@ -640,6 +646,18 @@ export default function GameLogger({ id: gameId, navigate }) {
           End Game
         </button>
       </div>
+
+      {showEndConfirm && (
+        <ActionConfirmModal
+          title="End Game"
+          body="End this game?"
+          cancelLabel="Cancel"
+          confirmLabel="End Game"
+          onCancel={() => setShowEndConfirm(false)}
+          onConfirm={confirmEndGame}
+          widthClass="w-[90%] max-w-sm"
+        />
+      )}
 
       {/* Shot modal */}
       {shotModal && (

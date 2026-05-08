@@ -1,3 +1,4 @@
+import ActionConfirmModal from "../components/ActionConfirmModal"
 import DashboardAthletePanel from "../components/DashboardAthletePanel"
 import DashboardCustomizeDrawer from "../components/DashboardCustomizeDrawer"
 import DashboardMetricsSection from "../components/DashboardMetricsSection"
@@ -42,9 +43,12 @@ export default function Dashboard() {
     lastName,
     setLastName,
     error,
+    pendingArchiveAthlete,
     handleSelectAthlete,
     handleAddAthlete,
     handleArchiveAthlete,
+    dismissArchiveAthlete,
+    confirmArchiveAthlete,
   } = useDashboardAthleteActions({
     activeAthlete,
     refreshAthletes,
@@ -131,6 +135,18 @@ export default function Dashboard() {
           addDraftMetric={addDraftMetric}
           removeDraftMetric={removeDraftMetric}
           updateDraftMetric={updateDraftMetric}
+        />
+      )}
+
+      {pendingArchiveAthlete && (
+        <ActionConfirmModal
+          title="Archive Athlete"
+          body={`Archive ${fullName(pendingArchiveAthlete)}?`}
+          cancelLabel="Cancel"
+          confirmLabel="Archive Athlete"
+          onCancel={dismissArchiveAthlete}
+          onConfirm={confirmArchiveAthlete}
+          widthClass="w-[90%] max-w-sm"
         />
       )}
     </div>
