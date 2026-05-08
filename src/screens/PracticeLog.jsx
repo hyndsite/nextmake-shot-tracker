@@ -363,7 +363,7 @@ export default function PracticeLog({ id, started_at, navigate }) {
               {activeList.length > 1 ? (
                 <div className="flex items-center gap-2">
                   <select
-                    className="h-10 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm"
+                    className="h-11 min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900"
                     value={activeId ?? ""}
                     onChange={(e) => setActiveId(e.target.value || null)}
                     aria-label="Switch active session"
