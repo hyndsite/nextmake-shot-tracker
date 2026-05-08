@@ -8,6 +8,23 @@ import {
 import { setActiveAthlete } from "../lib/athlete-db"
 import { usePracticeGateData } from "./usePracticeGateData"
 
+function formatDeleteSessionLabel(session) {
+  const iso = session?.started_at || session?.date_iso
+  if (!iso) return "Unknown session"
+
+  try {
+    const date = new Date(iso)
+    const shortDate = date.toLocaleDateString()
+    const shortTime = date.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    })
+    return `${shortDate} | ${shortTime}`
+  } catch {
+    return iso
+  }
+}
+
 export function usePracticeGateScreen({ navigate }) {
   const chooserRef = useRef(null)
   const {
@@ -23,6 +40,7 @@ export function usePracticeGateScreen({ navigate }) {
   } = usePracticeGateData()
 
   const [existingActiveSession, setExistingActiveSession] = useState(null)
+  const [pendingDeleteSessionId, setPendingDeleteSessionId] = useState(null)
   const [openMonth, setOpenMonth] = useState(null)
   const [showStartCard, setShowStartCard] = useState(false)
   const [showSwitchAthlete, setShowSwitchAthlete] = useState(false)
@@ -106,8 +124,19 @@ export function usePracticeGateScreen({ navigate }) {
     navigate?.("practice-log", { id: session.id, started_at: session.started_at })
   }
 
-  async function deleteSession(id) {
-    await deletePracticeSession(id)
+  function requestDeleteSession(id) {
+    setPendingDeleteSessionId(id)
+  }
+
+  function dismissDeleteSession() {
+    setPendingDeleteSessionId(null)
+  }
+
+  async function confirmDeleteSession() {
+    if (!pendingDeleteSessionId) return
+    const sessionId = pendingDeleteSessionId
+    setPendingDeleteSessionId(null)
+    await deletePracticeSession(sessionId)
     await refresh()
   }
 
@@ -135,6 +164,10 @@ export function usePracticeGateScreen({ navigate }) {
     },
     modal: {
       existingActiveSession,
+      pendingDeleteSessionId,
+      pendingDeleteSessionLabel: formatDeleteSessionLabel(
+        sessions.find((session) => session.id === pendingDeleteSessionId),
+      ),
     },
     startActions: {
       openStartCard,
@@ -149,11 +182,13 @@ export function usePracticeGateScreen({ navigate }) {
       toggleMonth,
       setOpenMonth,
       openSession,
-      deleteSession,
+      requestDeleteSession,
     },
     modalActions: {
       resumeExistingSession,
       dismissExistingSession,
+      confirmDeleteSession,
+      dismissDeleteSession,
     },
   }
 }

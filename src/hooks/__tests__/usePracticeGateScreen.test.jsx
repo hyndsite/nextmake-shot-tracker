@@ -112,12 +112,23 @@ describe("usePracticeGateScreen", () => {
     expect(navigate).not.toHaveBeenCalled()
   })
 
-  it("deletes a session and refreshes data", async () => {
+  it("requests delete and confirms it before refreshing data", async () => {
     const navigate = vi.fn()
     const { result } = renderHook(() => usePracticeGateScreen({ navigate }))
 
+    act(() => {
+      result.current.historyActions.requestDeleteSession("session-1")
+    })
+
+    const expectedLabel = `${new Date("2026-01-10T10:00:00Z").toLocaleDateString()} | ${new Date("2026-01-10T10:00:00Z").toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    })}`
+    expect(result.current.modal.pendingDeleteSessionId).toBe("session-1")
+    expect(result.current.modal.pendingDeleteSessionLabel).toBe(expectedLabel)
+
     await act(async () => {
-      await result.current.historyActions.deleteSession("session-1")
+      await result.current.modalActions.confirmDeleteSession()
     })
 
     expect(deletePracticeSession).toHaveBeenCalledWith("session-1")

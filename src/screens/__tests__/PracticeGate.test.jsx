@@ -311,10 +311,56 @@ describe('PracticeGate Component', () => {
     const deleteButton = within(row).getByLabelText('Delete session')
     await user.click(deleteButton)
 
+    const expectedLabel = `${new Date(janSession.started_at).toLocaleDateString()} | ${new Date(janSession.started_at).toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+    })}`
+    expect(screen.getByText('Delete Practice Session')).toBeInTheDocument()
+    expect(
+      screen.getByText(`Delete ${expectedLabel}? This cannot be undone.`),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByText('Delete Session'))
+
     await waitFor(() => {
       expect(deletePracticeSession).toHaveBeenCalledWith('jan-del')
       expect(listPracticeSessions).toHaveBeenCalledTimes(2)
       expect(listActivePracticeSessions).toHaveBeenCalledTimes(2)
     })
+  })
+
+  it('should not delete a previous session when the delete modal is cancelled', async () => {
+    const janSession = buildSession({
+      id: 'jan-del',
+      started_at: '2026-01-05T10:00:00Z',
+    })
+    listPracticeSessions.mockResolvedValue([janSession])
+
+    const user = userEvent.setup()
+    render(<PracticeGate navigate={mockNavigate} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Previous Sessions')).toBeInTheDocument()
+    })
+
+    const monthButton = screen.getByRole('button', { name: /january/i })
+    await user.click(monthButton)
+
+    const row = screen.getByLabelText('Open session').closest('.practice-session-row')
+    const deleteButton = within(row).getByLabelText('Delete session')
+    await user.click(deleteButton)
+
+    const expectedLabel = `${new Date(janSession.started_at).toLocaleDateString()} | ${new Date(janSession.started_at).toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+    })}`
+    expect(screen.getByText('Delete Practice Session')).toBeInTheDocument()
+    expect(
+      screen.getByText(`Delete ${expectedLabel}? This cannot be undone.`),
+    ).toBeInTheDocument()
+    await user.click(screen.getByText('Cancel'))
+
+    expect(deletePracticeSession).not.toHaveBeenCalled()
+    expect(screen.queryByText('Delete Practice Session')).not.toBeInTheDocument()
   })
 })

@@ -1,4 +1,5 @@
 // src/screens/PracticeGate.jsx
+import ActionConfirmModal from "../components/ActionConfirmModal"
 import PracticeExistingSessionModal from "../components/PracticeExistingSessionModal"
 import PracticeGateStartSection from "../components/PracticeGateStartSection"
 import PracticeSessionHistory from "../components/PracticeSessionHistory"
@@ -30,7 +31,7 @@ export default function PracticeGate({ navigate }) {
         openMonth={historyUi.openMonth}
         setOpenMonth={historyActions.toggleMonth}
         openSession={historyActions.openSession}
-        onDelete={historyActions.deleteSession}
+        onDelete={historyActions.requestDeleteSession}
       />
 
       {/* Existing active session modal */}
@@ -38,6 +39,18 @@ export default function PracticeGate({ navigate }) {
         <PracticeExistingSessionModal
           onCancel={modalActions.dismissExistingSession}
           onResume={modalActions.resumeExistingSession}
+        />
+      )}
+
+      {modal.pendingDeleteSessionId && (
+        <ActionConfirmModal
+          title="Delete Practice Session"
+          body={`Delete ${modal.pendingDeleteSessionLabel}? This cannot be undone.`}
+          cancelLabel="Cancel"
+          confirmLabel="Delete Session"
+          onCancel={modalActions.dismissDeleteSession}
+          onConfirm={modalActions.confirmDeleteSession}
+          widthClass="w-[90%] max-w-sm"
         />
       )}
     </div>
