@@ -500,6 +500,34 @@ describe('PracticeLog Component', () => {
     expect(mockNavigate).toHaveBeenCalledWith('gate')
   })
 
+  it('keeps the end session button available when multiple active sessions are listed', async () => {
+    listPracticeSessions.mockResolvedValue([
+      {
+        id: 'practice-1',
+        started_at: '2025-01-15T10:00:00Z',
+        ended_at: null,
+        status: 'active',
+      },
+      {
+        id: 'practice-2',
+        started_at: '2025-01-16T10:00:00Z',
+        ended_at: null,
+        status: 'active',
+      },
+    ])
+    listEntriesBySession.mockResolvedValue([])
+
+    render(<PracticeLog id="practice-1" navigate={mockNavigate} />)
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('combobox', { name: 'Switch active session' }),
+      ).toBeInTheDocument()
+    })
+
+    expect(screen.getByRole('button', { name: 'End active session' })).toBeInTheDocument()
+  })
+
   it('closes delete modal without deleting when no active session exists', async () => {
     const user = userEvent.setup()
     listPracticeSessions.mockResolvedValue([])

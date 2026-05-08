@@ -363,7 +363,7 @@ export default function PracticeLog({ id, started_at, navigate }) {
               {activeList.length > 1 ? (
                 <div className="flex items-center gap-2">
                   <select
-                    className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm flex-1"
+                    className="h-10 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm"
                     value={activeId ?? ""}
                     onChange={(e) => setActiveId(e.target.value || null)}
                     aria-label="Switch active session"
@@ -374,6 +374,16 @@ export default function PracticeLog({ id, started_at, navigate }) {
                       </option>
                     ))}
                   </select>
+                  {isTrulyActive && (
+                    <button
+                      type="button"
+                      onClick={onEndActive}
+                      className="btn btn-danger h-9 shrink-0 whitespace-nowrap px-4 text-xs font-semibold shadow-sm"
+                      aria-label="End active session"
+                    >
+                      End Session
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
