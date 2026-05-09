@@ -312,8 +312,11 @@ describe('PracticeLog Component', () => {
 
     await user.click(screen.getByRole('button', { name: 'Delete practice entry' }))
     expect(screen.getByText('Delete Practice Entry')).toBeInTheDocument()
+    expect(
+      screen.getByText('Delete L Corner 3? This cannot be undone.'),
+    ).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'OK' }))
+    await user.click(screen.getByRole('button', { name: 'Delete Entry' }))
 
     await waitFor(() => {
       expect(deleteEntry).toHaveBeenCalledWith('entry-1')
@@ -398,12 +401,9 @@ describe('PracticeLog Component', () => {
 
     await user.click(screen.getByRole('button', { name: 'Delete practice entry' }))
     expect(screen.getByText('Delete Practice Entry')).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Close' }))
-    expect(screen.queryByText('Delete Practice Entry')).not.toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Delete practice entry' }))
-    expect(screen.getByText('Delete Practice Entry')).toBeInTheDocument()
+    expect(
+      screen.getByText('Delete L Corner 3? This cannot be undone.'),
+    ).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByText('Delete Practice Entry')).not.toBeInTheDocument()
@@ -597,7 +597,7 @@ describe('PracticeLog Component', () => {
     await user.click(screen.getByRole('button', { name: 'Delete practice entry' }))
     expect(screen.getByText('Delete Practice Entry')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'OK' }))
+    await user.click(screen.getByRole('button', { name: 'Delete Entry' }))
     expect(deleteEntry).not.toHaveBeenCalled()
     expect(screen.queryByText('Delete Practice Entry')).not.toBeInTheDocument()
   })

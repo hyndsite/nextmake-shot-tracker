@@ -16,6 +16,7 @@ import {
   FINISH_TYPES,
   MOVEMENT_LEVELS,
 } from "../constants/shotTypes"
+import ActionConfirmModal from "../components/ActionConfirmModal"
 import { ArrowLeft, Edit2, Trash2, X } from "lucide-react"
 
 const ZONE_OPTIONS = ZONES.map((z) => ({ value: z.id, label: z.label }))
@@ -1010,38 +1011,20 @@ export default function PracticeLog({ id, started_at, navigate }) {
       )}
 
       {deleteOpen && (
-        <ModalShell
+        <ActionConfirmModal
           title="Delete Practice Entry"
-          onClose={() => {
+          body={`Delete ${
+            ZONE_LABEL_BY_ID[deleteRow?.zone_id] || deleteRow?.zone_id || "entry"
+          }? This cannot be undone.`}
+          cancelLabel="Cancel"
+          confirmLabel="Delete Entry"
+          onCancel={() => {
             setDeleteOpen(false)
             setDeleteRow(null)
           }}
-        >
-          <div className="text-sm text-slate-700">
-            You are about to delete this practice entry from the session. This
-            action will sync to Supabase when online.
-          </div>
-
-          <div className="flex items-center justify-end gap-2 pt-4">
-            <button
-              type="button"
-              className="btn h-10 rounded-lg text-sm font-medium border border-slate-200 bg-white"
-              onClick={() => {
-                setDeleteOpen(false)
-                setDeleteRow(null)
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="btn btn-danger h-10 rounded-lg text-sm font-medium"
-              onClick={onConfirmDelete}
-            >
-              OK
-            </button>
-          </div>
-        </ModalShell>
+          onConfirm={onConfirmDelete}
+          widthClass="w-[90%] max-w-sm"
+        />
       )}
     </div>
   )
