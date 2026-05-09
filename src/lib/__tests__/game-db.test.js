@@ -773,6 +773,27 @@ describe('game-db', () => {
 
       expect(result.map((r) => r.id)).toEqual(['e1', 'e3'])
     })
+
+    it('should normalize legacy catch and shoot events with null movement level to static', async () => {
+      mockKeys.mockResolvedValue(['e1'])
+      mockGet.mockResolvedValueOnce({
+        id: 'e1',
+        game_id: 'game-1',
+        shot_type: 'catch_shoot',
+        movement_level: null,
+        ts: '2024-01-15T12:00:00Z',
+        _deleted: false,
+      })
+
+      const result = await listGameEventsBySession('game-1')
+
+      expect(result[0].movement_level).toBe('static')
+      expect(mockSet).toHaveBeenCalledWith(
+        'e1',
+        expect.objectContaining({ movement_level: 'static' }),
+        st.game.events,
+      )
+    })
   })
 
   describe('_allDirtyGame', () => {

@@ -904,6 +904,32 @@ describe('practice-db', () => {
       expect(result).toHaveLength(2)
       expect(result.map((r) => r.id)).toEqual(['e1', 'e3'])
     })
+
+    it('should normalize legacy catch and shoot entries with null movement level to static', async () => {
+      const entry = {
+        id: 'e1',
+        session_id: 'session-1',
+        shot_type: 'catch_shoot',
+        movement_level: null,
+        ts: '2024-01-15T12:00:00Z',
+        _deleted: false,
+      }
+
+      mockGet.mockImplementation((key) => {
+        if (key === '__index__') return Promise.resolve(['e1'])
+        if (key === 'e1') return Promise.resolve(entry)
+        return Promise.resolve(null)
+      })
+
+      const result = await listEntriesBySession('session-1')
+
+      expect(result[0].movement_level).toBe('static')
+      expect(mockSet).toHaveBeenCalledWith(
+        'e1',
+        expect.objectContaining({ movement_level: 'static' }),
+        st.practice.entries,
+      )
+    })
   })
 
   describe('_allDirtyPractice', () => {

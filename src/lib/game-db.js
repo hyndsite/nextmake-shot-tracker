@@ -9,6 +9,7 @@ import { formatGameLevelLabel } from "../constants/programLevel"
 
 const ready = whenIdbReady()
 const nowISO = () => new Date().toISOString()
+const CATCH_SHOOT_SHOT_TYPE = "catch_shoot"
 
 export const st = {
   game: {
@@ -31,6 +32,13 @@ function belongsToActiveAthlete(rowAthleteId) {
   // Legacy rows may not have athlete_id yet; keep visible until full backfill.
   if (!rowAthleteId) return true
   return rowAthleteId === activeAthleteId
+}
+
+function normalizeCatchShootMovementLevel(row) {
+  if (!row) return row
+  if (row.shot_type !== CATCH_SHOOT_SHOT_TYPE) return row
+  if (row.movement_level) return row
+  return { ...row, movement_level: "static" }
 }
 
 /**
@@ -357,7 +365,9 @@ export async function listGameEventsBySession(gameId) {
   const out = []
   const allKeys = await keys(st.game.events)
   for (const k of allKeys) {
-    const ev = await get(k, st.game.events)
+    const raw = await get(k, st.game.events)
+    const ev = normalizeCatchShootMovementLevel(raw)
+    if (ev && raw && ev !== raw) await set(k, ev, st.game.events)
     if (
       ev?.game_id === gameId &&
       !ev._deleted &&
@@ -480,13 +490,13 @@ export async function upsertGameEventsFromRemote(rows = []) {
   for (const remote of rows) {
     if (!remote?.id) continue
     const existing = await get(remote.id, st.game.events)
-    const merged = {
+    const merged = normalizeCatchShootMovementLevel({
       ...(existing || {}),
       ...remote,
       _dirty: false,
       _deleted: false,
       _table: "game_events",
-    }
+    })
     await set(remote.id, merged, st.game.events)
   }
 }

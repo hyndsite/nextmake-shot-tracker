@@ -26,8 +26,8 @@ import { whenIdbReady } from "./lib/idb-init"
 const LAST_ROUTE_KEY = "nm_last_route"
 
 export default function App() {
-  // high-level screen: "login" | "app"
-  const [screen, setScreen] = useState("login")
+  // high-level screen: "boot" | "login" | "app"
+  const [screen, setScreen] = useState("boot")
 
   // bootPhase: controls loading while we hydrate from Supabase
   const [bootPhase, setBootPhase] = useState("checking") // "checking" | "bootstrapping" | "ready"
@@ -79,32 +79,32 @@ export default function App() {
     async function init() {
       setBootPhase("checking")
       try {
-        const { data } = await supabase.auth.getUser()
+        const { data, error } = await supabase.auth.getSession()
+        if (error) throw error
         if (cancelled) return
 
-        const user = data?.user ?? null
-        if (!user) {
+        const session = data?.session ?? null
+        const user = session?.user ?? null
+        if (!session || !user) {
           // no active session → show Login
           setScreen("login")
           setBootPhase("ready")
           return
         }
-        // active user → load data, then enter app shell
-        setBootPhase("bootstrapping")
-
-        try {
-          await bootstrapAllData()
-        } catch (err) {
-          console.error("[App] bootstrapAllData failed", err)
-        }
-
-        if (cancelled) return
+        // active user → enter the app shell immediately, then hydrate data
         restoreLastRoute()
-        setBootPhase("ready")
-
-        // Show Dashboard as the first screen after refresh
         setActiveTab("dashboard")
         setScreen("app")
+        setBootPhase("bootstrapping")
+
+        void bootstrapAllData(user.id)
+          .catch((err) => {
+            console.error("[App] bootstrapAllData failed", err)
+          })
+          .finally(() => {
+            if (!cancelled) setBootPhase("ready")
+          })
+
       } catch (err) {
         console.error("[App] auth check failed", err)
         if (!cancelled) {
@@ -151,12 +151,21 @@ export default function App() {
     await supabase.auth.signOut()
     localStorage.removeItem(LAST_ROUTE_KEY)
     setScreen("login")
+    setBootPhase("ready")
     setActiveTab("dashboard")
     setGameRoute({ screen: "gate", params: {} })
     setPracticeRoute({ screen: "gate", params: {} })
   }
 
   // ---------- render gates ----------
+
+  if (screen === "boot") {
+    return (
+      <div className="w-full min-h-dvh flex items-center justify-center bg-slate-50">
+        <div className="text-sm text-slate-600">Checking your session…</div>
+      </div>
+    )
+  }
 
   // 1) No active user → login
   if (screen === "login") {

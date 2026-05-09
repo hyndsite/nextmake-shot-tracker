@@ -20,6 +20,14 @@ export const st = {
 const IDX_KEY = "__index__"
 const todayISO = () => new Date().toISOString().slice(0, 10)
 const nowISO = () => new Date().toISOString()
+const CATCH_SHOOT_SHOT_TYPE = "catch_shoot"
+
+function normalizeCatchShootMovementLevel(row) {
+  if (!row) return row
+  if (row.shot_type !== CATCH_SHOOT_SHOT_TYPE) return row
+  if (row.movement_level) return row
+  return { ...row, movement_level: "static" }
+}
 
 function belongsToActiveAthlete(rowAthleteId) {
   const activeAthleteId = getActiveAthleteId()
@@ -404,7 +412,9 @@ export async function listEntriesBySession(sessionId) {
   const ids = await readIndex(st.practice.entries)
   const rows = []
   for (const id of ids) {
-    const e = await get(id, st.practice.entries)
+    const raw = await get(id, st.practice.entries)
+    const e = normalizeCatchShootMovementLevel(raw)
+    if (e && raw && e !== raw) await set(id, e, st.practice.entries)
     if (
       e?.session_id === sessionId &&
       !e._deleted &&
@@ -465,13 +475,13 @@ export async function upsertPracticeEntriesFromRemote(rows = []) {
   for (const remote of rows) {
     if (!remote?.id) continue
     const existing = await get(remote.id, st.practice.entries)
-    const merged = {
+    const merged = normalizeCatchShootMovementLevel({
       ...(existing || {}),
       ...remote,
       _dirty: false,
       _deleted: false,
       _table: "practice_entries",
-    }
+    })
     await set(remote.id, merged, st.practice.entries)
     await addToIndex(st.practice.entries, remote.id)
   }

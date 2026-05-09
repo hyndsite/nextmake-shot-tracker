@@ -155,6 +155,35 @@ describe('sync', () => {
   }
 
   describe('bootstrapAllData', () => {
+    it('should use the provided user id without calling auth.getUser again', async () => {
+      const mockQuery = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+      }
+
+      mockSupabase.from.mockReturnValue(mockQuery)
+      mockQuery.order
+        .mockResolvedValueOnce({ data: [], error: null })
+        .mockResolvedValueOnce({ data: [], error: null })
+        .mockResolvedValueOnce({ data: [], error: null })
+        .mockResolvedValueOnce({ data: [], error: null })
+        .mockResolvedValueOnce({ data: [], error: null })
+
+      const result = await bootstrapAllData('override-user')
+
+      expect(result).toEqual({
+        user: { id: 'override-user' },
+        gameSessionsCount: 0,
+        gameEventsCount: 0,
+        practiceSessionsCount: 0,
+        practiceEntriesCount: 0,
+        practiceMarkersCount: 0,
+      })
+      expect(mockSupabase.auth.getUser).not.toHaveBeenCalled()
+      expect(mockQuery.eq).toHaveBeenCalledWith('user_id', 'override-user')
+    })
+
     it('should load all data from Supabase for authenticated user', async () => {
       const mockGameSessions = [
         { id: 'gs1', user_id: 'test-user-123', date_iso: '2024-01-15' },

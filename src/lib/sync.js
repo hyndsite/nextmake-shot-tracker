@@ -32,14 +32,20 @@ let unsubAuth = null,
   intervalId = null
 
 // --------- bootstrap ALL data (game + practice) on app refresh ----------
-export async function bootstrapAllData() {
-  // 1) Check auth
-  const { data, error } = await supabase.auth.getUser()
-  if (error) throw error
-  const user = data?.user
-  if (!user) return { user: null }
+export async function bootstrapAllData(userIdOverride = null) {
+  // 1) Check auth unless caller already resolved the user id.
+  let user = null
+  let userId = userIdOverride || null
 
-  const userId = user.id
+  if (!userId) {
+    const { data, error } = await supabase.auth.getUser()
+    if (error) throw error
+    user = data?.user ?? null
+    if (!user) return { user: null }
+    userId = user.id
+  } else {
+    user = { id: userId }
+  }
 
   // 2) Pull all relevant rows for this user
   const [
