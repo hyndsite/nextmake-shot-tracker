@@ -705,6 +705,7 @@ describe('GameLogger Component', () => {
         expect(within(finishSection).getByText('Overhand')).toBeInTheDocument()
         expect(within(finishSection).getByText('Underhand')).toBeInTheDocument()
         expect(within(finishSection).getByText('Floater')).toBeInTheDocument()
+        expect(within(finishSection).getByText('Reverse')).toBeInTheDocument()
       })
     })
 
@@ -880,8 +881,8 @@ describe('GameLogger Component', () => {
       const highPickup = within(modal).getByText('High')
       await user.click(highPickup)
 
-      const overhand = within(modal).getByText('Overhand')
-      await user.click(overhand)
+      const reverse = within(modal).getByText('Reverse')
+      await user.click(reverse)
 
       const makeButton = within(modal).getByText('Make').closest('button')
       await user.click(makeButton)
@@ -891,7 +892,7 @@ describe('GameLogger Component', () => {
           expect.objectContaining({
             shot_type: 'layup',
             pickup_type: 'high_pickup',
-            finish_type: 'overhand',
+            finish_type: 'reverse',
           })
         )
       })

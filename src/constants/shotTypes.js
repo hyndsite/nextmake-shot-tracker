@@ -20,6 +20,7 @@ export const FINISH_TYPES = [
   { value: "overhand", label: "Overhand" },
   { value: "underhand", label: "Underhand" },
   { value: "floater", label: "Floater" },
+  { value: "reverse", label: "Reverse" },
 ]
 
 export const MOVEMENT_LEVELS = [

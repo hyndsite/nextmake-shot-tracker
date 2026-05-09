@@ -125,7 +125,7 @@ describe('PracticeLog Component', () => {
     await user.selectOptions(shotTypeSelect, 'layup')
 
     await user.click(screen.getByRole('button', { name: 'High' }))
-    await user.click(screen.getByRole('button', { name: 'Overhand' }))
+    await user.click(screen.getByRole('button', { name: 'Reverse' }))
     await user.click(screen.getByRole('button', { name: 'Uncontested' }))
 
     const [attemptsInput, makesInput] = screen.getAllByRole('spinbutton')
@@ -150,7 +150,7 @@ describe('PracticeLog Component', () => {
         makes: 3,
         movementLevel: null,
         pickupType: 'high_pickup',
-        finishType: 'overhand',
+        finishType: 'reverse',
       })
     )
     expect(addMarker).toHaveBeenCalledWith({ sessionId: 'practice-1', label: 'Set' })
