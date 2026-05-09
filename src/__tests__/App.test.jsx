@@ -70,7 +70,8 @@ describe("App auth boot flow", () => {
 
     expect(screen.queryByText("Login Screen")).not.toBeInTheDocument()
     await waitFor(() => {
-      expect(screen.getByText("Loading your data…")).toBeInTheDocument()
+      expect(screen.getByAltText("NextMake")).toBeInTheDocument()
+      expect(screen.getByLabelText("Loading")).toBeInTheDocument()
     })
 
     await act(async () => {

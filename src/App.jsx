@@ -25,6 +25,24 @@ import { whenIdbReady } from "./lib/idb-init"
 
 const LAST_ROUTE_KEY = "nm_last_route"
 
+function BootSplash() {
+  return (
+    <div className="w-full min-h-dvh flex items-center justify-center bg-slate-50 px-6">
+      <div className="flex flex-col items-center gap-5">
+        <img
+          src="/icons/icon-192.png"
+          alt="NextMake"
+          className="h-20 w-20 rounded-3xl shadow-sm"
+        />
+        <div
+          className="h-6 w-6 rounded-full border-[3px] border-slate-200 border-t-sky-600 animate-spin"
+          aria-label="Loading"
+        />
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   // high-level screen: "boot" | "login" | "app"
   const [screen, setScreen] = useState("boot")
@@ -160,11 +178,7 @@ export default function App() {
   // ---------- render gates ----------
 
   if (screen === "boot") {
-    return (
-      <div className="w-full min-h-dvh flex items-center justify-center bg-slate-50">
-        <div className="text-sm text-slate-600">Checking your session…</div>
-      </div>
-    )
+    return <BootSplash />
   }
 
   // 1) No active user → login
@@ -174,11 +188,7 @@ export default function App() {
 
   // 3) Authenticated app, but still bootstrapping from Supabase
   if (screen === "app" && bootPhase !== "ready") {
-    return (
-      <div className="w-full min-h-dvh flex items-center justify-center bg-slate-50">
-        <div className="text-sm text-slate-600">Loading your data…</div>
-      </div>
-    )
+    return <BootSplash />
   }
 
   // 4) Normal app
