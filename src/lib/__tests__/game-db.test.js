@@ -603,6 +603,23 @@ describe('game-db', () => {
       expect(result.finish_type).toBe('left_hand')
     })
 
+    it('should persist movement level for catch and shoot game events', async () => {
+      mockGet.mockResolvedValue(null)
+      mockKeys.mockResolvedValue([])
+
+      const input = {
+        game_id: 'game-1',
+        type: 'shot',
+        shot_type: 'catch_shoot',
+        movement_level: 'relocation',
+        made: true,
+      }
+
+      const result = await addGameEvent(input)
+
+      expect(result.movement_level).toBe('relocation')
+    })
+
     it('should accept custom timestamp', async () => {
       mockGet.mockResolvedValue(null)
       mockKeys.mockResolvedValue([])

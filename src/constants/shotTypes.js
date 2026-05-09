@@ -16,9 +16,15 @@
     { value: "outside_hand_pickup", label: "OutHand" },
   ]
 
-  export const FINISH_TYPES = [
-    { value: "overhand", label: "Overhand" },
-    { value: "underhand", label: "Underhand" },
-    { value: "floater", label: "Floater" },
-  ]
+export const FINISH_TYPES = [
+  { value: "overhand", label: "Overhand" },
+  { value: "underhand", label: "Underhand" },
+  { value: "floater", label: "Floater" },
+]
+
+export const MOVEMENT_LEVELS = [
+  { value: "static", label: "Static" },
+  { value: "relocation", label: "Relocation" },
+  { value: "on_the_move", label: "On The Move" },
+]
     

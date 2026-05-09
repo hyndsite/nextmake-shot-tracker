@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import ActionConfirmModal from "../components/ActionConfirmModal"
-import { SHOT_TYPES, PICKUP_TYPES, FINISH_TYPES } from "../constants/shotTypes"
+import {
+  SHOT_TYPES,
+  PICKUP_TYPES,
+  FINISH_TYPES,
+  MOVEMENT_LEVELS,
+} from "../constants/shotTypes"
 import { ZONES } from "../constants/zones"
 import { ZONE_ANCHORS } from "../constants/zoneAnchors"
 import {
@@ -275,6 +280,7 @@ export default function GameLogger({ id: gameId, navigate }) {
       isThree: !!z?.isThree,
       shotTypeId: null, // must pick
       contested: false,
+      movementLevel: "static",
       pickupType: null,
       finishType: null,
     })
@@ -291,6 +297,8 @@ export default function GameLogger({ id: gameId, navigate }) {
       isThree: !!ev.is_three,
       shotTypeId: ev.shot_type || null, // stored as id
       contested: !!ev.contested,
+      movementLevel:
+        ev.shot_type === "catch_shoot" ? ev.movement_level ?? "static" : "static",
       pickupType: ev.pickup_type ?? null,
       finishType: ev.finish_type ?? null,
     })
@@ -304,10 +312,12 @@ export default function GameLogger({ id: gameId, navigate }) {
     shotTypeId, // canonical id (e.g., 'layup', 'catch_shoot', 'off_dribble')
     contested,
     made,
+    movementLevel,
     pickupType, // canonical value (e.g., 'football_pickup')
     finishType, // canonical value (e.g., 'underhand')
   }) {
     const isLayup = shotTypeId === "layup"
+    const isCatchShoot = shotTypeId === "catch_shoot"
 
     await addGameEvent({
       // If editing, pass the id so sync uses UPSERT/UPDATE
@@ -321,6 +331,7 @@ export default function GameLogger({ id: gameId, navigate }) {
       shot_type: shotTypeId,
       contested: !!contested,
       made: !!made,
+      movement_level: isCatchShoot ? movementLevel ?? "static" : null,
 
       // Only layups carry these; otherwise force null
       pickup_type: isLayup ? pickupType ?? null : null,
@@ -745,6 +756,9 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
   const [contested, setContested] = useState(
     typeof data.contested === "boolean" ? data.contested : false,
   )
+  const [movementLevel, setMovementLevel] = useState(
+    data.movementLevel ?? "static",
+  )
 
   // Layup metadata uses canonical constraint values
   const [pickupType, setPickupType] = useState(data.pickupType ?? null)
@@ -766,6 +780,7 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
   const canSubmit = hasShotType
 
   const isLayup = shotTypeId === "layup"
+  const isCatchShoot = shotTypeId === "catch_shoot"
 
   function pickupButtonLabel(pt) {
     if (pt.value === "inside_hand_pickup") return "Inside"
@@ -798,7 +813,14 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
                 <button
                   key={st.id}
                   type="button"
-                  onClick={() => setShotTypeId(st.id)}
+                  onClick={() => {
+                    setShotTypeId(st.id)
+                    if (st.id !== "catch_shoot") setMovementLevel("static")
+                    if (st.id !== "layup") {
+                      setPickupType(null)
+                      setFinishType(null)
+                    }
+                  }}
                   className={`shot-type-btn ${selected ? "selected" : ""}`}
                 >
                   {st.label}
@@ -807,6 +829,29 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
             })}
           </div>
         </div>
+
+        {isCatchShoot && (
+          <div className="mb-3">
+            <label
+              htmlFor="game-shot-movement-level"
+              className="block text-sm text-slate-700 mb-1"
+            >
+              Movement Level
+            </label>
+            <select
+              id="game-shot-movement-level"
+              className="input w-full"
+              value={movementLevel}
+              onChange={(e) => setMovementLevel(e.target.value)}
+            >
+              {MOVEMENT_LEVELS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Layup metadata */}
         {isLayup && (
@@ -885,6 +930,7 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
               onMiss({
                 shotTypeId,
                 contested: isContested,
+                movementLevel,
                 pickupType,
                 finishType,
               })
@@ -903,6 +949,7 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
               onMake({
                 shotTypeId,
                 contested: isContested,
+                movementLevel,
                 pickupType,
                 finishType,
               })

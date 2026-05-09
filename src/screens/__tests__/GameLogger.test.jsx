@@ -93,6 +93,7 @@ describe('GameLogger Component', () => {
       type: 'shot',
       zone_id: 'left_corner_3',
       shot_type: 'catch_shoot',
+      movement_level: 'relocation',
       is_three: true,
       made: true,
       contested: false,
@@ -785,6 +786,9 @@ describe('GameLogger Component', () => {
       const modal = await openShotModal(user, 'left_corner_3')
       const catchShootButton = within(modal).getByText('Catch & Shoot')
       await user.click(catchShootButton)
+      const movementLevelSelect = within(modal).getByLabelText('Movement Level')
+      expect(movementLevelSelect).toHaveValue('static')
+      await user.selectOptions(movementLevelSelect, 'on_the_move')
 
       const makeButton = within(modal).getByText('Make').closest('button')
       await user.click(makeButton)
@@ -798,6 +802,7 @@ describe('GameLogger Component', () => {
             zone_id: 'left_corner_3',
             is_three: true,
             shot_type: 'catch_shoot',
+            movement_level: 'on_the_move',
             contested: false,
             made: true,
           })
@@ -899,6 +904,7 @@ describe('GameLogger Component', () => {
       const modal = await openShotModal(user, 'left_corner_3')
       const catchShootButton = within(modal).getByText('Catch & Shoot')
       await user.click(catchShootButton)
+      expect(within(modal).getByLabelText('Movement Level')).toHaveValue('static')
 
       const makeButton = within(modal).getByText('Make').closest('button')
       await user.click(makeButton)
@@ -907,6 +913,7 @@ describe('GameLogger Component', () => {
         expect(addGameEvent).toHaveBeenCalledWith(
           expect.objectContaining({
             shot_type: 'catch_shoot',
+            movement_level: 'static',
             pickup_type: null,
             finish_type: null,
           })
@@ -970,6 +977,7 @@ describe('GameLogger Component', () => {
         const modal = getShotModal()
         const catchShootButton = within(modal).getByText('Catch & Shoot')
         expect(catchShootButton).toHaveClass('selected')
+        expect(within(modal).getByLabelText('Movement Level')).toHaveValue('relocation')
       })
     })
 
@@ -1035,6 +1043,41 @@ describe('GameLogger Component', () => {
           expect.objectContaining({
             id: 'event-1',
             shot_type: 'off_dribble',
+            movement_level: null,
+            made: false,
+          })
+        )
+      })
+    })
+
+    it('should update movement level when editing a catch and shoot shot', async () => {
+      const user = userEvent.setup()
+      render(<GameLogger id="game-123" navigate={mockNavigate} />)
+
+      await waitFor(() => {
+        expect(screen.getByText('Shot Attempts')).toBeInTheDocument()
+      })
+
+      const shotAttempts = screen.getByText('Shot Attempts').closest('section')
+      const shotRow = within(shotAttempts).getByText('3 pointer').closest('button')
+      await user.click(shotRow)
+
+      await waitFor(() => {
+        expect(getShotModal()).toBeTruthy()
+      })
+
+      const modal = getShotModal()
+      await user.selectOptions(within(modal).getByLabelText('Movement Level'), 'static')
+
+      const missButton = within(modal).getByText('Miss').closest('button')
+      await user.click(missButton)
+
+      await waitFor(() => {
+        expect(addGameEvent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: 'event-1',
+            shot_type: 'catch_shoot',
+            movement_level: 'static',
             made: false,
           })
         )

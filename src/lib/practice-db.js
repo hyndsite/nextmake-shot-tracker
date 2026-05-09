@@ -114,6 +114,7 @@ export async function addEntry({
   athlete_id,
   zoneId,
   shotType,
+  movementLevel = null,
   // Canonical name is `contested`.
   // We still accept legacy `pressured` so older callers don't break.
   contested,
@@ -149,6 +150,7 @@ export async function addEntry({
     session_id: sessionId,
     zone_id: zoneId,
     shot_type: shotType,
+    movement_level: movementLevel,
     // layup metadata
     pickup_type: pickupType,
     finish_type: finishType,
@@ -177,6 +179,7 @@ export async function updateEntry({
   sessionId,
   zoneId,
   shotType,
+  movementLevel,
   contested,
   attempts = 0,
   makes = 0,
@@ -194,6 +197,8 @@ export async function updateEntry({
     session_id: sessionId ?? cur.session_id,
     zone_id: zoneId ?? cur.zone_id,
     shot_type: typeof shotType === "undefined" ? cur.shot_type : shotType,
+    movement_level:
+      typeof movementLevel === "undefined" ? cur.movement_level ?? null : movementLevel,
     contested: typeof contested === "undefined" ? cur.contested : !!contested,
     attempts: Number(attempts),
     makes: Number(makes),

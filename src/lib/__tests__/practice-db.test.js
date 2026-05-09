@@ -327,6 +327,21 @@ describe('practice-db', () => {
       expect(result.finish_type).toBe('right_hand')
     })
 
+    it('should persist movement level for catch and shoot entries', async () => {
+      const input = {
+        sessionId: 'session-1',
+        zoneId: 'zone-1',
+        shotType: 'catch_shoot',
+        movementLevel: 'relocation',
+        attempts: 8,
+        makes: 6,
+      }
+
+      const result = await addEntry(input)
+
+      expect(result.movement_level).toBe('relocation')
+    })
+
     it('should accept custom timestamp', async () => {
       const input = {
         sessionId: 'session-1',
@@ -461,6 +476,35 @@ describe('practice-db', () => {
       })
 
       expect(result.contested).toBe(true)
+    })
+
+    it('should update movement level on an existing practice entry', async () => {
+      const existingEntry = {
+        id: 'entry-1',
+        session_id: 'session-1',
+        zone_id: 'zone-1',
+        shot_type: 'catch_shoot',
+        movement_level: 'static',
+        contested: false,
+        attempts: 5,
+        makes: 3,
+        ts: '2024-01-15T10:00:00Z',
+      }
+
+      mockGet.mockImplementation((key) => {
+        if (key === 'entry-1') return Promise.resolve(existingEntry)
+        if (key === '__index__') return Promise.resolve(['entry-1'])
+        return Promise.resolve(null)
+      })
+
+      const result = await updateEntry({
+        id: 'entry-1',
+        movementLevel: 'on_the_move',
+        attempts: 10,
+        makes: 7,
+      })
+
+      expect(result.movement_level).toBe('on_the_move')
     })
 
     it('should update layup metadata', async () => {

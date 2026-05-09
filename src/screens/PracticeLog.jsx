@@ -10,7 +10,12 @@ import {
   deleteEntry,
 } from "../lib/practice-db"
 import { ZONES } from "../constants/zones"
-import { SHOT_TYPES, PICKUP_TYPES, FINISH_TYPES } from "../constants/shotTypes"
+import {
+  SHOT_TYPES,
+  PICKUP_TYPES,
+  FINISH_TYPES,
+  MOVEMENT_LEVELS,
+} from "../constants/shotTypes"
 import { ArrowLeft, Edit2, Trash2, X } from "lucide-react"
 
 const ZONE_OPTIONS = ZONES.map((z) => ({ value: z.id, label: z.label }))
@@ -33,6 +38,13 @@ const LAYUP_SHOT_TYPE_ID =
       s.id === "layup" ||
       (s.label && s.label.toLowerCase().includes("layup")),
   )?.id || "layup"
+
+const CATCH_SHOOT_SHOT_TYPE_ID =
+  SHOT_TYPES.find(
+    (s) =>
+      s.id === "catch_shoot" ||
+      (s.label && s.label.toLowerCase().includes("catch")),
+  )?.id || "catch_shoot"
 
 function fmtDT(iso) {
   try {
@@ -103,6 +115,7 @@ export default function PracticeLog({ id, started_at, navigate }) {
 
   const [pickupType, setPickupType] = useState(null)
   const [finishType, setFinishType] = useState(null)
+  const [movementLevel, setMovementLevel] = useState("static")
 
   const [editOpen, setEditOpen] = useState(false)
   const [editRow, setEditRow] = useState(null)
@@ -113,6 +126,7 @@ export default function PracticeLog({ id, started_at, navigate }) {
   const [editMakes, setEditMakes] = useState("")
   const [editPickupType, setEditPickupType] = useState(null)
   const [editFinishType, setEditFinishType] = useState(null)
+  const [editMovementLevel, setEditMovementLevel] = useState("static")
 
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteRow, setDeleteRow] = useState(null)
@@ -124,6 +138,7 @@ export default function PracticeLog({ id, started_at, navigate }) {
 
   const isFreeThrowZone = zoneId === FREE_THROW_ZONE_ID
   const isLayupShotType = shotTypeId === LAYUP_SHOT_TYPE_ID
+  const isCatchShootShotType = shotTypeId === CATCH_SHOOT_SHOT_TYPE_ID
 
   const attemptsNum = Number(attempts || 0)
   const makesNum = Number(makes || 0)
@@ -248,6 +263,8 @@ export default function PracticeLog({ id, started_at, navigate }) {
       attempts: a,
       makes: m,
       ts: new Date().toISOString(),
+      movementLevel:
+        effectiveShotType === CATCH_SHOOT_SHOT_TYPE_ID ? movementLevel : null,
       pickupType: isLayup ? pickupType : null,
       finishType: isLayup ? finishType : null,
     })
@@ -257,6 +274,7 @@ export default function PracticeLog({ id, started_at, navigate }) {
     // Clear (blank), not forced 0
     setAttempts("")
     setMakes("")
+    setMovementLevel("static")
     setPickupType(null)
     setFinishType(null)
 
@@ -278,6 +296,7 @@ export default function PracticeLog({ id, started_at, navigate }) {
     const st = row.shot_type ?? ""
     const isFT = z === FREE_THROW_ZONE_ID
     const isLayup = st === LAYUP_SHOT_TYPE_ID
+    const isCatchShoot = st === CATCH_SHOOT_SHOT_TYPE_ID
 
     setEditRow(row)
     setEditZoneId(z)
@@ -285,6 +304,9 @@ export default function PracticeLog({ id, started_at, navigate }) {
     setEditContested(isFT ? false : !!row.contested)
     setEditAttempts(Number(row.attempts ?? ""))
     setEditMakes(Number(row.makes ?? ""))
+    setEditMovementLevel(
+      isCatchShoot ? row.movement_level ?? "static" : "static",
+    )
     setEditPickupType(isLayup ? row.pickup_type ?? null : null)
     setEditFinishType(isLayup ? row.finish_type ?? null : null)
     setEditOpen(true)
@@ -326,6 +348,10 @@ export default function PracticeLog({ id, started_at, navigate }) {
       attempts: Number(editAttempts || 0),
       makes: Number(editMakes || 0),
       ts: editRow.ts,
+      movementLevel:
+        effectiveShotType === CATCH_SHOOT_SHOT_TYPE_ID
+          ? editMovementLevel
+          : null,
       pickupType: isLayup ? editPickupType : null,
       finishType: isLayup ? editFinishType : null,
     })
@@ -450,8 +476,11 @@ export default function PracticeLog({ id, started_at, navigate }) {
         <section className="card">
           <div className="grid gap-3">
             <div className="grid grid-cols-3 gap-3 items-center">
-              <label className="label col-span-1">Zone</label>
+              <label htmlFor="practice-zone" className="label col-span-1">
+                Zone
+              </label>
               <select
+                id="practice-zone"
                 className="input col-span-2"
                 value={zoneId}
                 onChange={(e) => {
@@ -469,13 +498,19 @@ export default function PracticeLog({ id, started_at, navigate }) {
             </div>
 
             <div className="grid grid-cols-3 gap-3 items-center">
-              <label className="label col-span-1">Shot Type</label>
+              <label htmlFor="practice-shot-type" className="label col-span-1">
+                Shot Type
+              </label>
               <select
+                id="practice-shot-type"
                 className="input col-span-2"
                 value={shotTypeId}
                 onChange={(e) => {
                   const v = e.target.value
                   setShotTypeId(v)
+                  if (v !== CATCH_SHOOT_SHOT_TYPE_ID) {
+                    setMovementLevel("static")
+                  }
                   if (v !== LAYUP_SHOT_TYPE_ID) {
                     setPickupType(null)
                     setFinishType(null)
@@ -490,6 +525,26 @@ export default function PracticeLog({ id, started_at, navigate }) {
                 ))}
               </select>
             </div>
+
+            {isCatchShootShotType && !isFreeThrowZone && (
+              <div className="grid grid-cols-3 gap-3 items-center">
+                <label htmlFor="movement-level" className="label col-span-1">
+                  Movement Level
+                </label>
+                <select
+                  id="movement-level"
+                  className="input col-span-2"
+                  value={movementLevel}
+                  onChange={(e) => setMovementLevel(e.target.value)}
+                >
+                  {MOVEMENT_LEVELS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {isLayupShotType && !isFreeThrowZone && (
               <>
@@ -735,8 +790,11 @@ export default function PracticeLog({ id, started_at, navigate }) {
         >
           <div className="grid gap-3">
             <div className="grid grid-cols-3 gap-3 items-center">
-              <label className="label col-span-1">Zone</label>
+              <label htmlFor="edit-practice-zone" className="label col-span-1">
+                Zone
+              </label>
               <select
+                id="edit-practice-zone"
                 className="input col-span-2"
                 value={editZoneId}
                 onChange={(e) => {
@@ -745,6 +803,7 @@ export default function PracticeLog({ id, started_at, navigate }) {
                   if (newZoneId === FREE_THROW_ZONE_ID) {
                     setEditContested(false)
                     setEditShotTypeId("")
+                    setEditMovementLevel("static")
                     setEditPickupType(null)
                     setEditFinishType(null)
                   }
@@ -759,13 +818,22 @@ export default function PracticeLog({ id, started_at, navigate }) {
             </div>
 
             <div className="grid grid-cols-3 gap-3 items-center">
-              <label className="label col-span-1">Shot Type</label>
+              <label
+                htmlFor="edit-practice-shot-type"
+                className="label col-span-1"
+              >
+                Shot Type
+              </label>
               <select
+                id="edit-practice-shot-type"
                 className="input col-span-2"
                 value={editShotTypeId}
                 onChange={(e) => {
                   const v = e.target.value
                   setEditShotTypeId(v)
+                  if (v !== CATCH_SHOOT_SHOT_TYPE_ID) {
+                    setEditMovementLevel("static")
+                  }
                   if (v !== LAYUP_SHOT_TYPE_ID) {
                     setEditPickupType(null)
                     setEditFinishType(null)
@@ -780,6 +848,30 @@ export default function PracticeLog({ id, started_at, navigate }) {
                 ))}
               </select>
             </div>
+
+            {editZoneId !== FREE_THROW_ZONE_ID &&
+              editShotTypeId === CATCH_SHOOT_SHOT_TYPE_ID && (
+                <div className="grid grid-cols-3 gap-3 items-center">
+                  <label
+                    htmlFor="edit-movement-level"
+                    className="label col-span-1"
+                  >
+                    Movement Level
+                  </label>
+                  <select
+                    id="edit-movement-level"
+                    className="input col-span-2"
+                    value={editMovementLevel}
+                    onChange={(e) => setEditMovementLevel(e.target.value)}
+                  >
+                    {MOVEMENT_LEVELS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
             {editZoneId !== FREE_THROW_ZONE_ID &&
               editShotTypeId === LAYUP_SHOT_TYPE_ID && (

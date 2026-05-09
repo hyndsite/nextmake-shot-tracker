@@ -175,6 +175,7 @@ function sanitizeForUpsert(rows) {
         session_id,
         zone_id,
         shot_type,
+        movement_level,
         // canonical column is contested; legacy queued rows may still have pressured
         contested,
         pressured,
@@ -197,6 +198,7 @@ function sanitizeForUpsert(rows) {
         session_id,
         zone_id,
         shot_type,
+        movement_level,
         contested: resolvedContested,
         attempts,
         makes,

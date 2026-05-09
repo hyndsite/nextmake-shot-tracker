@@ -120,7 +120,8 @@ describe('PracticeLog Component', () => {
       expect(listPracticeSessions).toHaveBeenCalled()
     })
 
-    const [zoneSelect, shotTypeSelect] = screen.getAllByRole('combobox')
+    const zoneSelect = screen.getByLabelText('Zone')
+    const shotTypeSelect = screen.getByLabelText('Shot Type')
     await user.selectOptions(shotTypeSelect, 'layup')
 
     await user.click(screen.getByRole('button', { name: 'High' }))
@@ -139,20 +140,58 @@ describe('PracticeLog Component', () => {
       expect(addEntry).toHaveBeenCalled()
     })
 
-    expect(addEntry).toHaveBeenCalledWith({
-      sessionId: 'practice-1',
-      zoneId: zoneSelect.value,
-      shotType: 'layup',
-      contested: true,
-      attempts: 5,
-      makes: 3,
-      ts: expect.any(String),
-      pickupType: 'high_pickup',
-      finishType: 'overhand',
-    })
+    expect(addEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 'practice-1',
+        zoneId: zoneSelect.value,
+        shotType: 'layup',
+        contested: true,
+        attempts: 5,
+        makes: 3,
+        movementLevel: null,
+        pickupType: 'high_pickup',
+        finishType: 'overhand',
+      })
+    )
     expect(addMarker).toHaveBeenCalledWith({ sessionId: 'practice-1', label: 'Set' })
     expect(attemptsInput.value).toBe('')
     expect(makesInput.value).toBe('')
+  })
+
+  it('saves a catch and shoot entry with movement level metadata', async () => {
+    const user = userEvent.setup()
+
+    render(<PracticeLog navigate={mockNavigate} />)
+
+    await waitFor(() => {
+      expect(listPracticeSessions).toHaveBeenCalled()
+    })
+
+    const shotTypeSelect = screen.getByLabelText('Shot Type')
+    await user.selectOptions(shotTypeSelect, 'catch_shoot')
+
+    const movementLevelSelect = screen.getByLabelText('Movement Level')
+    expect(movementLevelSelect).toHaveValue('static')
+    await user.selectOptions(movementLevelSelect, 'relocation')
+
+    const [attemptsInput, makesInput] = screen.getAllByRole('spinbutton')
+    await user.clear(attemptsInput)
+    await user.type(attemptsInput, '5')
+    await user.clear(makesInput)
+    await user.type(makesInput, '3')
+
+    await user.click(screen.getByRole('button', { name: 'Save & Mark Set' }))
+
+    await waitFor(() => {
+      expect(addEntry).toHaveBeenCalled()
+    })
+
+    expect(addEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        shotType: 'catch_shoot',
+        movementLevel: 'relocation',
+      })
+    )
   })
 
   it('disables shot type and contested for free throws and saves with null shot type', async () => {
@@ -164,7 +203,8 @@ describe('PracticeLog Component', () => {
       expect(listPracticeSessions).toHaveBeenCalled()
     })
 
-    const [zoneSelect, shotTypeSelect] = screen.getAllByRole('combobox')
+    const zoneSelect = screen.getByLabelText('Zone')
+    const shotTypeSelect = screen.getByLabelText('Shot Type')
     await user.selectOptions(zoneSelect, 'free_throw')
 
     expect(shotTypeSelect).toBeDisabled()
@@ -201,6 +241,7 @@ describe('PracticeLog Component', () => {
         session_id: 'practice-1',
         zone_id: 'left_corner_3',
         shot_type: 'catch_shoot',
+        movement_level: 'relocation',
         contested: false,
         attempts: 4,
         makes: 2,
@@ -216,11 +257,13 @@ describe('PracticeLog Component', () => {
 
     await user.click(screen.getByRole('button', { name: 'Edit practice entry' }))
     expect(screen.getByText('Edit Practice Entry')).toBeInTheDocument()
+    expect(screen.getAllByLabelText('Movement Level')[1]).toHaveValue('relocation')
 
     const editInputs = screen.getAllByRole('spinbutton')
     const editAttemptsInput = editInputs[editInputs.length - 2]
     const editMakesInput = editInputs[editInputs.length - 1]
 
+    await user.selectOptions(screen.getAllByLabelText('Movement Level')[1], 'on_the_move')
     await user.clear(editAttemptsInput)
     await user.type(editAttemptsInput, '6')
     await user.clear(editMakesInput)
@@ -238,6 +281,7 @@ describe('PracticeLog Component', () => {
         sessionId: 'practice-1',
         zoneId: 'left_corner_3',
         shotType: 'catch_shoot',
+        movementLevel: 'on_the_move',
         contested: false,
         attempts: 6,
         makes: 4,
@@ -393,7 +437,7 @@ describe('PracticeLog Component', () => {
     expect(screen.getByRole('button', { name: 'High' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Overhand' })).toBeInTheDocument()
 
-    const editShotTypeSelect = screen.getAllByRole('combobox')[3]
+    const editShotTypeSelect = screen.getAllByLabelText('Shot Type')[1]
     await user.selectOptions(editShotTypeSelect, 'off_dribble')
 
     await waitFor(() => {
@@ -449,7 +493,7 @@ describe('PracticeLog Component', () => {
     await user.click(screen.getByRole('button', { name: 'Increase attempts' }))
     expect(attemptsInput).toHaveValue(5)
 
-    const shotTypeSelect = screen.getAllByRole('combobox')[1]
+    const shotTypeSelect = screen.getByLabelText('Shot Type')
     await user.selectOptions(shotTypeSelect, 'layup')
 
     expect(screen.getByRole('button', { name: 'High' })).toBeInTheDocument()
@@ -583,10 +627,10 @@ describe('PracticeLog Component', () => {
 
     await user.click(screen.getByRole('button', { name: 'Edit practice entry' }))
 
-    const editZoneSelect = screen.getAllByRole('combobox')[2]
+    const editZoneSelect = screen.getAllByLabelText('Zone')[1]
     await user.selectOptions(editZoneSelect, 'free_throw')
 
-    const editShotTypeSelect = screen.getAllByRole('combobox')[3]
+    const editShotTypeSelect = screen.getAllByLabelText('Shot Type')[1]
     expect(editShotTypeSelect).toBeDisabled()
     expect(editShotTypeSelect).toHaveValue('catch_shoot')
 

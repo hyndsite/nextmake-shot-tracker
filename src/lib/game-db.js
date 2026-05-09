@@ -249,6 +249,7 @@ export async function addGameEvent(input) {
   const athlete_id = input.athlete_id ?? input.athleteId ?? getActiveAthleteId() ?? null
   const zone_id = input.zone_id ?? input.zoneId ?? null
   const shot_type = input.shot_type ?? input.shotType ?? null
+  const movement_level = input.movement_level ?? input.movementLevel ?? null
   const is_three =
     typeof input.is_three !== "undefined" ? input.is_three : input.isThree ?? null
   const made = typeof input.made !== "undefined" ? input.made : null
@@ -293,6 +294,7 @@ export async function addGameEvent(input) {
     type,
     zone_id,
     shot_type,
+    movement_level,
     is_three,
     made,
 
