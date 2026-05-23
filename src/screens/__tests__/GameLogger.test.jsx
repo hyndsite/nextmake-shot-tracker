@@ -811,6 +811,54 @@ describe('GameLogger Component', () => {
       })
     })
 
+    it('should show off dribble movement options and reset defaults when switching shot types', async () => {
+      const user = userEvent.setup()
+      render(<GameLogger id="game-123" navigate={mockNavigate} />)
+
+      const modal = await openShotModal(user, 'left_corner_3')
+      const catchShootButton = within(modal).getByText('Catch & Shoot')
+      await user.click(catchShootButton)
+      await user.selectOptions(within(modal).getByLabelText('Movement Level'), 'on_the_move')
+
+      const offDribbleButton = within(modal).getByText('Off-Dribble')
+      await user.click(offDribbleButton)
+
+      const movementLevelSelect = within(modal).getByLabelText('Movement Level')
+      expect(movementLevelSelect).toHaveValue('controlled')
+      expect(within(modal).getByRole('option', { name: 'Controlled' })).toBeInTheDocument()
+      expect(within(modal).getByRole('option', { name: 'Lateral' })).toBeInTheDocument()
+      expect(within(modal).getByRole('option', { name: 'Downhill' })).toBeInTheDocument()
+
+      await user.click(catchShootButton)
+      expect(within(modal).getByLabelText('Movement Level')).toHaveValue('static')
+    })
+
+    it('should record an off dribble shot with movement level metadata', async () => {
+      const user = userEvent.setup()
+      render(<GameLogger id="game-123" navigate={mockNavigate} />)
+
+      const modal = await openShotModal(user, 'left_corner_3')
+      const offDribbleButton = within(modal).getByText('Off-Dribble')
+      await user.click(offDribbleButton)
+
+      const movementLevelSelect = within(modal).getByLabelText('Movement Level')
+      expect(movementLevelSelect).toHaveValue('controlled')
+      await user.selectOptions(movementLevelSelect, 'downhill')
+
+      const makeButton = within(modal).getByText('Make').closest('button')
+      await user.click(makeButton)
+
+      await waitFor(() => {
+        expect(addGameEvent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            shot_type: 'off_dribble',
+            movement_level: 'downhill',
+            made: true,
+          })
+        )
+      })
+    })
+
     it('should render structured level labels from saved game sessions', async () => {
       getGameSession.mockResolvedValue({
         ...mockGameSession,
@@ -1044,7 +1092,7 @@ describe('GameLogger Component', () => {
           expect.objectContaining({
             id: 'event-1',
             shot_type: 'off_dribble',
-            movement_level: null,
+            movement_level: 'controlled',
             made: false,
           })
         )
@@ -1079,6 +1127,50 @@ describe('GameLogger Component', () => {
             id: 'event-1',
             shot_type: 'catch_shoot',
             movement_level: 'static',
+            made: false,
+          })
+        )
+      })
+    })
+
+    it('should restore and update off dribble movement level when editing', async () => {
+      const user = userEvent.setup()
+      listGameEventsBySession.mockResolvedValue([
+        {
+          ...mockEvents[0],
+          shot_type: 'off_dribble',
+          movement_level: 'lateral',
+        },
+        ...mockEvents.slice(1),
+      ])
+
+      render(<GameLogger id="game-123" navigate={mockNavigate} />)
+
+      await waitFor(() => {
+        expect(screen.getByText('Shot Attempts')).toBeInTheDocument()
+      })
+
+      const shotAttempts = screen.getByText('Shot Attempts').closest('section')
+      const shotRow = within(shotAttempts).getByText('3 pointer').closest('button')
+      await user.click(shotRow)
+
+      await waitFor(() => {
+        expect(getShotModal()).toBeTruthy()
+      })
+
+      const modal = getShotModal()
+      expect(within(modal).getByLabelText('Movement Level')).toHaveValue('lateral')
+      await user.selectOptions(within(modal).getByLabelText('Movement Level'), 'downhill')
+
+      const missButton = within(modal).getByText('Miss').closest('button')
+      await user.click(missButton)
+
+      await waitFor(() => {
+        expect(addGameEvent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: 'event-1',
+            shot_type: 'off_dribble',
+            movement_level: 'downhill',
             made: false,
           })
         )

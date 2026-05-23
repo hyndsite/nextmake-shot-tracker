@@ -21,12 +21,18 @@ const IDX_KEY = "__index__"
 const todayISO = () => new Date().toISOString().slice(0, 10)
 const nowISO = () => new Date().toISOString()
 const CATCH_SHOOT_SHOT_TYPE = "catch_shoot"
+const OFF_DRIBBLE_SHOT_TYPE = "off_dribble"
 
-function normalizeCatchShootMovementLevel(row) {
+function normalizeMovementLevel(row) {
   if (!row) return row
-  if (row.shot_type !== CATCH_SHOOT_SHOT_TYPE) return row
   if (row.movement_level) return row
-  return { ...row, movement_level: "static" }
+  if (row.shot_type === CATCH_SHOOT_SHOT_TYPE) {
+    return { ...row, movement_level: "static" }
+  }
+  if (row.shot_type === OFF_DRIBBLE_SHOT_TYPE) {
+    return { ...row, movement_level: "controlled" }
+  }
+  return row
 }
 
 function belongsToActiveAthlete(rowAthleteId) {
@@ -150,7 +156,7 @@ export async function addEntry({
         ? !!pressured
         : false
 
-  const row = {
+  const row = normalizeMovementLevel({
     id,
     user_id: null,
     athlete_id: resolvedAthleteId,
@@ -170,7 +176,7 @@ export async function addEntry({
     _dirty: true,
     _deleted: false,
     _table: "practice_entries",
-  }
+  })
 
   await set(id, row, st.practice.entries)
   await addToIndex(st.practice.entries, id)
@@ -200,7 +206,7 @@ export async function updateEntry({
   const cur = await get(id, st.practice.entries)
   if (!cur) throw new Error(`practice entry not found: ${id}`)
 
-  const updated = {
+  const updated = normalizeMovementLevel({
     ...cur,
     session_id: sessionId ?? cur.session_id,
     zone_id: zoneId ?? cur.zone_id,
@@ -216,7 +222,7 @@ export async function updateEntry({
     _dirty: true,
     _deleted: false,
     _table: "practice_entries",
-  }
+  })
 
   await set(id, updated, st.practice.entries)
   await addToIndex(st.practice.entries, id)
@@ -413,7 +419,7 @@ export async function listEntriesBySession(sessionId) {
   const rows = []
   for (const id of ids) {
     const raw = await get(id, st.practice.entries)
-    const e = normalizeCatchShootMovementLevel(raw)
+    const e = normalizeMovementLevel(raw)
     if (e && raw && e !== raw) await set(id, e, st.practice.entries)
     if (
       e?.session_id === sessionId &&
@@ -475,7 +481,7 @@ export async function upsertPracticeEntriesFromRemote(rows = []) {
   for (const remote of rows) {
     if (!remote?.id) continue
     const existing = await get(remote.id, st.practice.entries)
-    const merged = normalizeCatchShootMovementLevel({
+    const merged = normalizeMovementLevel({
       ...(existing || {}),
       ...remote,
       _dirty: false,

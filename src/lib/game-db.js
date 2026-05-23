@@ -10,6 +10,7 @@ import { formatGameLevelLabel } from "../constants/programLevel"
 const ready = whenIdbReady()
 const nowISO = () => new Date().toISOString()
 const CATCH_SHOOT_SHOT_TYPE = "catch_shoot"
+const OFF_DRIBBLE_SHOT_TYPE = "off_dribble"
 
 export const st = {
   game: {
@@ -34,11 +35,16 @@ function belongsToActiveAthlete(rowAthleteId) {
   return rowAthleteId === activeAthleteId
 }
 
-function normalizeCatchShootMovementLevel(row) {
+function normalizeMovementLevel(row) {
   if (!row) return row
-  if (row.shot_type !== CATCH_SHOOT_SHOT_TYPE) return row
   if (row.movement_level) return row
-  return { ...row, movement_level: "static" }
+  if (row.shot_type === CATCH_SHOOT_SHOT_TYPE) {
+    return { ...row, movement_level: "static" }
+  }
+  if (row.shot_type === OFF_DRIBBLE_SHOT_TYPE) {
+    return { ...row, movement_level: "controlled" }
+  }
+  return row
 }
 
 /**
@@ -292,7 +298,7 @@ export async function addGameEvent(input) {
   // Preserve existing row fields when editing (if present)
   const existing = await get(id, st.game.events)
 
-  const row = {
+  const row = normalizeMovementLevel({
     ...(existing || {}),
     id,
     game_id,
@@ -318,7 +324,7 @@ export async function addGameEvent(input) {
     _dirty: true,
     _deleted: false,
     _table: "game_events",
-  }
+  })
 
   await set(id, row, st.game.events)
 
@@ -366,7 +372,7 @@ export async function listGameEventsBySession(gameId) {
   const allKeys = await keys(st.game.events)
   for (const k of allKeys) {
     const raw = await get(k, st.game.events)
-    const ev = normalizeCatchShootMovementLevel(raw)
+    const ev = normalizeMovementLevel(raw)
     if (ev && raw && ev !== raw) await set(k, ev, st.game.events)
     if (
       ev?.game_id === gameId &&
@@ -490,7 +496,7 @@ export async function upsertGameEventsFromRemote(rows = []) {
   for (const remote of rows) {
     if (!remote?.id) continue
     const existing = await get(remote.id, st.game.events)
-    const merged = normalizeCatchShootMovementLevel({
+    const merged = normalizeMovementLevel({
       ...(existing || {}),
       ...remote,
       _dirty: false,

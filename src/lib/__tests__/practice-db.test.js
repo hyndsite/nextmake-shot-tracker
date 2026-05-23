@@ -342,6 +342,21 @@ describe('practice-db', () => {
       expect(result.movement_level).toBe('relocation')
     })
 
+    it('should persist movement level for off dribble entries', async () => {
+      const input = {
+        sessionId: 'session-1',
+        zoneId: 'zone-1',
+        shotType: 'off_dribble',
+        movementLevel: 'controlled',
+        attempts: 8,
+        makes: 6,
+      }
+
+      const result = await addEntry(input)
+
+      expect(result.movement_level).toBe('controlled')
+    })
+
     it('should accept custom timestamp', async () => {
       const input = {
         sessionId: 'session-1',
@@ -927,6 +942,32 @@ describe('practice-db', () => {
       expect(mockSet).toHaveBeenCalledWith(
         'e1',
         expect.objectContaining({ movement_level: 'static' }),
+        st.practice.entries,
+      )
+    })
+
+    it('should normalize legacy off dribble entries with null movement level to controlled', async () => {
+      const entry = {
+        id: 'e1',
+        session_id: 'session-1',
+        shot_type: 'off_dribble',
+        movement_level: null,
+        ts: '2024-01-15T12:00:00Z',
+        _deleted: false,
+      }
+
+      mockGet.mockImplementation((key) => {
+        if (key === '__index__') return Promise.resolve(['e1'])
+        if (key === 'e1') return Promise.resolve(entry)
+        return Promise.resolve(null)
+      })
+
+      const result = await listEntriesBySession('session-1')
+
+      expect(result[0].movement_level).toBe('controlled')
+      expect(mockSet).toHaveBeenCalledWith(
+        'e1',
+        expect.objectContaining({ movement_level: 'controlled' }),
         st.practice.entries,
       )
     })

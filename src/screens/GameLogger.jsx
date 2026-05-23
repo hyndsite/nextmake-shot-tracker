@@ -4,7 +4,8 @@ import {
   SHOT_TYPES,
   PICKUP_TYPES,
   FINISH_TYPES,
-  MOVEMENT_LEVELS,
+  getDefaultMovementLevelForShotType,
+  getMovementLevelsForShotType,
 } from "../constants/shotTypes"
 import { ZONES } from "../constants/zones"
 import { ZONE_ANCHORS } from "../constants/zoneAnchors"
@@ -280,7 +281,7 @@ export default function GameLogger({ id: gameId, navigate }) {
       isThree: !!z?.isThree,
       shotTypeId: null, // must pick
       contested: false,
-      movementLevel: "static",
+      movementLevel: "",
       pickupType: null,
       finishType: null,
     })
@@ -298,7 +299,7 @@ export default function GameLogger({ id: gameId, navigate }) {
       shotTypeId: ev.shot_type || null, // stored as id
       contested: !!ev.contested,
       movementLevel:
-        ev.shot_type === "catch_shoot" ? ev.movement_level ?? "static" : "static",
+        ev.movement_level ?? getDefaultMovementLevelForShotType(ev.shot_type),
       pickupType: ev.pickup_type ?? null,
       finishType: ev.finish_type ?? null,
     })
@@ -317,7 +318,8 @@ export default function GameLogger({ id: gameId, navigate }) {
     finishType, // canonical value (e.g., 'underhand')
   }) {
     const isLayup = shotTypeId === "layup"
-    const isCatchShoot = shotTypeId === "catch_shoot"
+    const supportsMovementLevel =
+      getMovementLevelsForShotType(shotTypeId).length > 0
 
     await addGameEvent({
       // If editing, pass the id so sync uses UPSERT/UPDATE
@@ -331,7 +333,7 @@ export default function GameLogger({ id: gameId, navigate }) {
       shot_type: shotTypeId,
       contested: !!contested,
       made: !!made,
-      movement_level: isCatchShoot ? movementLevel ?? "static" : null,
+      movement_level: supportsMovementLevel ? movementLevel : null,
 
       // Only layups carry these; otherwise force null
       pickup_type: isLayup ? pickupType ?? null : null,
@@ -757,7 +759,7 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
     typeof data.contested === "boolean" ? data.contested : false,
   )
   const [movementLevel, setMovementLevel] = useState(
-    data.movementLevel ?? "static",
+    data.movementLevel ?? getDefaultMovementLevelForShotType(data.shotTypeId),
   )
 
   // Layup metadata uses canonical constraint values
@@ -780,7 +782,7 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
   const canSubmit = hasShotType
 
   const isLayup = shotTypeId === "layup"
-  const isCatchShoot = shotTypeId === "catch_shoot"
+  const movementLevelOptions = getMovementLevelsForShotType(shotTypeId)
 
   function pickupButtonLabel(pt) {
     if (pt.value === "inside_hand_pickup") return "Inside"
@@ -815,7 +817,7 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
                   type="button"
                   onClick={() => {
                     setShotTypeId(st.id)
-                    if (st.id !== "catch_shoot") setMovementLevel("static")
+                    setMovementLevel(getDefaultMovementLevelForShotType(st.id))
                     if (st.id !== "layup") {
                       setPickupType(null)
                       setFinishType(null)
@@ -830,7 +832,7 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
           </div>
         </div>
 
-        {isCatchShoot && (
+        {movementLevelOptions.length > 0 && (
           <div className="mb-3">
             <label
               htmlFor="game-shot-movement-level"
@@ -844,7 +846,7 @@ function ShotModal({ data, onClose, onMake, onMiss }) {
               value={movementLevel}
               onChange={(e) => setMovementLevel(e.target.value)}
             >
-              {MOVEMENT_LEVELS.map((opt) => (
+              {movementLevelOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>

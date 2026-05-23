@@ -194,6 +194,69 @@ describe('PracticeLog Component', () => {
     )
   })
 
+  it('shows off dribble movement options and resets defaults when switching shot types', async () => {
+    const user = userEvent.setup()
+
+    render(<PracticeLog navigate={mockNavigate} />)
+
+    await waitFor(() => {
+      expect(listPracticeSessions).toHaveBeenCalled()
+    })
+
+    const shotTypeSelect = screen.getByLabelText('Shot Type')
+
+    await user.selectOptions(shotTypeSelect, 'off_dribble')
+
+    const movementLevelSelect = screen.getByLabelText('Movement Level')
+    expect(movementLevelSelect).toHaveValue('controlled')
+    expect(screen.getByRole('option', { name: 'Controlled' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Lateral' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Downhill' })).toBeInTheDocument()
+
+    await user.selectOptions(movementLevelSelect, 'lateral')
+    await user.selectOptions(shotTypeSelect, 'catch_shoot')
+
+    expect(screen.getByLabelText('Movement Level')).toHaveValue('static')
+
+    await user.selectOptions(shotTypeSelect, 'off_dribble')
+    expect(screen.getByLabelText('Movement Level')).toHaveValue('controlled')
+  })
+
+  it('saves an off dribble entry with movement level metadata', async () => {
+    const user = userEvent.setup()
+
+    render(<PracticeLog navigate={mockNavigate} />)
+
+    await waitFor(() => {
+      expect(listPracticeSessions).toHaveBeenCalled()
+    })
+
+    const shotTypeSelect = screen.getByLabelText('Shot Type')
+    await user.selectOptions(shotTypeSelect, 'off_dribble')
+
+    const movementLevelSelect = screen.getByLabelText('Movement Level')
+    await user.selectOptions(movementLevelSelect, 'downhill')
+
+    const [attemptsInput, makesInput] = screen.getAllByRole('spinbutton')
+    await user.clear(attemptsInput)
+    await user.type(attemptsInput, '5')
+    await user.clear(makesInput)
+    await user.type(makesInput, '3')
+
+    await user.click(screen.getByRole('button', { name: 'Save & Mark Set' }))
+
+    await waitFor(() => {
+      expect(addEntry).toHaveBeenCalled()
+    })
+
+    expect(addEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        shotType: 'off_dribble',
+        movementLevel: 'downhill',
+      })
+    )
+  })
+
   it('disables shot type and contested for free throws and saves with null shot type', async () => {
     const user = userEvent.setup()
 
@@ -285,6 +348,48 @@ describe('PracticeLog Component', () => {
         contested: false,
         attempts: 6,
         makes: 4,
+      })
+    )
+  })
+
+  it('restores and updates off dribble movement level in edit mode', async () => {
+    const user = userEvent.setup()
+    listEntriesBySession.mockResolvedValue([
+      {
+        id: 'entry-1',
+        session_id: 'practice-1',
+        zone_id: 'left_corner_3',
+        shot_type: 'off_dribble',
+        movement_level: 'lateral',
+        contested: false,
+        attempts: 4,
+        makes: 2,
+        ts: '2025-01-15T10:01:00Z',
+      },
+    ])
+
+    render(<PracticeLog navigate={mockNavigate} />)
+
+    await waitFor(() => {
+      expect(listEntriesBySession).toHaveBeenCalled()
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Edit practice entry' }))
+    expect(screen.getByText('Edit Practice Entry')).toBeInTheDocument()
+    expect(screen.getAllByLabelText('Movement Level')[1]).toHaveValue('lateral')
+
+    await user.selectOptions(screen.getAllByLabelText('Movement Level')[1], 'downhill')
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }))
+
+    await waitFor(() => {
+      expect(updateEntry).toHaveBeenCalled()
+    })
+
+    expect(updateEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'entry-1',
+        shotType: 'off_dribble',
+        movementLevel: 'downhill',
       })
     )
   })

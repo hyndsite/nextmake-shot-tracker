@@ -1112,6 +1112,38 @@ describe('sync', () => {
       ].sort())
     })
 
+    it('should whitelist movement_level for off dribble practice_entries', async () => {
+      const dirtyEntry = {
+        id: 'pe1',
+        _table: 'practice_entries',
+        _dirty: true,
+        _deleted: false,
+        user_id: null,
+        athlete_id: 'ath-1',
+        session_id: 'ps1',
+        zone_id: 'zone1',
+        shot_type: 'off_dribble',
+        movement_level: 'controlled',
+        contested: true,
+        attempts: 5,
+        makes: 3,
+        ts: '2024-01-15T10:05:00Z',
+      }
+
+      mockPracticeDb._allDirtyPractice.mockResolvedValue([dirtyEntry])
+
+      const mockUpsert = {
+        upsert: vi.fn().mockResolvedValue({ error: null }),
+      }
+      setupSyncAllMocks({ 'practice_entries': mockUpsert })
+
+      await syncAll()
+
+      const upsertedRow = mockUpsert.upsert.mock.calls[0][0][0]
+      expect(upsertedRow.shot_type).toBe('off_dribble')
+      expect(upsertedRow.movement_level).toBe('controlled')
+    })
+
     it('should whitelist practice_markers fields', async () => {
       const dirtyMarker = {
         id: 'pm1',
@@ -1172,6 +1204,38 @@ describe('sync', () => {
         })],
         { onConflict: 'id' }
       )
+    })
+
+    it('should preserve movement_level for off dribble game_events', async () => {
+      const dirtyEvent = {
+        id: 'ge1',
+        _table: 'game_events',
+        _dirty: true,
+        _deleted: false,
+        user_id: null,
+        athlete_id: 'ath-1',
+        game_id: 'gs1',
+        type: 'shot',
+        zone_id: 'zone1',
+        shot_type: 'off_dribble',
+        movement_level: 'lateral',
+        contested: false,
+        made: true,
+        ts: '2024-01-15T10:05:00Z',
+      }
+
+      mockGameDb._allDirtyGame.mockResolvedValue([dirtyEvent])
+
+      const mockUpsert = {
+        upsert: vi.fn().mockResolvedValue({ error: null }),
+      }
+      setupSyncAllMocks({ 'game_events': mockUpsert })
+
+      await syncAll()
+
+      const upsertedRow = mockUpsert.upsert.mock.calls[0][0][0]
+      expect(upsertedRow.shot_type).toBe('off_dribble')
+      expect(upsertedRow.movement_level).toBe('lateral')
     })
 
     it('should truncate date_iso to YYYY-MM-DD format', async () => {

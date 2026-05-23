@@ -620,6 +620,23 @@ describe('game-db', () => {
       expect(result.movement_level).toBe('relocation')
     })
 
+    it('should persist movement level for off dribble game events', async () => {
+      mockGet.mockResolvedValue(null)
+      mockKeys.mockResolvedValue([])
+
+      const input = {
+        game_id: 'game-1',
+        type: 'shot',
+        shot_type: 'off_dribble',
+        movement_level: 'lateral',
+        made: true,
+      }
+
+      const result = await addGameEvent(input)
+
+      expect(result.movement_level).toBe('lateral')
+    })
+
     it('should accept custom timestamp', async () => {
       mockGet.mockResolvedValue(null)
       mockKeys.mockResolvedValue([])
@@ -791,6 +808,27 @@ describe('game-db', () => {
       expect(mockSet).toHaveBeenCalledWith(
         'e1',
         expect.objectContaining({ movement_level: 'static' }),
+        st.game.events,
+      )
+    })
+
+    it('should normalize legacy off dribble events with null movement level to controlled', async () => {
+      mockKeys.mockResolvedValue(['e1'])
+      mockGet.mockResolvedValueOnce({
+        id: 'e1',
+        game_id: 'game-1',
+        shot_type: 'off_dribble',
+        movement_level: null,
+        ts: '2024-01-15T12:00:00Z',
+        _deleted: false,
+      })
+
+      const result = await listGameEventsBySession('game-1')
+
+      expect(result[0].movement_level).toBe('controlled')
+      expect(mockSet).toHaveBeenCalledWith(
+        'e1',
+        expect.objectContaining({ movement_level: 'controlled' }),
         st.game.events,
       )
     })
